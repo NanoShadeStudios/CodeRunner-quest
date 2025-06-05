@@ -1,0 +1,2076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeRunner - Digital Explorer</title>
+    <!-- Prevent favicon 404 error -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🏃</text></svg>">    <style>
+        * {
+            box-sizing: border-box;
+        }
+          body {
+            margin: 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            font-family: 'Courier New', monospace;
+            color: #f0f6fc;
+            min-height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 0 15px;
+            min-height: 100vh;
+        }
+        
+        .game-header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+          .game-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            background: linear-gradient(45deg, #58a6ff, #79c0ff, #a5f3fc);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(88, 166, 255, 0.3);
+        }
+        
+        .game-header .subtitle {
+            margin: 5px 0 0 0;
+            font-size: 0.8rem;
+            color: #7d8590;
+        }        .main-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            justify-content: center;
+            max-width: 100%;
+        }        .canvas-container {
+            position: relative;
+            border: 3px solid;
+            border-image: linear-gradient(45deg, #21262d, #30363d, #21262d) 1;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+        }        /* Fullscreen canvas container styles */
+        .canvas-container:fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 9999 !important;
+        }
+
+        .canvas-container:-webkit-full-screen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 9999 !important;
+        }
+
+        .canvas-container:-moz-full-screen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 9999 !important;
+        }        .canvas-container:fullscreen canvas,
+        .canvas-container:-webkit-full-screen canvas,
+        .canvas-container:-moz-full-screen canvas,
+        .canvas-container:-ms-fullscreen canvas {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            min-width: 100vw !important;
+            min-height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            outline: none !important;
+            object-fit: fill !important;
+            background: #0d1117 !important;
+            transform: none !important;
+            clip: none !important;
+            box-sizing: border-box !important;
+        }/* Additional fullscreen body override */
+        body:has(.canvas-container:fullscreen),
+        body:has(.canvas-container:-webkit-full-screen),
+        body:has(.canvas-container:-moz-full-screen) {
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+
+        /* Fullscreen backdrop styling */
+        .canvas-container::backdrop,
+        .canvas-container::-webkit-backdrop {
+            background: #0d1117 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }        /* Override any default fullscreen margins/padding */
+        *:fullscreen {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        *:-webkit-full-screen {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        *:-moz-full-screen {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* Ultra-aggressive fullscreen overrides for all browsers */
+        html:has(.canvas-container:fullscreen),
+        html:has(.canvas-container:-webkit-full-screen),
+        html:has(.canvas-container:-moz-full-screen) {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+            border: none !important;
+            outline: none !important;
+        }
+
+        /* Specific browser fullscreen element overrides */
+        .canvas-container:fullscreen,
+        .canvas-container:-webkit-full-screen,
+        .canvas-container:-moz-full-screen,
+        .canvas-container:-ms-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            min-width: 100vw !important;
+            min-height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 2147483647 !important;
+            transform: none !important;
+            clip: none !important;
+            outline: none !important;
+        }
+        
+        canvas {
+            display: block;
+            background: #161b22;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        /* Hamburger Menu Styles */
+        .hamburger-menu {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(13, 17, 23, 0.95);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .hamburger-menu:hover {
+            background: rgba(13, 17, 23, 1);
+            border-color: #58a6ff;
+            box-shadow: 0 6px 20px rgba(88, 166, 255, 0.2);
+        }
+
+        .hamburger-icon {
+            font-size: 20px;
+            color: #58a6ff;
+            line-height: 1;
+        }
+
+        /* Dropdown Panel Styles */
+        .dropdown-panel {
+            position: fixed;
+            top: 0;
+            left: -400px;
+            width: 400px;
+            height: 100vh;
+            background: rgba(13, 17, 23, 0.98);
+            border-right: 2px solid #30363d;
+            z-index: 999;
+            transition: left 0.3s ease;
+            backdrop-filter: blur(15px);
+            overflow-y: auto;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .dropdown-panel.open {
+            left: 0;
+        }
+
+        .dropdown-header {
+            padding: 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dropdown-title {
+            font-size: 18px;
+            color: #58a6ff;
+            font-weight: bold;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.3s ease;
+        }
+
+        .close-btn:hover {
+            color: #f85149;
+        }
+
+        .dropdown-content {
+            padding: 0;
+        }
+
+        .section {
+            border-bottom: 1px solid #21262d;
+        }
+
+        .section-header {
+            padding: 16px 20px;
+            background: rgba(33, 38, 45, 0.5);
+            color: #58a6ff;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-header:hover {
+            background: rgba(33, 38, 45, 0.8);
+        }
+
+        .section-content {
+            padding: 20px;
+            display: none;
+            background: rgba(22, 27, 34, 0.3);
+        }
+
+        .section.expanded .section-content {
+            display: block;
+        }
+
+        .section-header::after {
+            content: "▼";
+            font-size: 12px;
+            transition: transform 0.3s ease;
+        }        .section.expanded .section-header::after {
+            transform: rotate(180deg);
+        }
+
+        /* Quick Actions Section */
+        .quick-actions {
+            border-bottom: none;
+        }
+
+        .quick-actions .section-content {
+            display: block !important;
+            padding: 16px 20px;
+            background: rgba(22, 27, 34, 0.2);
+        }
+
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .quick-action-btn {
+            background: linear-gradient(135deg, #21262d 0%, #30363d 100%);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            color: #f0f6fc;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .quick-action-btn:hover {
+            background: linear-gradient(135deg, #30363d 0%, #434950 100%);
+            border-color: #58a6ff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+        }
+
+        .quick-action-btn:active {
+            transform: translateY(0);
+        }
+
+        .action-icon {
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+
+        .action-text {
+            font-size: 11px;
+            font-weight: bold;
+            color: #f0f6fc;
+        }
+
+        .action-key {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            background: rgba(88, 166, 255, 0.2);
+            border: 1px solid #58a6ff;
+            border-radius: 3px;
+            padding: 1px 4px;
+            font-size: 9px;
+            color: #58a6ff;
+            font-weight: bold;
+        }
+
+        /* Controls Section */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 12px;
+            font-size: 12px;
+        }
+
+        .key {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 3px;
+            padding: 4px 8px;
+            font-family: inherit;
+            font-size: 11px;
+            color: #58a6ff;
+            text-align: center;
+            min-width: 40px;
+        }
+
+        .action {
+            color: #7d8590;
+            align-self: center;
+            font-size: 11px;
+        }
+
+        /* Tips Section */
+        .tips-content {
+            font-size: 12px;
+            color: #7d8590;
+            line-height: 1.5;
+        }
+
+        .tips-content strong {
+            color: #f0f6fc;
+        }
+
+        .tip-item {
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(33, 38, 45, 0.3);
+            border-radius: 4px;
+            border-left: 3px solid #58a6ff;
+        }
+
+        /* Feedback Section */
+        .feedback-link {
+            color: #58a6ff;
+            text-decoration: none;
+            padding: 10px 16px;
+            background: rgba(33, 38, 45, 0.5);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            display: inline-block;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .feedback-link:hover {
+            background: rgba(88, 166, 255, 0.1);
+            border-color: #58a6ff;
+            text-decoration: none;
+        }
+
+        /* Profile Section */
+        .profile-grid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .profile-name {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .profile-name label {
+            color: #f0f6fc;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .profile-name input {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: #f0f6fc;
+            font-family: inherit;
+            font-size: 12px;
+        }
+
+        .profile-name input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+
+        .profile-stats {
+            display: grid;
+            gap: 8px;
+            background: rgba(33, 38, 45, 0.3);
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .stat-label {
+            color: #7d8590;
+        }
+
+        .stat-value {
+            color: #f0f6fc;
+            font-weight: bold;
+        }
+
+        /* Pixel Art Editor */
+        .pixel-editor {
+            display: grid;
+            gap: 12px;
+        }
+
+        .pixel-editor-title {
+            color: #f0f6fc;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .pixel-canvas {
+            display: grid;
+            grid-template-columns: repeat(16, 1fr);
+            gap: 1px;
+            background: #30363d;
+            padding: 4px;
+            border-radius: 4px;
+            width: 200px;
+            height: 200px;
+        }
+
+        .pixel {
+            background: #161b22;
+            cursor: pointer;
+            transition: background 0.1s ease;
+        }
+
+        .pixel:hover {
+            box-shadow: inset 0 0 0 1px #58a6ff;
+        }
+
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .color-option {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #30363d;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+        }
+
+        .color-option.selected {
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.3);
+        }.ui-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            min-width: 360px;
+            max-width: 450px;
+            align-self: flex-start;
+        }        .panel {
+            background: rgba(13, 17, 23, 0.9);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 14px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            min-height: 120px;
+        }
+        
+        .panel-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #58a6ff;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #21262d;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .panel-content {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 6px 12px;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        
+        .stat-label {
+            color: #7d8590;
+        }
+        
+        .stat-value {
+            color: #f0f6fc;
+            font-weight: bold;
+            text-align: right;
+        }
+          .controls-panel {
+            background: rgba(13, 17, 23, 0.95);
+            grid-column: 1 / -1;
+        }
+        
+        .controls-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 3px 8px;
+            font-size: 10px;
+        }
+          .key {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 3px;
+            padding: 1px 4px;
+            font-family: inherit;
+            font-size: 9px;
+            color: #58a6ff;
+            text-align: center;
+            min-width: 35px;
+        }
+          .action {
+            color: #7d8590;
+            align-self: center;
+            font-size: 9px;
+        }
+        
+        .code-text {
+            color: #79c0ff;
+        }
+        
+        .status-ready {
+            color: #56d364;
+        }
+        
+        .status-error {
+            color: #f85149;
+        }
+          .status-warning {
+            color: #ffd700;
+        }
+          .feedback-link {
+            color: #58a6ff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+          .feedback-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Shop System Styles */
+        .shop-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .shop-overlay.open {
+            display: flex;
+        }
+
+        .shop-container {
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            border: 2px solid #30363d;
+            border-radius: 12px;
+            width: 90vw;
+            max-width: 800px;
+            height: 85vh;
+            max-height: 600px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .shop-header {
+            background: rgba(33, 38, 45, 0.9);
+            padding: 16px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .shop-title {
+            font-size: 20px;
+            color: #58a6ff;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .shop-currency {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid #58a6ff;
+            border-radius: 6px;
+            padding: 6px 12px;
+        }
+
+        .currency-icon {
+            font-size: 16px;
+        }
+
+        .currency-amount {
+            color: #58a6ff;
+            font-weight: bold;
+        }
+
+        .shop-close {
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            transition: color 0.3s ease;
+        }
+
+        .shop-close:hover {
+            color: #f85149;
+        }
+
+        .shop-tabs {
+            display: flex;
+            background: rgba(22, 27, 34, 0.5);
+            border-bottom: 1px solid #30363d;
+            overflow-x: auto;
+        }
+
+        .shop-tab {
+            background: none;
+            border: none;
+            color: #7d8590;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 13px;
+            font-weight: bold;
+            white-space: nowrap;
+            border-bottom: 2px solid transparent;
+        }
+
+        .shop-tab:hover {
+            color: #f0f6fc;
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .shop-tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .shop-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .shop-category-title {
+            font-size: 16px;
+            color: #58a6ff;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .shop-items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+        }
+
+        .shop-item {
+            background: rgba(33, 38, 45, 0.5);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .shop-item:hover {
+            border-color: #58a6ff;
+            background: rgba(33, 38, 45, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(88, 166, 255, 0.2);
+        }
+
+        .shop-item.owned {
+            border-color: #56d364;
+            background: rgba(86, 211, 100, 0.1);
+        }
+
+        .shop-item.owned:hover {
+            border-color: #56d364;
+            background: rgba(86, 211, 100, 0.2);
+        }
+
+        .shop-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .shop-item-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #f0f6fc;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .shop-item-icon {
+            font-size: 18px;
+        }
+
+        .shop-item-price {
+            background: rgba(88, 166, 255, 0.2);
+            border: 1px solid #58a6ff;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 11px;
+            color: #58a6ff;
+            font-weight: bold;
+        }
+
+        .shop-item-description {
+            color: #7d8590;
+            font-size: 12px;
+            line-height: 1.4;
+            margin-bottom: 12px;
+        }
+
+        .shop-item-stats {
+            font-size: 11px;
+            color: #56d364;
+            margin-bottom: 8px;
+        }
+
+        .shop-item-button {
+            width: 100%;
+            background: linear-gradient(135deg, #21262d 0%, #30363d 100%);
+            border: 1px solid #58a6ff;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #58a6ff;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .shop-item-button:hover {
+            background: linear-gradient(135deg, #58a6ff 0%, #79c0ff 100%);
+            color: #0d1117;
+        }
+
+        .shop-item-button:disabled {
+            background: rgba(125, 133, 144, 0.2);
+            border-color: #7d8590;
+            color: #7d8590;
+            cursor: not-allowed;
+        }
+
+        .shop-item-button.owned {
+            background: rgba(86, 211, 100, 0.2);
+            border-color: #56d364;
+            color: #56d364;
+            cursor: default;
+        }
+
+        .owned-badge {
+            position: absolute;
+            top: -1px;
+            right: -1px;
+            background: #56d364;
+            color: #0d1117;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 0 8px 0 6px;
+        }
+
+        /* Responsive shop design */
+        @media (max-width: 700px) {
+            .shop-container {
+                width: 95vw;
+                height: 90vh;
+            }
+            
+            .shop-items-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .shop-tabs {
+                overflow-x: auto;
+            }
+            
+            .shop-tab {
+                flex-shrink: 0;
+            }
+        }
+
+        /* Responsive design - updated for new menu */
+        @media (max-width: 700px) {
+            body {
+                padding: 10px;
+            }
+            
+            .game-header h1 {
+                font-size: 1.8rem;
+            }
+            
+            canvas {
+                width: 100%;
+                height: auto;
+                max-width: 100vw;
+            }
+            
+            .canvas-container {
+                width: 100%;
+                max-width: 100vw;
+                overflow: hidden;
+            }
+            
+            .dropdown-panel {
+                width: 100vw;
+                left: -100vw;
+            }
+            
+            .dropdown-panel.open {
+                left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hamburger Menu Button -->
+    <div class="hamburger-menu" onclick="toggleDropdown()">
+        <div class="hamburger-icon">≡</div>
+    </div>
+
+    <!-- Dropdown Panel -->
+    <div class="dropdown-panel" id="dropdownPanel">
+        <div class="dropdown-header">
+            <div class="dropdown-title">Game Menu</div>
+            <button class="close-btn" onclick="closeDropdown()">&times;</button>
+        </div>
+git push          <div class="dropdown-content">
+            <!-- Quick Actions Section -->
+            <div class="section quick-actions" id="quickActionsSection">
+                <div class="section-content" style="display: block;">                    <div class="quick-actions-grid">                        <button class="quick-action-btn" onclick="showLeaderboard(); closeDropdown();">
+                            <span class="action-icon">🏆</span>
+                            <span class="action-text">Leaderboard</span>
+                            <span class="action-key">L</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="toggleShop(); closeDropdown();">
+                            <span class="action-icon">🛒</span>
+                            <span class="action-text">Shop</span>
+                            <span class="action-key">S</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="pauseGame(); closeDropdown();">
+                            <span class="action-icon">⏸️</span>
+                            <span class="action-text">Pause</span>
+                            <span class="action-key">P</span>
+                        </button><button class="quick-action-btn" onclick="restartGame(); closeDropdown();">
+                            <span class="action-icon">🔄</span>
+                            <span class="action-text">Restart</span>
+                            <span class="action-key">R</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="resetSaveData(); closeDropdown();">
+                            <span class="action-icon">🗑️</span>
+                            <span class="action-text">Reset Save</span>
+                            <span class="action-key">Delete</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="toggleFullscreen(); closeDropdown();">
+                            <span class="action-icon">🖥️</span>
+                            <span class="action-text">Fullscreen</span>
+                            <span class="action-key">F</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Section (moved to top for easy access) -->
+            <div class="section" id="profileSection">
+                <div class="section-header" onclick="toggleSection('profileSection')">
+                    👤 Profile & Stats
+                </div>
+                <div class="section-content">
+                    <div class="profile-grid">
+                        <!-- Name Entry -->
+                        <div class="profile-name">
+                            <label for="playerName">Player Name:</label>
+                            <input type="text" id="playerName" maxlength="20" placeholder="Enter your name">
+                        </div>
+
+                        <!-- Stats Display -->
+                        <div class="profile-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">Best Distance:</span>
+                                <span class="stat-value" id="profileBestDistance">0m</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Games Played:</span>
+                                <span class="stat-value" id="profileGamesPlayed">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Total Data Packets:</span>
+                                <span class="stat-value" id="profileTotalPackets">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Play Time:</span>
+                                <span class="stat-value" id="profilePlayTime">0h 0m</span>
+                            </div>
+                        </div>
+
+                        <!-- Pixel Art Profile Picture Editor -->
+                        <div class="pixel-editor">
+                            <div class="pixel-editor-title">Profile Picture (16x16):</div>
+                            <div class="pixel-canvas" id="pixelCanvas">
+                                <!-- 256 pixel divs will be generated by JavaScript -->
+                            </div>
+                            <div class="color-palette" id="colorPalette">
+                                <!-- Color options will be generated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls Section -->
+            <div class="section" id="controlsSection">
+                <div class="section-header" onclick="toggleSection('controlsSection')">
+                    ⌨️ Game Controls
+                </div>
+                <div class="section-content">
+                    <div class="controls-grid">
+                        <span class="key">A/D</span>
+                        <span class="action">Move Left/Right</span>
+                        
+                        <span class="key">←/→</span>
+                        <span class="action">Move Left/Right</span>
+                        
+                        <span class="key">W/↑</span>
+                        <span class="action">Jump</span>
+                        
+                        <span class="key">Space</span>
+                        <span class="action">Jump</span>
+                        
+                        <span class="key">S/↓</span>
+                        <span class="action">Drop Through</span>
+                          <span class="key">L</span>
+                        <span class="action">Leaderboard</span>
+                        
+                        <span class="key">P</span>
+                        <span class="action">Pause/Resume</span>
+                        
+                        <span class="key">R</span>
+                        <span class="action">Restart</span>
+                        
+                        <span class="key">C</span>
+                        <span class="action">Changelog</span>
+                          <span class="key">E</span>
+                        <span class="action">Upload Score</span>
+                        
+                        <span class="key">F</span>
+                        <span class="action">Toggle Fullscreen</span>
+                    </div>
+                </div>
+            </div>            <!-- Tips and Strategies Section -->
+            <div class="section" id="tipsSection">
+                <div class="section-header" onclick="toggleSection('tipsSection')">
+                    💡 Tips & Strategies
+                </div>
+                <div class="section-content">                    <div class="tips-content">                        <div class="tip-item">
+                            💎 <strong>Data Packet Strategy:</strong> Collect data packets scattered throughout the game to earn currency for shop upgrades. Gather as many as possible to maximize your purchasing power!
+                        </div>
+                        <div class="tip-item">
+                            ⚡ <strong>Shop Upgrades:</strong> Visit the shop to purchase permanent upgrades using your collected data packets. Improve jump height, score multipliers, and more!
+                        </div>                        <div class="tip-item">
+                            🎯 <strong>Survival Tips:</strong> Time your jumps carefully, use drop-through for quick escapes, and learn to navigate the various obstacles you'll encounter.
+                        </div>
+                        <div class="tip-item">
+                            🏃‍♂️ <strong>Advanced Techniques:</strong> Master precise jumping, collect packets in groups for efficiency, and learn enemy patterns to achieve higher scores.
+                        </div>
+                        <div class="tip-item">
+                            🏆 <strong>Leaderboard:</strong> Press 'L' to view global rankings. Your best score is automatically uploaded when you achieve a new personal best!
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feedback Section -->
+            <div class="section" id="feedbackSection">
+                <div class="section-header" onclick="toggleSection('feedbackSection')">
+                    💬 Help & Feedback
+                </div>
+                <div class="section-content">
+                    <div style="margin-bottom: 12px;">
+                        <a href="https://forms.office.com/r/mr8ienGv77" target="_blank" class="feedback-link">
+                            📝 Submit Feedback
+                        </a>
+                    </div>
+                    <div style="font-size: 12px; color: #7d8590; line-height: 1.4;">
+                        Help us improve CodeRunner! Share your thoughts on gameplay, bugs, features, or any suggestions you have.
+                    </div>
+                </div>
+            </div>        </div>
+    </div>
+
+    <!-- Shop Overlay -->
+    <div class="shop-overlay" id="shopOverlay">
+        <div class="shop-container">
+            <div class="shop-header">
+                <div class="shop-title">
+                    🛒 Shop
+                </div>
+                <div class="shop-currency">
+                    <span class="currency-icon">💾</span>
+                    <span class="currency-amount" id="shopCurrencyAmount">0</span>
+                </div>
+                <button class="shop-close" onclick="closeShop()">&times;</button>
+            </div>
+            
+            <div class="shop-tabs">
+                <button class="shop-tab active" onclick="switchShopTab('movement')">🏃 Movement</button>
+                <button class="shop-tab" onclick="switchShopTab('score')">💰 Score & Data</button>
+                <button class="shop-tab" onclick="switchShopTab('mechanics')">🛠️ Mechanics</button>
+                <button class="shop-tab" onclick="switchShopTab('revive')">🔄 Revive</button>
+                <button class="shop-tab" onclick="switchShopTab('cosmetic')">💎 Cosmetics</button>
+            </div>
+            
+            <div class="shop-content">
+                <!-- Movement Upgrades Tab -->
+                <div class="tab-content active" id="movement-tab">
+                    <div class="shop-category-title">🏃 Movement Upgrades</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="speed-boost">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">⚡</span>
+                                    Speed Boost
+                                </div>
+                                <div class="shop-item-price">25 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Makes the player run faster for better navigation and higher scores.
+                            </div>
+                            <div class="shop-item-stats">+20% movement speed</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('speed-boost')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="double-jump">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">⬆️</span>
+                                    Double Jump
+                                </div>
+                                <div class="shop-item-price">50 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Adds a second jump in mid-air to reach higher platforms and avoid obstacles.
+                            </div>
+                            <div class="shop-item-stats">Unlock air jump ability</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('double-jump')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="dash">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">💨</span>
+                                    Dash
+                                </div>
+                                <div class="shop-item-price">40 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Lets the player dash forward quickly to avoid obstacles or cross gaps.
+                            </div>
+                            <div class="shop-item-stats">Fast horizontal movement burst</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('dash')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="shield">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🛡️</span>
+                                    Shield
+                                </div>
+                                <div class="shop-item-price">35 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Blocks one hit or obstacle, giving you a second chance when you make a mistake.
+                            </div>
+                            <div class="shop-item-stats">One-time damage protection</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('shield')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="magnet">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🧲</span>
+                                    Magnet
+                                </div>
+                                <div class="shop-item-price">30 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Pulls coins or pickups toward the player for a limited time, making collection easier.
+                            </div>
+                            <div class="shop-item-stats">Auto-collect nearby items</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('magnet')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="hover-boots">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">👢</span>
+                                    Hover Boots
+                                </div>
+                                <div class="shop-item-price">45 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Float for a short time after jumping or falling, allowing precise landings.
+                            </div>
+                            <div class="shop-item-stats">Temporary air control</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('hover-boots')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="health-upgrade">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">❤️</span>
+                                    Health Upgrade
+                                </div>
+                                <div class="shop-item-price">60 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Increases maximum health, allowing you to take more hits before game over.
+                            </div>
+                            <div class="shop-item-stats">+1 maximum health</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('health-upgrade')">Purchase</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Score & Data Upgrades Tab -->
+                <div class="tab-content" id="score-tab">
+                    <div class="shop-category-title">💰 Score & Data Pack Upgrades</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="datapack-multiplier">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">💾</span>
+                                    Datapack Multiplier
+                                </div>
+                                <div class="shop-item-price">75 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Doubles all datapacks collected, significantly boosting your earning potential.
+                            </div>
+                            <div class="shop-item-stats">2x datapack collection</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('datapack-multiplier')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="score-multiplier">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">📊</span>
+                                    Score Multiplier
+                                </div>
+                                <div class="shop-item-price">80 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Increases score gained over time, helping you climb the leaderboards faster.
+                            </div>
+                            <div class="shop-item-stats">+25% score gain</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('score-multiplier')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="combo-bonus">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🔥</span>
+                                    Combo Bonus
+                                </div>
+                                <div class="shop-item-price">65 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Rewards long streaks of running, jumping, or collecting with bonus points.
+                            </div>
+                            <div class="shop-item-stats">Streak-based scoring</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('combo-bonus')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="streak-saver">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">💫</span>
+                                    Streak Saver
+                                </div>
+                                <div class="shop-item-price">55 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Keeps your combo alive after a mistake, maintaining your scoring momentum.
+                            </div>
+                            <div class="shop-item-stats">Combo protection</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('streak-saver')">Purchase</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Game-Changing Mechanics Tab -->
+                <div class="tab-content" id="mechanics-tab">
+                    <div class="shop-category-title">🛠️ Game-Changing Mechanics</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="ally-drone">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🤖</span>
+                                    Ally Drone
+                                </div>
+                                <div class="shop-item-price">120 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A small helper that shoots or clears obstacles ahead of you automatically.
+                            </div>
+                            <div class="shop-item-stats">AI obstacle clearing</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('ally-drone')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="extra-lane">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🛤️</span>
+                                    Extra Lane
+                                </div>
+                                <div class="shop-item-price">150 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Temporarily opens a new running path with more rewards and fewer obstacles.
+                            </div>
+                            <div class="shop-item-stats">Alternative safe path</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('extra-lane')">Purchase</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Revive/Retry Upgrades Tab -->
+                <div class="tab-content" id="revive-tab">
+                    <div class="shop-category-title">🔄 Revive / Retry Upgrades</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="second-chance">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">💖</span>
+                                    Second Chance
+                                </div>
+                                <div class="shop-item-price">100 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Revive once per run after dying, giving you another opportunity to continue.
+                            </div>
+                            <div class="shop-item-stats">One-time revival</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('second-chance')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="rewind">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">⏪</span>
+                                    Rewind
+                                </div>
+                                <div class="shop-item-price">90 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Go back a few seconds after a mistake, like a time bubble that undoes errors.
+                            </div>
+                            <div class="shop-item-stats">3-second time rewind</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('rewind')">Purchase</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cosmetic Unlocks Tab -->
+                <div class="tab-content" id="cosmetic-tab">
+                    <div class="shop-category-title">💎 Cosmetic Unlocks</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="trail-effects">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">✨</span>
+                                    Trail Effects
+                                </div>
+                                <div class="shop-item-price">20 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Cool effects behind the character while running, making you look more stylish.
+                            </div>
+                            <div class="shop-item-stats">Visual enhancement</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('trail-effects')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="glowing-outfit">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🌟</span>
+                                    Glowing Outfit
+                                </div>
+                                <div class="shop-item-price">50 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Cosmetic skin that activates after reaching high scores, showing your achievements.
+                            </div>
+                            <div class="shop-item-stats">Prestige appearance</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('glowing-outfit')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="custom-animations">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🎭</span>
+                                    Custom Animations
+                                </div>
+                                <div class="shop-item-price">35 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Change running, jumping, or dashing animations for a personalized character.
+                            </div>
+                            <div class="shop-item-stats">Animation variety</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('custom-animations')">Purchase</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <header class="game-header">
+            <h1>🏃‍♂️ <span class="code-text">CodeRunner</span></h1>
+            <p class="subtitle">Phase 1: Core Systems Demo</p>
+        </header>
+
+        <div class="main-content">
+            <div class="canvas-container">
+                <canvas id="gameCanvas" width="1400" height="700"></canvas>
+            </div>
+              <!-- Leaderboard Container (hidden by default) -->
+            <div id="leaderboard-container" style="display: none; margin-top: 20px;">
+                <div style="background: rgba(13, 17, 23, 0.95); border: 1px solid #30363d; border-radius: 8px; padding: 20px; max-width: 600px; margin: 0 auto;">
+                    <h3 style="color: #f0f6fc; text-align: center; margin-top: 0;">🏆 Live Leaderboard</h3>
+                    <ul id="leaderboard" style="list-style: none; padding: 0; margin: 0; color: #f0f6fc; font-family: 'Courier New', monospace;"></ul>
+                    <div style="text-align: center; margin-top: 15px;">
+                        <button onclick="hideLeaderboard()" style="background: #21262d; color: #f0f6fc; border: 1px solid #30363d; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-family: inherit;">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden elements for game compatibility -->
+            <div style="display: none;">
+                <span id="fps">0</span>
+                <span id="gameState">Initializing...</span>
+                <span id="score">0</span>
+                <span id="bestDistance">0</span>
+                <span id="dataPackets">0</span>
+                <span id="playerPos">0, 0</span>
+                <span id="playerMode">LIVE</span>
+                <span id="cameraX">0</span>
+                <span id="worldChunks">0</span>
+                <span id="worldDifficulty">1.0</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    
+    <!-- Firebase Configuration -->
+    <script>
+        // Firebase configuration - replace with your actual config
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyC3Sf6r81WojKrRUP-tmirHG9nW5Lytqvc",
+  authDomain: "coderunner-9e199.firebaseapp.com",
+  databaseURL: "https://coderunner-9e199-default-rtdb.firebaseio.com/",
+  projectId: "coderunner-9e199",
+  storageBucket: "coderunner-9e199.firebasestorage.app",
+  messagingSenderId: "593312008496",
+  appId: "1:593312008496:web:fc12738c8ff2946138e0f5",
+};
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+          // Make database available globally for the game
+        window.firebaseDatabase = database;
+          // Helper functions for leaderboard display
+        function hideLeaderboard() {
+            const container = document.getElementById("leaderboard-container");
+            if (container) {
+                container.style.display = "none";
+            }
+            
+            // Stop live updates when hiding leaderboard
+            if (window.gameInstance && window.gameInstance.leaderboardSystem) {
+                window.gameInstance.leaderboardSystem.stopLiveLeaderboardUpdates();
+            }
+        }
+          // Make function available globally
+        window.hideLeaderboard = hideLeaderboard;        // Dropdown Menu Functions
+        function toggleDropdown() {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            panel.classList.toggle('open');
+            
+            // Hide hamburger menu when panel is open, show when closed
+            if (panel.classList.contains('open')) {
+                hamburger.style.display = 'none';
+            } else {
+                hamburger.style.display = 'block';
+            }
+        }        function toggleDropdown() {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            panel.classList.toggle('open');
+            if (panel.classList.contains('open')) {
+                hamburger.style.display = 'none'; // Hide hamburger when dropdown is open
+            } else {
+                hamburger.style.display = 'block'; // Show hamburger when dropdown is closed
+            }
+        }
+          function toggleDropdown() {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            panel.classList.toggle('open');
+            if (panel.classList.contains('open')) {
+                hamburger.style.display = 'none'; // Hide hamburger when dropdown is open
+            } else {
+                hamburger.style.display = 'block'; // Show hamburger when dropdown is closed
+            }
+        }
+
+        function closeDropdown() {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            panel.classList.remove('open');
+            hamburger.style.display = 'block'; // Always show hamburger when closing
+        }
+
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            section.classList.toggle('expanded');
+        }
+
+        // Profile System
+        class ProfileManager {
+            constructor() {
+                this.profileData = this.loadProfile();
+                this.selectedColor = '#58a6ff';
+                this.initializeProfile();
+                this.initializePixelEditor();
+                this.updateProfileDisplay();
+            }
+
+            loadProfile() {
+                const saved = localStorage.getItem('coderunner_profile');
+                return saved ? JSON.parse(saved) : {
+                    name: 'Anonymous',
+                    bestDistance: 0,
+                    gamesPlayed: 0,
+                    totalPackets: 0,
+                    playTime: 0,
+                    profilePicture: Array(256).fill('#161b22')
+                };
+            }
+
+            saveProfile() {
+                localStorage.setItem('coderunner_profile', JSON.stringify(this.profileData));
+            }
+
+            initializeProfile() {
+                const nameInput = document.getElementById('playerName');
+                nameInput.value = this.profileData.name;
+                
+                nameInput.addEventListener('input', (e) => {
+                    this.profileData.name = e.target.value || 'Anonymous';
+                    this.saveProfile();
+                });
+            }
+
+            initializePixelEditor() {
+                const canvas = document.getElementById('pixelCanvas');
+                const palette = document.getElementById('colorPalette');
+                
+                // Create 16x16 pixel grid
+                for (let i = 0; i < 256; i++) {
+                    const pixel = document.createElement('div');
+                    pixel.className = 'pixel';
+                    pixel.style.backgroundColor = this.profileData.profilePicture[i];
+                    pixel.addEventListener('click', () => this.paintPixel(i, pixel));
+                    canvas.appendChild(pixel);
+                }
+
+                // Create color palette
+                const colors = [
+                    '#161b22', '#f0f6fc', '#58a6ff', '#79c0ff',
+                    '#56d364', '#ffd700', '#f85149', '#a5f3fc',
+                    '#ff7b72', '#ffa657', '#d2a8ff', '#7ee787',
+                    '#ffec8c', '#f85149', '#30363d', '#21262d'
+                ];
+
+                colors.forEach(color => {
+                    const colorOption = document.createElement('div');
+                    colorOption.className = 'color-option';
+                    colorOption.style.backgroundColor = color;
+                    if (color === this.selectedColor) {
+                        colorOption.classList.add('selected');
+                    }
+                    colorOption.addEventListener('click', () => this.selectColor(color, colorOption));
+                    palette.appendChild(colorOption);
+                });
+            }
+
+            selectColor(color, element) {
+                document.querySelector('.color-option.selected')?.classList.remove('selected');
+                element.classList.add('selected');
+                this.selectedColor = color;
+            }
+
+            paintPixel(index, element) {
+                this.profileData.profilePicture[index] = this.selectedColor;
+                element.style.backgroundColor = this.selectedColor;
+                this.saveProfile();
+            }
+
+            updateProfileDisplay() {
+                document.getElementById('profileBestDistance').textContent = this.profileData.bestDistance + 'm';
+                document.getElementById('profileGamesPlayed').textContent = this.profileData.gamesPlayed;
+                document.getElementById('profileTotalPackets').textContent = this.profileData.totalPackets;
+                
+                const hours = Math.floor(this.profileData.playTime / 3600);
+                const minutes = Math.floor((this.profileData.playTime % 3600) / 60);
+                document.getElementById('profilePlayTime').textContent = `${hours}h ${minutes}m`;
+            }
+
+            updateStats(newBest, gamesPlayed, totalPackets, playTime) {
+                if (newBest > this.profileData.bestDistance) {
+                    this.profileData.bestDistance = newBest;
+                }
+                this.profileData.gamesPlayed = gamesPlayed;
+                this.profileData.totalPackets = totalPackets;
+                this.profileData.playTime = playTime;
+                this.saveProfile();
+                this.updateProfileDisplay();
+            }
+
+            getName() {
+                return this.profileData.name;
+            }
+        }        // Initialize profile manager when page loads
+        let profileManager;
+        document.addEventListener('DOMContentLoaded', () => {
+            profileManager = new ProfileManager();
+        });
+
+        // Integration with game stats
+        function updateGameStats() {
+            if (window.gameInstance && profileManager) {
+                const gameStats = {
+                    bestDistance: window.gameInstance.bestDistance || 0,
+                    gamesPlayed: (profileManager.profileData.gamesPlayed + 1),
+                    totalPackets: window.gameInstance.upgradeSystem ? window.gameInstance.upgradeSystem.getDataPackets() : 0,
+                    playTime: profileManager.profileData.playTime + 1
+                };
+                
+                profileManager.updateStats(
+                    gameStats.bestDistance,
+                    gameStats.gamesPlayed,
+                    gameStats.totalPackets,
+                    gameStats.playTime
+                );
+            }
+        }
+
+        // Update stats every 60 seconds during gameplay
+        setInterval(() => {
+            if (window.gameInstance && window.gameInstance.gameState === 'playing') {
+                updateGameStats();
+            }
+        }, 60000);
+
+        // Make functions available globally
+        window.toggleDropdown = toggleDropdown;
+        window.closeDropdown = closeDropdown;
+        window.toggleSection = toggleSection;
+        window.profileManager = profileManager;
+        window.updateGameStats = updateGameStats;
+
+        // Quick Action Functions for Dropdown Menu
+        window.showLeaderboard = function() {
+            if (window.gameInstance && typeof window.gameInstance.showLeaderboard === 'function') {
+                window.gameInstance.showLeaderboard();
+            } else {
+                console.warn('Game instance not available or showLeaderboard method not found');
+            }        };
+
+        window.pauseGame = function() {
+            if (window.gameInstance && typeof window.gameInstance.togglePause === 'function') {
+                window.gameInstance.togglePause();
+            } else {
+                console.warn('Game instance not available or togglePause method not found');
+            }
+        };        window.restartGame = function() {
+            if (window.gameInstance && typeof window.gameInstance.restart === 'function') {
+                // Only restart if in valid states
+                if (['PLAYING', 'PAUSED', 'GAME_OVER'].includes(window.gameInstance.gameState)) {
+                    window.gameInstance.restart();
+                }
+            } else {
+                console.warn('Game instance not available or restart method not found');
+            }
+        };        window.toggleFullscreen = function() {
+            try {
+                const canvasContainer = document.querySelector('.canvas-container');
+                const canvas = canvasContainer?.querySelector('canvas');
+                
+                if (!document.fullscreenElement) {
+                    // Enter fullscreen on canvas container only
+                    const fullscreenPromise = canvasContainer.requestFullscreen?.() || 
+                                            canvasContainer.webkitRequestFullscreen?.() || 
+                                            canvasContainer.msRequestFullscreen?.();
+                      if (fullscreenPromise) {
+                        fullscreenPromise.then(() => {
+                            // Aspect ratio handling is now done in the fullscreen change event handler
+                        }).catch(err => {
+                            // Fullscreen request failed
+                        });
+                    }
+                } else {
+                    // Exit fullscreen
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }
+                }
+            } catch (error) {
+                console.warn('Fullscreen operation failed:', error);
+            }        };
+
+        // Reset Save Data Function
+        window.resetSaveData = function() {
+            // Use the in-game reset confirmation dialog instead of browser alerts
+            if (window.gameInstance) {
+                window.gameInstance.showResetConfirmationDialog();
+            } else {
+                console.error("Game instance not available");
+                alert("Game is not fully initialized. Please refresh the page and try again.");
+            }
+        };
+
+        // Shop System Functions
+        window.toggleShop = function() {
+            const shopOverlay = document.getElementById('shopOverlay');
+            if (shopOverlay) {
+                if (shopOverlay.classList.contains('open')) {
+                    closeShop();
+                } else {
+                    openShop();
+                }
+            }
+        };
+
+        function openShop() {
+            const shopOverlay = document.getElementById('shopOverlay');
+            if (shopOverlay) {
+                updateShopCurrency();
+                updateShopItems();
+                shopOverlay.classList.add('open');
+                
+                // Pause game if it's running
+                if (window.gameInstance && window.gameInstance.gameState === 'PLAYING') {
+                    window.gameInstance.togglePause();
+                }
+            }
+        }
+
+        function closeShop() {
+            const shopOverlay = document.getElementById('shopOverlay');
+            if (shopOverlay) {
+                shopOverlay.classList.remove('open');
+            }
+        }
+
+        window.closeShop = closeShop;
+
+        function switchShopTab(tabName) {
+            // Remove active class from all tabs and content
+            document.querySelectorAll('.shop-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active class to selected tab and content
+            const selectedTab = document.querySelector(`[onclick="switchShopTab('${tabName}')"]`);
+            const selectedContent = document.getElementById(`${tabName}-tab`);
+            
+            if (selectedTab && selectedContent) {
+                selectedTab.classList.add('active');
+                selectedContent.classList.add('active');
+            }
+        }
+
+        window.switchShopTab = switchShopTab;
+
+        function updateShopCurrency() {
+            const currencyElement = document.getElementById('shopCurrencyAmount');
+            if (currencyElement && window.gameInstance && window.gameInstance.upgradeSystem) {
+                const dataPackets = window.gameInstance.upgradeSystem.getDataPackets();
+                currencyElement.textContent = dataPackets;
+            }
+        }
+
+        function updateShopItems() {
+            if (!window.gameInstance || !window.gameInstance.shopSystem) return;
+            
+            const shopItems = document.querySelectorAll('.shop-item');
+            shopItems.forEach(item => {
+                const itemId = item.dataset.item;
+                const button = item.querySelector('.shop-item-button');
+                const price = item.querySelector('.shop-item-price');
+                
+                if (window.gameInstance.shopSystem.isOwned(itemId)) {
+                    item.classList.add('owned');
+                    button.textContent = 'Owned';
+                    button.classList.add('owned');
+                    button.disabled = true;
+                    
+                    // Add owned badge if not already present
+                    if (!item.querySelector('.owned-badge')) {
+                        const badge = document.createElement('div');
+                        badge.className = 'owned-badge';
+                        badge.textContent = 'OWNED';
+                        item.appendChild(badge);
+                    }
+                } else {
+                    item.classList.remove('owned');
+                    button.textContent = 'Purchase';
+                    button.classList.remove('owned');
+                    button.disabled = false;
+                    
+                    // Remove owned badge if present
+                    const badge = item.querySelector('.owned-badge');
+                    if (badge) {
+                        badge.remove();
+                    }
+                    
+                    // Check if player can afford it
+                    const priceText = price.textContent;
+                    const priceAmount = parseInt(priceText.match(/\d+/)[0]);
+                    const currentCurrency = window.gameInstance.upgradeSystem.getDataPackets();
+                    
+                    if (currentCurrency < priceAmount) {
+                        button.disabled = true;
+                        button.textContent = 'Insufficient Funds';
+                    }
+                }
+            });
+        }
+
+        function buyUpgrade(itemId) {
+            if (!window.gameInstance || !window.gameInstance.shopSystem) {
+                console.warn('Shop system not available');
+                return;
+            }
+            
+            const success = window.gameInstance.shopSystem.purchaseUpgrade(itemId);
+            if (success) {
+                updateShopCurrency();
+                updateShopItems();
+                
+                // Show purchase feedback
+                const item = document.querySelector(`[data-item="${itemId}"]`);
+                if (item) {
+                    item.style.transform = 'scale(1.05)';
+                    setTimeout(() => {
+                        item.style.transform = '';
+                    }, 200);
+                }
+            } else {
+                // Show error feedback
+                console.warn(`Failed to purchase ${itemId}`);
+            }
+        }
+
+        window.buyUpgrade = buyUpgrade;
+
+        // Close shop when clicking outside
+        document.addEventListener('click', (e) => {
+            const shopOverlay = document.getElementById('shopOverlay');
+            const shopContainer = document.querySelector('.shop-container');
+            
+            if (shopOverlay && shopOverlay.classList.contains('open') && 
+                !shopContainer.contains(e.target)) {
+                closeShop();
+            }
+        });
+
+        // Keyboard shortcut for shop
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                // Only open shop if not typing in an input field
+                if (!['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+                    e.preventDefault();
+                    toggleShop();
+                }
+            }
+        });        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            if (panel && hamburger && !panel.contains(e.target) && !hamburger.contains(e.target)) {
+                panel.classList.remove('open');
+                hamburger.style.display = 'block'; // Show hamburger when closing dropdown
+            }
+        });        // Enhanced fullscreen change handler
+        function handleFullscreenChange() {
+            const canvasContainer = document.querySelector('.canvas-container');
+            const canvas = canvasContainer?.querySelector('canvas');
+            
+            if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement) {
+                // Entering fullscreen - maintain aspect ratio while filling screen
+                if (canvas && canvasContainer) {
+                    setTimeout(() => {
+                        // Get screen dimensions
+                        const screenW = window.screen.width;
+                        const screenH = window.screen.height;
+                        const screenRatio = screenW / screenH;
+                        
+                        // Get canvas original dimensions and aspect ratio
+                        const canvasWidth = 1400;
+                        const canvasHeight = 700;
+                        const canvasRatio = canvasWidth / canvasHeight; // 2:1
+                        
+                        let finalWidth, finalHeight, offsetX = 0, offsetY = 0;
+                        
+                        // Calculate dimensions to maintain aspect ratio
+                        if (screenRatio > canvasRatio) {
+                            // Screen is wider than canvas ratio - fit by height
+                            finalHeight = screenH;
+                            finalWidth = screenH * canvasRatio;
+                            offsetX = (screenW - finalWidth) / 2;
+                        } else {
+                            // Screen is taller than canvas ratio - fit by width
+                            finalWidth = screenW;
+                            finalHeight = screenW / canvasRatio;
+                            offsetY = (screenH - finalHeight) / 2;
+                        }
+                        
+                        // Apply styles to container
+                        canvasContainer.style.cssText = `
+                            position: fixed !important;
+                            top: 0px !important;
+                            left: 0px !important;
+                            width: ${screenW}px !important;
+                            height: ${screenH}px !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            border: none !important;
+                            outline: none !important;
+                            background: #0d1117 !important;
+                            box-sizing: border-box !important;
+                            z-index: 2147483647 !important;
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                        `;
+                        
+                        // Apply styles to canvas with proper aspect ratio
+                        canvas.style.cssText = `
+                            position: relative !important;
+                            width: ${finalWidth}px !important;
+                            height: ${finalHeight}px !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            border: none !important;
+                            outline: none !important;
+                            background: #161b22 !important;
+                            box-sizing: border-box !important;
+                            image-rendering: pixelated !important;
+                            image-rendering: -moz-crisp-edges !important;
+                            image-rendering: crisp-edges !important;
+                        `;
+                        
+                        // Force document elements to have no margins/padding
+                        document.documentElement.style.cssText = 'margin: 0 !important; padding: 0 !important; overflow: hidden !important;';
+                        document.body.style.cssText = 'margin: 0 !important; padding: 0 !important; overflow: hidden !important;';
+                    }, 50);
+                }
+            } else {
+                // Exiting fullscreen - reset styles
+                if (canvas && canvasContainer) {
+                    canvasContainer.style.cssText = '';
+                    canvas.style.cssText = '';
+                    document.documentElement.style.cssText = '';
+                    document.body.style.cssText = 'margin: 0; padding: 15px; background: linear-gradient(135deg, #0d1117 0%, #161b22 100%); font-family: "Courier New", monospace; color: #f0f6fc; min-height: 100vh; overflow-y: auto; overflow-x: hidden;';
+                }
+            }
+        }
+
+        // Add event listeners for all browsers
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    </script>
+    
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>

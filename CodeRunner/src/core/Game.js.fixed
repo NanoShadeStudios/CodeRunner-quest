@@ -1,0 +1,156 @@
+// filepath: c:\Users\lutaa\OneDrive\Desktop\CodeRunner\src\core\Game.js
+/**
+ * Game Engine - Main game loop and coordination
+ */
+
+import { GAME_CONFIG, GAME_STATES, DIFFICULTY_LEVELS } from '../utils/constants.js';
+import { InputManager } from '../systems/InputManager.js';
+import { UpgradeSystem } from '../systems/UpgradeSystem.js';
+import { ShopSystem } from '../systems/ShopSystem.js';
+import { LeaderboardSystem } from '../systems/LeaderboardSystem.js';
+import { WorldGenerator } from './WorldGenerator.js';
+import { Player } from './Player.js';
+import { PhysicsEngine } from '../physics/PhysicsEngine.js';
+import { GameRenderer } from '../rendering/GameRenderer.js';
+import { GameUI } from '../rendering/GameUI.js';
+import { GameDialogs } from '../rendering/GameDialogs.js';
+
+// Module integration helper
+import { connectRenderingModules } from './game-module-bridge.js';
+
+export class Game {
+    constructor() {
+        this.canvas = document.getElementById(GAME_CONFIG.CANVAS_ID);        
+        this.ctx = this.canvas.getContext('2d');
+        
+        this.gameState = GAME_STATES.INITIALIZING;
+        this.previousGameState = null;
+        this.lastTime = 0;
+        this.deltaTime = 0;
+        this.gameOverReason = null;
+        
+        this.gameOverStartTime = null;
+        this.isNewHighScore = false;
+        
+        this.fps = 0;
+        this.frameCount = 0;
+        this.lastFpsUpdate = 0;
+        this.camera = { x: 0, y: 0 };
+        this.score = 0;
+        this.bestDistance = 0;
+        this.previousBestDistance = 0; // Store previous best for high score detection
+        this.startTime = 0; // Will be set when game actually starts
+        this.player = null;
+        this.world = null;
+        this.physics = null;
+        this.inputManager = null;
+        this.upgradeSystem = null;
+        this.leaderboardSystem = null;
+        
+        // Difficulty system
+        this.selectedDifficulty = 'EASY';
+        this.difficultyIndex = 0;
+        this.difficultyKeys = Object.keys(DIFFICULTY_LEVELS);
+        this.lastHealthRegenTime = 0;
+        
+        // Performance monitoring for enhanced effects
+        this.fpsCounter = {
+            frames: 0,
+            lastTime: 0,
+            currentFPS: 0
+        };
+        
+        // Add rendering modules
+        this.renderer = new GameRenderer(this);
+        this.ui = new GameUI(this);
+        this.dialogs = new GameDialogs(this);
+        
+        // Purchase effect tracking
+        this.purchaseEffect = null;
+        
+        // Changelog data
+        this.changelogData = {
+            version: "v1.3.0",
+            lastUpdated: "June 2025",
+            entries: [
+                {
+                    version: "v1.3.0",
+                    date: "June 2025",
+                    title: "Difficulty Selection System",
+                    changes: [
+                        "• New difficulty selection screen at game start",
+                        "🔹 Easy: Fast health regeneration (1 minute)",
+                        "🔸 Medium: Moderate regeneration (3 minutes)", 
+                        "🔴 Hard: Slow regeneration (7 minutes)",
+                        "❌ Extreme: No health regeneration at all",
+                        "• Difficulty indicator shown during gameplay",
+                        "• Health regeneration timer updates based on selected difficulty"
+                    ]
+                },
+                {
+                    version: "v1.2.0",
+                    date: "June 2025",
+                    title: "Upgrade System Overhaul",                    
+                    changes: [
+                        "• Complete shop system integration with permanent upgrades",
+                        "• Data Packets currency system for shop purchases", 
+                        "• Multiple upgrade categories: Movement, Score & Data, Mechanics, Revive, Cosmetics",
+                        "• Persistent upgrade ownership across game sessions",
+                        "• Animated shop interface with modern UI design",
+                        "• Shop accessible through main website interface",  
+                    ]
+                },
+                {
+                    version: "v1.1.0", 
+                    date: "June 2025",
+                    title: "Performance & UI Improvements",
+                    changes: [
+                        "• Added F3 performance monitoring display",
+                        "• Enhanced health regeneration system",
+                        "• Improved pixelated heart health display",
+                        "• Better game over animations with high score celebration",
+                        "• Optimized rendering pipeline"
+                    ]
+                }
+            ]
+        };
+        
+        this.init();
+    }
+    
+    init() {
+        this.createSystems();
+        this.setupInputCallbacks();
+        
+        // Connect rendering modules
+        connectRenderingModules(this);
+        
+        // Start with difficulty selection instead of jumping straight to gameplay
+        this.gameState = GAME_STATES.DIFFICULTY_SELECT;
+        
+        this.gameLoop(0);
+    }
+    
+    createSystems() {
+        this.inputManager = new InputManager();
+        this.upgradeSystem = new UpgradeSystem();
+        this.shopSystem = new ShopSystem(this);
+        this.leaderboardSystem = new LeaderboardSystem();
+        
+        // Set up name input checker for InputManager
+        this.inputManager.setNameInputChecker(() => {
+            return this.leaderboardSystem && this.leaderboardSystem.nameInputActive;
+        });
+        
+        // Add mouse click listener for leaderboard tabs and menus
+        this.tabHitAreas = [];
+        this.difficultyHitAreas = [];
+        
+        // Mouse state tracking
+        this.mousePos = { x: 0, y: 0 };
+        this.hoveredDifficulty = -1;
+        
+        this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+    }
+}

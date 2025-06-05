@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Health Test</title>
+</head>
+<body>
+    <h1>Health System Test</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        import { GAME_CONFIG } from './src/utils/constants.js';
+        
+        const resultsDiv = document.getElementById('results');
+        
+        function log(message) {
+            const p = document.createElement('p');
+            p.textContent = message;
+            resultsDiv.appendChild(p);
+        }
+        
+        log('Testing GAME_CONFIG constants...');
+        log(`PLAYER_HEALTH: ${GAME_CONFIG.PLAYER_HEALTH}`);
+        log(`MAX_HEALTH: ${GAME_CONFIG.MAX_HEALTH}`);
+        
+        // Test health calculation like in Player constructor
+        const shopUpgrades = { extraHealth: 0 }; // Simulate no shop upgrades
+        const calculatedHealth = GAME_CONFIG.PLAYER_HEALTH + shopUpgrades.extraHealth;
+        
+        log(`Calculated health (PLAYER_HEALTH + extraHealth): ${calculatedHealth}`);
+        log(`Is calculated health a valid number? ${!isNaN(calculatedHealth)}`);
+        
+        if (isNaN(calculatedHealth)) {
+            log('❌ PROBLEM: Health calculation results in NaN!');
+        } else {
+            log('✅ Health calculation is working correctly');
+        }
+    </script>
+</body>
+</html>

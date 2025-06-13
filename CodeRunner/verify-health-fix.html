@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Health System Verification</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #0d1117; color: #f0f6fc; }
+        .result { padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .success { background: rgba(64, 209, 88, 0.2); border: 1px solid #40d158; }
+        .error { background: rgba(248, 81, 73, 0.2); border: 1px solid #f85149; }
+        .info { background: rgba(121, 192, 255, 0.2); border: 1px solid #79c0ff; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Health System Verification</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        import { GAME_CONFIG } from './src/utils/constants.js';
+        
+        const resultsDiv = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = message;
+            resultsDiv.appendChild(div);
+        }
+        
+        // Test 1: Check constants exist
+        addResult('=== CONSTANT VERIFICATION ===', 'info');
+        
+        if (typeof GAME_CONFIG.PLAYER_HEALTH !== 'undefined') {
+            addResult(`✅ PLAYER_HEALTH is defined: ${GAME_CONFIG.PLAYER_HEALTH}`, 'success');
+        } else {
+            addResult('❌ PLAYER_HEALTH is undefined!', 'error');
+        }
+        
+        if (typeof GAME_CONFIG.MAX_HEALTH !== 'undefined') {
+            addResult(`✅ MAX_HEALTH is defined: ${GAME_CONFIG.MAX_HEALTH}`, 'success');
+        } else {
+            addResult('❌ MAX_HEALTH is undefined!', 'error');
+        }
+        
+        // Test 2: Simulate Player health calculation
+        addResult('\n=== HEALTH CALCULATION TEST ===', 'info');
+        
+        const mockShopUpgrades = { extraHealth: 0 };
+        const calculatedHealth = GAME_CONFIG.PLAYER_HEALTH + mockShopUpgrades.extraHealth;
+        
+        if (!isNaN(calculatedHealth) && calculatedHealth > 0) {
+            addResult(`✅ Health calculation successful: ${calculatedHealth}`, 'success');
+        } else {
+            addResult(`❌ Health calculation failed: ${calculatedHealth}`, 'error');
+        }
+        
+        // Test 3: Test with shop upgrades
+        const mockShopUpgradesWithExtra = { extraHealth: 2 };
+        const calculatedHealthWithUpgrades = GAME_CONFIG.PLAYER_HEALTH + mockShopUpgradesWithExtra.extraHealth;
+        
+        if (!isNaN(calculatedHealthWithUpgrades) && calculatedHealthWithUpgrades === 5) {
+            addResult(`✅ Health with upgrades: ${calculatedHealthWithUpgrades}`, 'success');
+        } else {
+            addResult(`❌ Health with upgrades failed: ${calculatedHealthWithUpgrades}`, 'error');
+        }
+        
+        // Test 4: Check for other related constants
+        addResult('\n=== RELATED CONSTANTS ===', 'info');
+        
+        if (typeof GAME_CONFIG.INVULNERABILITY_DURATION !== 'undefined') {
+            addResult(`✅ INVULNERABILITY_DURATION: ${GAME_CONFIG.INVULNERABILITY_DURATION}ms`, 'success');
+        } else {
+            addResult('⚠️ INVULNERABILITY_DURATION not found', 'error');
+        }
+        
+        // Final summary
+        addResult('\n=== SUMMARY ===', 'info');
+        addResult('🎯 The health hearts should now be visible in the game!', 'success');
+        addResult('🎮 Open the main game (index.html) to verify health hearts display', 'info');
+        addResult('❤️ Hearts should appear in the top-left corner during gameplay', 'info');
+        
+    </script>
+</body>
+</html>

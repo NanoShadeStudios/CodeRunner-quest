@@ -1,0 +1,4340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeRunner - Digital Explorer</title>
+    <!-- Prevent favicon 404 error -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🏃</text></svg>">    <style>
+        * {
+            box-sizing: border-box;
+        }
+          body {
+            margin: 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            font-family: 'Courier New', monospace;
+            color: #f0f6fc;
+            min-height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 0 15px;
+            min-height: 100vh;
+        }
+        
+        .game-header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+          .game-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            background: linear-gradient(45deg, #58a6ff, #79c0ff, #a5f3fc);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(88, 166, 255, 0.3);
+        }
+        
+        .game-header .subtitle {
+            margin: 5px 0 0 0;
+            font-size: 0.8rem;
+            color: #7d8590;
+        }        .main-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            justify-content: center;
+            max-width: 100%;
+        }        .canvas-container {
+            position: relative;
+            border: 3px solid #30363d;
+            border-image: linear-gradient(45deg, #21262d, #30363d, #21262d) 1;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+        }/* Fullscreen canvas container styles */
+        .canvas-container:fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 9999 !important;
+        }
+
+        .canvas-container:-webkit-full-screen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 9999 !important;
+        }
+
+        .canvas-container:-moz-full-screen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 9999 !important;
+        }        .canvas-container:fullscreen canvas,
+        .canvas-container:-webkit-full-screen canvas,
+        .canvas-container:-moz-full-screen canvas,
+        .canvas-container:-ms-fullscreen canvas {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            outline: none !important;
+            background: #161b22 !important;
+            box-sizing: border-box !important;
+            image-rendering: pixelated !important;
+            image-rendering: -moz-crisp-edges !important;
+            image-rendering: crisp-edges !important;
+            object-fit: fill !important;
+            display: block !important;
+        }/* Additional fullscreen body override */
+        body:has(.canvas-container:fullscreen),
+        body:has(.canvas-container:-webkit-full-screen),
+        body:has(.canvas-container:-moz-full-screen) {
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+
+        /* Fullscreen backdrop styling */
+        .canvas-container::backdrop,
+        .canvas-container::-webkit-backdrop {
+            background: #0d1117 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }        /* Override any default fullscreen margins/padding */
+        *:fullscreen {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        *:-webkit-full-screen {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        *:-moz-full-screen {
+            margin: 0 !important;
+            padding: 0 !important;
+        }        /* Ultra-aggressive fullscreen overrides for all browsers */
+        html:has(.canvas-container:fullscreen),
+        html:has(.canvas-container:-webkit-full-screen),
+        html:has(.canvas-container:-moz-full-screen) {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+            border: none !important;
+            outline: none !important;
+        }
+
+        /* Root element fullscreen overrides */
+        html:fullscreen, html:-webkit-full-screen, html:-moz-full-screen {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+        }
+
+        body:fullscreen, body:-webkit-full-screen, body:-moz-full-screen {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+        }
+
+        /* Specific browser fullscreen element overrides */        .canvas-container:fullscreen,
+        .canvas-container:-webkit-full-screen,
+        .canvas-container:-moz-full-screen,
+        .canvas-container:-ms-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            min-width: 100vw !important;
+            min-height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #0d1117 !important;
+            overflow: hidden !important;
+            z-index: 2147483647 !important;
+            transform: none !important;
+            clip: none !important;
+            outline: none !important;
+            display: block !important;
+        }
+        
+        canvas {
+            display: block;
+            background: #161b22;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        /* Hamburger Menu Styles */
+        .hamburger-menu {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(13, 17, 23, 0.95);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .hamburger-menu:hover {
+            background: rgba(13, 17, 23, 1);
+            border-color: #58a6ff;
+            box-shadow: 0 6px 20px rgba(88, 166, 255, 0.2);
+        }
+
+        .hamburger-icon {
+            font-size: 20px;
+            color: #58a6ff;
+            line-height: 1;
+        }
+
+        /* Dropdown Panel Styles */
+        .dropdown-panel {
+            position: fixed;
+            top: 0;
+            left: -400px;
+            width: 400px;
+            height: 100vh;
+            background: rgba(13, 17, 23, 0.98);
+            border-right: 2px solid #30363d;
+            z-index: 999;
+            transition: left 0.3s ease;
+            backdrop-filter: blur(15px);
+            overflow-y: auto;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .dropdown-panel.open {
+            left: 0;
+        }
+
+        .dropdown-header {
+            padding: 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dropdown-title {
+            font-size: 18px;
+            color: #58a6ff;
+            font-weight: bold;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.3s ease;
+        }
+
+        .close-btn:hover {
+            color: #f85149;
+        }
+
+        .dropdown-content {
+            padding: 0;
+        }
+
+        .section {
+            border-bottom: 1px solid #21262d;
+        }
+
+        .section-header {
+            padding: 16px 20px;
+            background: rgba(33, 38, 45, 0.5);
+            color: #58a6ff;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-header:hover {
+            background: rgba(33, 38, 45, 0.8);
+        }
+
+        .section-content {
+            padding: 20px;
+            display: none;
+            background: rgba(22, 27, 34, 0.3);
+        }
+
+        .section.expanded .section-content {
+            display: block;
+        }
+
+        .section-header::after {
+            content: "▼";
+            font-size: 12px;
+            transition: transform 0.3s ease;
+        }        .section.expanded .section-header::after {
+            transform: rotate(180deg);
+        }
+
+        /* Quick Actions Section */
+        .quick-actions {
+            border-bottom: none;
+        }
+
+        .quick-actions .section-content {
+            display: block !important;
+            padding: 16px 20px;
+            background: rgba(22, 27, 34, 0.2);
+        }
+
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .quick-action-btn {
+            background: linear-gradient(135deg, #21262d 0%, #30363d 100%);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            color: #f0f6fc;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .quick-action-btn:hover {
+            background: linear-gradient(135deg, #30363d 0%, #434950 100%);
+            border-color: #58a6ff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+        }
+
+        .quick-action-btn:active {
+            transform: translateY(0);
+        }
+
+        .action-icon {
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+
+        .action-text {
+            font-size: 11px;
+            font-weight: bold;
+            color: #f0f6fc;
+        }
+
+        .action-key {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            background: rgba(88, 166, 255, 0.2);
+            border: 1px solid #58a6ff;
+            border-radius: 3px;
+            padding: 1px 4px;
+            font-size: 9px;
+            color: #58a6ff;
+            font-weight: bold;
+        }
+
+        /* Controls Section */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 12px;
+            font-size: 12px;
+        }
+
+        .key {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 3px;
+            padding: 4px 8px;
+            font-family: inherit;
+            font-size: 11px;
+            color: #58a6ff;
+            text-align: center;
+            min-width: 40px;
+        }
+
+        .action {
+            color: #7d8590;
+            align-self: center;
+            font-size: 11px;
+        }
+
+        /* Tips Section */
+        .tips-content {
+            font-size: 12px;
+            color: #7d8590;
+            line-height: 1.5;
+        }
+
+        .tips-content strong {
+            color: #f0f6fc;
+        }
+
+        .tip-item {
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(33, 38, 45, 0.3);
+            border-radius: 4px;
+            border-left: 3px solid #58a6ff;        }
+
+        /* Audio Controls Section */
+        .audio-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            font-size: 12px;
+        }
+
+        .volume-control {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .volume-control label {
+            color: #f0f6fc;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .volume-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .volume-slider {
+            flex: 1;
+            height: 4px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #58a6ff;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            background: #79c0ff;
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #58a6ff;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            transition: background 0.3s ease;
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            background: #79c0ff;
+        }
+
+        .volume-value {
+            color: #58a6ff;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+            font-size: 11px;
+        }
+
+        .audio-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .audio-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #21262d 0%, #30363d 100%);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #f0f6fc;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .audio-btn:hover {
+            background: linear-gradient(135deg, #30363d 0%, #434950 100%);
+            border-color: #58a6ff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+        }        .audio-btn-icon {
+            font-size: 12px;
+        }
+
+        /* Music Selector Styles */
+        .music-selector {
+            display: grid;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .music-selector-title {
+            color: #f0f6fc;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .music-track {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: linear-gradient(135deg, #21262d 0%, #30363d 100%);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .music-track:hover {
+            background: linear-gradient(135deg, #30363d 0%, #434950 100%);
+            border-color: #58a6ff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+        }
+
+        .music-track.selected {
+            border-color: #40d158;
+            background: linear-gradient(135deg, rgba(64, 209, 88, 0.1) 0%, rgba(64, 209, 88, 0.05) 100%);
+            box-shadow: 0 0 0 2px rgba(64, 209, 88, 0.3);
+        }
+
+        .music-track.playing {
+            border-color: #58a6ff;
+            background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.3);
+        }
+
+        .music-track-info {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }        .music-track-name {
+            color: #f0f6fc;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .music-track-description {
+            color: #8b949e;
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+
+        .music-track-filename {
+            color: #7d8590;
+            font-size: 9px;
+            opacity: 0.8;
+        }
+
+        .music-track-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .music-control-btn {
+            background: none;
+            border: none;
+            color: #58a6ff;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .music-control-btn:hover {
+            background: rgba(88, 166, 255, 0.1);
+            transform: scale(1.1);
+        }
+
+        .music-control-btn.playing {
+            color: #40d158;
+        }
+
+        /* Mute button state */
+        .quick-action-btn.muted .action-icon {
+            opacity: 0.5;
+        }
+
+        .quick-action-btn.muted .action-text::after {
+            content: " (Muted)";
+            color: #f85149;
+            font-size: 9px;
+        }
+
+        /* Feedback Section */
+        .feedback-link {
+            color: #58a6ff;
+            text-decoration: none;
+            padding: 10px 16px;
+            background: rgba(33, 38, 45, 0.5);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            display: inline-block;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .feedback-link:hover {
+            background: rgba(88, 166, 255, 0.1);
+            border-color: #58a6ff;
+            text-decoration: none;
+        }
+
+        /* Profile Section */
+        .profile-grid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .profile-name {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .profile-name label {
+            color: #f0f6fc;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .profile-name input {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: #f0f6fc;
+            font-family: inherit;
+            font-size: 12px;
+        }
+
+        .profile-name input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+
+        .profile-stats {
+            display: grid;
+            gap: 8px;
+            background: rgba(33, 38, 45, 0.3);
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .stat-label {
+            color: #7d8590;
+        }        .stat-value {
+            color: #f0f6fc;
+            font-weight: bold;
+        }
+
+        /* Login Status Section */
+        .login-status {
+            background: rgba(33, 38, 45, 0.3);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+        }
+
+        .login-status-title {
+            color: #f0f6fc;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .login-info {
+            display: grid;
+            gap: 6px;
+        }
+
+        .login-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            align-items: center;
+        }
+
+        .login-label {
+            color: #7d8590;
+        }
+
+        .login-value {
+            color: #f0f6fc;
+            font-weight: bold;
+        }
+
+        .login-value.guest {
+            color: #fbbf24;
+        }
+
+        .login-value.authenticated {
+            color: #40d158;
+        }
+
+        .login-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .login-action-btn {
+            padding: 6px 12px;
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid #58a6ff;
+            border-radius: 4px;
+            color: #58a6ff;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .login-action-btn:hover {
+            background: rgba(88, 166, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .login-action-btn.logout {
+            background: rgba(248, 81, 73, 0.1);
+            border-color: #f85149;
+            color: #f85149;
+        }        .login-action-btn.logout:hover {
+            background: rgba(248, 81, 73, 0.2);
+        }
+
+        /* Account Management Section */
+        .account-management {
+            background: rgba(33, 38, 45, 0.3);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            display: grid;
+            gap: 16px;
+        }
+
+        .account-management-title {
+            color: #f0f6fc;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .account-section {
+            background: rgba(22, 27, 34, 0.5);
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #21262d;
+        }
+
+        .account-section-title {
+            color: #f0f6fc;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .account-form {
+            display: grid;
+            gap: 10px;
+        }
+
+        .account-input-group {
+            display: grid;
+            gap: 4px;
+        }
+
+        .account-input-group label {
+            color: #8b949e;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .account-input-group input {
+            background: rgba(13, 17, 23, 0.8);
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 8px 10px;
+            color: #f0f6fc;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .account-input-group input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+
+        .password-input-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-input-container input {
+            flex: 1;
+            padding-right: 40px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+        }
+
+        .password-toggle:hover {
+            color: #58a6ff;
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .account-action-btn {
+            padding: 8px 12px;
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid #58a6ff;
+            border-radius: 4px;
+            color: #58a6ff;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .account-action-btn:hover {
+            background: rgba(88, 166, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .account-action-btn.danger {
+            background: rgba(248, 81, 73, 0.1);
+            border-color: #f85149;
+            color: #f85149;
+        }
+
+        .account-action-btn.danger:hover {
+            background: rgba(248, 81, 73, 0.2);
+        }
+
+        .account-note {
+            font-size: 10px;
+            color: #7d8590;
+            margin-top: 8px;
+            padding: 6px;
+            background: rgba(248, 81, 73, 0.05);
+            border-radius: 3px;
+            border-left: 2px solid #f85149;
+        }
+
+        /* Character Sprite Selector */
+        .sprite-selector {
+            display: grid;
+            gap: 12px;
+        }
+
+        .sprite-selector-title {
+            color: #f0f6fc;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }        .sprite-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 15px;
+            max-height: 350px;
+            overflow-y: auto;
+            padding: 12px;
+            background: rgba(33, 38, 45, 0.3);
+            border-radius: 6px;
+            justify-items: center;
+        }        .sprite-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 15px;
+            background: #21262d;
+            border: 2px solid #30363d;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 90px;
+            width: 100%;
+            max-width: 120px;
+        }.sprite-option:hover {
+            border-color: #58a6ff;
+            background: rgba(88, 166, 255, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .sprite-option.selected {
+            border-color: #40d158;
+            background: rgba(64, 209, 88, 0.1);
+            box-shadow: 0 0 0 2px rgba(64, 209, 88, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .sprite-option.selected:hover {
+            border-color: #40d158;
+            background: rgba(64, 209, 88, 0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 0 0 2px rgba(64, 209, 88, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3);
+        }        .sprite-preview {
+            width: 56px;
+            height: 56px;
+            image-rendering: pixelated;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .sprite-preview-error {
+            width: 56px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+            border-radius: 3px;
+            font-size: 24px;
+        }        .sprite-name {
+            color: #f0f6fc;
+            font-size: 11px;
+            text-align: center;
+            font-weight: bold;
+            line-height: 1.2;
+        }        .sprite-option.selected .sprite-name {
+            color: #40d158;
+        }
+
+        /* Settings Categories */
+        .settings-categories {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .settings-category-btn {
+            background: linear-gradient(135deg, #21262d 0%, #30363d 100%);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            color: #f0f6fc;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-align: left;
+            font-family: inherit;
+        }
+
+        .settings-category-btn:hover {
+            background: linear-gradient(135deg, #30363d 0%, #434950 100%);
+            border-color: #58a6ff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+        }
+
+        .category-icon {
+            font-size: 18px;
+            margin-right: 12px;
+        }
+
+        .category-text {
+            flex-grow: 1;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .category-arrow {
+            color: #58a6ff;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        /* Settings Panel Overlay */
+        .settings-panel-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .settings-panel-overlay.open {
+            display: flex;
+            opacity: 1;
+        }
+
+        .settings-panel {
+            background: rgba(13, 17, 23, 0.98);
+            border: 2px solid #30363d;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+            transform: scale(0.9) translateY(-20px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }        .settings-panel-overlay.open .settings-panel {
+            transform: scale(1) translateY(0);
+        }
+
+        .settings-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #30363d;
+            background: rgba(33, 38, 45, 0.5);
+        }
+
+        .settings-panel-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #f0f6fc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .settings-panel-title span {
+            font-size: 20px;
+        }
+
+        .settings-panel-close {
+            background: none;
+            border: none;
+            color: #7d8590;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 8px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            line-height: 1;
+        }
+
+        .settings-panel-close:hover {
+            color: #f85149;
+            background: rgba(248, 81, 73, 0.1);
+            transform: scale(1.1);
+        }
+
+        .settings-panel-close:active {
+            transform: scale(0.95);
+        }
+
+        .settings-panel-content {
+            padding: 20px;
+        }        /* Mobile responsiveness for settings panels */
+        @media (max-width: 768px) {
+            .settings-panel {
+                width: 95%;
+                max-height: 90vh;
+                border-radius: 8px;
+            }
+            
+            .settings-panel-header {
+                padding: 15px;
+            }
+            
+            .settings-panel-title {
+                font-size: 16px;
+            }
+
+            .settings-panel-close {
+                font-size: 24px;
+                width: 36px;
+                height: 36px;
+                padding: 6px;
+            }
+            
+            .settings-panel-content {
+                padding: 15px;
+            }
+            
+            .settings-category-btn {
+                padding: 12px;
+            }
+            
+            .category-text {
+                font-size: 13px;
+            }
+        }
+
+        /* Ensure panels work well with small screens */
+        @media (max-height: 600px) {
+            .settings-panel {
+                max-height: 95vh;
+            }
+        }        /* General Settings Controls */
+        .general-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            font-size: 12px;
+        }
+
+        .setting-control {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .setting-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #f0f6fc;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .setting-icon {
+            font-size: 16px;
+        }
+
+        .setting-toggle {
+            display: flex;
+            align-items: center;
+            margin-left: 24px;
+        }
+
+        .toggle-checkbox {
+            display: none;
+        }
+
+        .toggle-label {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: #656d76;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-checkbox:checked + .toggle-label {
+            background: #238636;
+            border-color: #2ea043;
+        }
+
+        .toggle-checkbox:checked + .toggle-label .toggle-slider {
+            transform: translateX(26px);
+            background: #fff;
+        }        .setting-description {
+            color: #8b949e;
+            font-size: 11px;
+            margin-left: 24px;
+            line-height: 1.4;
+        }
+
+        /* Graphics Quality Dropdown */
+        .setting-dropdown {
+            display: flex;
+            align-items: center;
+            margin-left: 24px;
+        }        .quality-select {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #f0f6fc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 100px;
+        }
+
+        .language-select {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .quality-select:hover {
+            background: #30363d;
+            border-color: #58a6ff;
+        }
+
+        .quality-select:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+
+        .quality-select option {
+            background: #21262d;
+            color: #f0f6fc;
+            padding: 4px 8px;
+        }
+
+        /* Keybind Customization Styles */
+        .keybind-section {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .keybind-controls {
+            width: 100%;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            background: #0d1117;
+        }
+
+        .keybind-category {
+            margin-bottom: 20px;
+        }
+
+        .keybind-category:last-child {
+            margin-bottom: 0;
+        }
+
+        .keybind-category h4 {
+            margin: 0 0 10px 0;
+            color: #58a6ff;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #21262d;
+            padding-bottom: 5px;
+        }
+
+        .keybind-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+
+        .keybind-label {
+            color: #f0f6fc;
+            font-size: 11px;
+            min-width: 140px;
+            flex-shrink: 0;
+        }
+
+        .keybind-button {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #f0f6fc;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 60px;
+            text-align: center;
+            margin-left: 5px;
+        }
+
+        .keybind-button:hover {
+            background: #30363d;
+            border-color: #58a6ff;
+        }
+
+        .keybind-button.capturing {
+            background: #58a6ff;
+            color: #0d1117;
+            border-color: #58a6ff;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .keybind-actions {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .keybind-reset-btn {
+            background: #da3633;
+            border: 1px solid #f85149;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .keybind-reset-btn:hover {
+            background: #f85149;
+            border-color: #ff7b72;
+        }        .keybind-reset-btn:active {
+            transform: translateY(1px);
+        }
+
+        /* Data Management Section */
+        .data-management-section {
+            border-top: 1px solid #333;
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+
+        .data-management-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .data-action-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border: 2px solid;
+            border-radius: 8px;
+            background: transparent;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 44px;
+        }
+
+        .reset-data-btn {
+            border-color: #da3633;
+            color: #ff7b72;
+        }
+
+        .reset-data-btn:hover {
+            background: rgba(218, 54, 51, 0.1);
+            border-color: #f85149;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .reset-data-btn:active {
+            transform: translateY(0);
+        }
+
+        .data-action-btn .action-icon {
+            font-size: 16px;
+        }        .data-action-btn .action-text {
+            flex: 1;
+            text-align: left;
+        }
+
+        /* Keybind capture overlay */
+        .keybind-capture-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .keybind-capture-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .keybind-capture-modal {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            min-width: 300px;
+            color: #f0f6fc;
+        }
+
+        .keybind-capture-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #58a6ff;
+        }
+
+        .keybind-capture-desc {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .keybind-capture-key {
+            background: #0d1117;
+            border: 2px solid #58a6ff;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            color: #58a6ff;
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hamburger Menu Button -->
+    <div class="hamburger-menu" onclick="toggleDropdown()">
+        <div class="hamburger-icon">≡</div>
+    </div>
+
+    <!-- Dropdown Panel -->
+    <div class="dropdown-panel" id="dropdownPanel">
+        <div class="dropdown-header">
+            <div class="dropdown-title">Game Menu</div>
+            <button class="close-btn" onclick="closeDropdown()">&times;</button>        </div>
+          <div class="dropdown-content">
+            <!-- Quick Actions Section -->
+            <div class="section quick-actions" id="quickActionsSection">
+                <div class="section-content" style="display: block;">                    <div class="quick-actions-grid">                        <button class="quick-action-btn" onclick="showLeaderboard(); closeDropdown();">
+                            <span class="action-icon">🏆</span>
+                            <span class="action-text">Leaderboard</span>
+                            <span class="action-key">L</span>
+                        </button>                        <button class="quick-action-btn" onclick="window.gameInstance.toggleShop(); setTimeout(() => closeDropdown(), 50);" id="dropdown-shop-btn">
+                            <span class="action-icon">🛒</span>
+                            <span class="action-text">Shop</span>
+                            <span class="action-key">Q</span>                        </button>
+                        <button class="quick-action-btn" onclick="toggleFullscreen(); closeDropdown();">
+                            <span class="action-icon">🖥️</span>
+                            <span class="action-text">Fullscreen</span>
+                            <span class="action-key">F</span>
+                        </button>
+                        <button class="quick-action-btn" onclick="toggleAudioMute(); closeDropdown();" id="audio-mute-btn">
+                            <span class="action-icon">🔊</span>
+                            <span class="action-text">Mute Audio</span>
+                            <span class="action-key">M</span>
+                        </button>
+                    </div>
+                </div>
+            </div>            <!-- Unified Settings Section -->
+            <div class="section" id="settingsSection">
+                <div class="section-header" onclick="toggleSection('settingsSection')">
+                    ⚙️ Settings
+                </div>
+                <div class="section-content">                    <div class="settings-categories">
+                        <button class="settings-category-btn" onclick="openSettingsPanel('general')">
+                            <span class="category-icon">⚙️</span>
+                            <span class="category-text">General Settings</span>
+                            <span class="category-arrow">→</span>
+                        </button>
+                        <button class="settings-category-btn" onclick="openSettingsPanel('audio')">
+                            <span class="category-icon">🔊</span>
+                            <span class="category-text">Audio Settings</span>
+                            <span class="category-arrow">→</span>
+                        </button>
+                        <button class="settings-category-btn" onclick="openSettingsPanel('music')">
+                            <span class="category-icon">🎵</span>
+                            <span class="category-text">Music Selector</span>
+                            <span class="category-arrow">→</span>
+                        </button>
+                        <button class="settings-category-btn" onclick="openSettingsPanel('profile')">
+                            <span class="category-icon">👤</span>
+                            <span class="category-text">Profile & Stats</span>
+                            <span class="category-arrow">→</span>
+                        </button>
+                        <button class="settings-category-btn" onclick="openSettingsPanel('feedback')">
+                            <span class="category-icon">💬</span>
+                            <span class="category-text">Feedback</span>
+                            <span class="category-arrow">→</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Character Sprite Selector (separate section) -->
+            <div class="section" id="characterSection">
+                <div class="section-header" onclick="toggleSection('characterSection')">
+                    🎨 Character Sprite
+                </div>
+                <div class="section-content">
+                    <div class="sprite-selector">
+                        <div class="sprite-selector-title">Choose Your Character:</div>
+                        <div class="sprite-grid" id="spriteGrid">
+                            <!-- Sprite options will be generated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls Section -->
+            <div class="section" id="controlsSection">
+                <div class="section-header" onclick="toggleSection('controlsSection')">
+                    ⌨️ Game Controls
+                </div>
+                <div class="section-content">
+                    <div class="controls-grid">
+                        <span class="key">A/D</span>
+                        <span class="action">Move Left/Right</span>
+                        
+                        <span class="key">←/→</span>
+                        <span class="action">Move Left/Right</span>
+                        
+                        <span class="key">W/↑</span>
+                        <span class="action">Jump</span>
+                        
+                        <span class="key">Space</span>
+                        <span class="action">Jump</span>
+                        
+                        <span class="key">S/↓</span>
+                        <span class="action">Drop Through</span>
+                          <span class="key">L</span>
+                        <span class="action">Leaderboard</span>
+                        
+                        <span class="key">P</span>
+                        <span class="action">Pause/Resume</span>
+                        
+                        <span class="key">R</span>
+                        <span class="action">Restart</span>
+                        
+                        <span class="key">C</span>
+                        <span class="action">Changelog</span>
+                          <span class="key">E</span>
+                        <span class="action">Upload Score</span>
+                        
+                        <span class="key">F</span>
+                        <span class="action">Toggle Fullscreen</span>
+                    </div>
+                </div>
+            </div>            <!-- Tips and Strategies Section -->
+            <div class="section" id="tipsSection">
+                <div class="section-header" onclick="toggleSection('tipsSection')">
+                    💡 Tips & Strategies
+                </div>
+                <div class="section-content">                    <div class="tips-content">                        <div class="tip-item">
+                            💎 <strong>Data Packet Strategy:</strong> Collect data packets scattered throughout the game to earn currency for shop upgrades. Gather as many as possible to maximize your purchasing power!
+                        </div>
+                        <div class="tip-item">
+                            ⚡ <strong>Shop Upgrades:</strong> Visit the shop to purchase permanent upgrades using your collected data packets. Improve jump height, score multipliers, and more!
+                        </div>                        <div class="tip-item">
+                            🎯 <strong>Survival Tips:</strong> Time your jumps carefully, use drop-through for quick escapes, and learn to navigate the various obstacles you'll encounter.
+                        </div>
+                        <div class="tip-item">
+                            🏃‍♂️ <strong>Advanced Techniques:</strong> Master precise jumping, collect packets in groups for efficiency, and learn enemy patterns to achieve higher scores.
+                        </div>
+                        <div class="tip-item">
+                            🏆 <strong>Leaderboard:</strong> Press 'L' to view global rankings. Your best score is automatically uploaded when you achieve a new personal best!
+                        </div>                    </div>
+                </div>
+            </div>            </div>
+        </div>
+    </div>    <!-- Settings Panel Overlays -->
+    <!-- General Settings Panel -->
+    <div class="settings-panel-overlay" id="generalSettingsPanel">
+        <div class="settings-panel">
+            <div class="settings-panel-header">
+                <div class="settings-panel-title">
+                    <span>⚙️</span>
+                    General Settings
+                </div>
+                <button class="settings-panel-close" onclick="closeSettingsPanel('generalSettingsPanel')">&times;</button>
+            </div>
+            <div class="settings-panel-content">
+                <div class="general-controls">                    <div class="setting-control">
+                        <label for="enableOpeningAnimation" class="setting-label">
+                            <span class="setting-icon">🎬</span>
+                            <span class="setting-text">Play Opening Animation</span>
+                        </label>
+                        <div class="setting-toggle">
+                            <input type="checkbox" id="enableOpeningAnimation" class="toggle-checkbox" checked>
+                            <label for="enableOpeningAnimation" class="toggle-label">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">
+                            Show the opening animation when the game loads
+                        </div>
+                    </div>
+
+                    <!-- Graphics Quality Setting -->
+                    <div class="setting-control">
+                        <label class="setting-label">
+                            <span class="setting-icon">🎮</span>
+                            <span class="setting-text">Graphics Quality</span>
+                        </label>
+                        <div class="setting-dropdown">
+                            <select id="graphicsQuality" class="quality-select">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                        <div class="setting-description">
+                            Affects particle effects, background tiles, and lighting. Lower settings improve performance on weaker devices.
+                        </div>
+                    </div>                    <!-- Show FPS Setting -->
+                    <div class="setting-control">
+                        <label for="showFpsCounter" class="setting-label">
+                            <span class="setting-icon">📊</span>
+                            <span class="setting-text">Show FPS Counter</span>
+                        </label>
+                        <div class="setting-toggle">
+                            <input type="checkbox" id="showFpsCounter" class="toggle-checkbox">
+                            <label for="showFpsCounter" class="toggle-label">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">
+                            Display frame rate counter for performance monitoring
+                        </div>
+                    </div>
+
+                    <!-- Language Setting -->
+                    <div class="setting-control">
+                        <label class="setting-label">
+                            <span class="setting-icon">🌍</span>
+                            <span class="setting-text">Language</span>
+                        </label>
+                        <div class="setting-dropdown">
+                            <select id="gameLanguage" class="language-select">
+                                <option value="en">🇺🇸 English</option>
+                                <option value="es">🇪🇸 Español</option>
+                                <option value="fr">🇫🇷 Français</option>
+                                <option value="de">🇩🇪 Deutsch</option>
+                                <option value="zh">🇨🇳 中文</option>
+                                <option value="ja">🇯🇵 日本語</option>
+                            </select>
+                        </div>
+                        <div class="setting-description">
+                            Change the game interface language
+                        </div>
+                    </div>
+
+                    <!-- Keybind Customization Section -->
+                    <div class="setting-control keybind-section">
+                        <div class="setting-label">
+                            <span class="setting-icon">⌨️</span>
+                            <span class="setting-text">Keybind Customization</span>
+                        </div>
+                        <div class="setting-description" style="margin-bottom: 15px;">
+                            Click on any key to change it. Press ESC to cancel.
+                        </div>
+                        
+                        <div class="keybind-controls">
+                            <!-- Movement Controls -->
+                            <div class="keybind-category">
+                                <h4>Movement</h4>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Move Left:</span>
+                                    <button class="keybind-button" data-action="left" id="keybind-left">A</button>
+                                    <button class="keybind-button" data-action="left-alt" id="keybind-left-alt">←</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Move Right:</span>
+                                    <button class="keybind-button" data-action="right" id="keybind-right">D</button>
+                                    <button class="keybind-button" data-action="right-alt" id="keybind-right-alt">→</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Move Up:</span>
+                                    <button class="keybind-button" data-action="up" id="keybind-up">W</button>
+                                    <button class="keybind-button" data-action="up-alt" id="keybind-up-alt">↑</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Move Down:</span>
+                                    <button class="keybind-button" data-action="down" id="keybind-down">S</button>
+                                    <button class="keybind-button" data-action="down-alt" id="keybind-down-alt">↓</button>
+                                </div>
+                            </div>
+
+                            <!-- Action Controls -->
+                            <div class="keybind-category">
+                                <h4>Actions</h4>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Jump/Action:</span>
+                                    <button class="keybind-button" data-action="space" id="keybind-space">Space</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Dash:</span>
+                                    <button class="keybind-button" data-action="x" id="keybind-x">X</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Modifier:</span>
+                                    <button class="keybind-button" data-action="shift" id="keybind-shift">Shift</button>
+                                </div>
+                            </div>
+
+                            <!-- Game Controls -->
+                            <div class="keybind-category">
+                                <h4>Game Controls</h4>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Pause:</span>
+                                    <button class="keybind-button" data-action="pause" id="keybind-pause">P</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Restart:</span>
+                                    <button class="keybind-button" data-action="restart" id="keybind-restart">R</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Confirm:</span>
+                                    <button class="keybind-button" data-action="confirm" id="keybind-confirm">Enter</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Continue/Changelog:</span>
+                                    <button class="keybind-button" data-action="continue" id="keybind-continue">C</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Skip:</span>
+                                    <button class="keybind-button" data-action="skip" id="keybind-skip">Esc</button>
+                                </div>
+                            </div>
+
+                            <!-- Menu Controls -->
+                            <div class="keybind-category">
+                                <h4>Menu Controls</h4>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Leaderboard:</span>
+                                    <button class="keybind-button" data-action="leaderboard" id="keybind-leaderboard">L</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Upload Score:</span>
+                                    <button class="keybind-button" data-action="uploadScore" id="keybind-uploadScore">E</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Fullscreen:</span>
+                                    <button class="keybind-button" data-action="fullscreen" id="keybind-fullscreen">F</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Change Name:</span>
+                                    <button class="keybind-button" data-action="changeName" id="keybind-changeName">N</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Shop:</span>
+                                    <button class="keybind-button" data-action="shop" id="keybind-shop">Q</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Performance Monitor:</span>
+                                    <button class="keybind-button" data-action="togglePerformance" id="keybind-togglePerformance">F3</button>
+                                </div>
+                                <div class="keybind-item">
+                                    <span class="keybind-label">Delete Entry:</span>
+                                    <button class="keybind-button" data-action="deleteEntry" id="keybind-deleteEntry">Del</button>
+                                </div>
+                            </div>
+                        </div>                        <div class="keybind-actions">
+                            <button class="keybind-reset-btn" onclick="resetKeybinds()">Reset to Defaults</button>
+                        </div>
+                    </div>
+
+                    <!-- Data Management Section -->
+                    <div class="setting-control data-management-section">
+                        <div class="setting-label">
+                            <span class="setting-icon">💾</span>
+                            <span class="setting-text">Data Management</span>
+                        </div>
+                        <div class="setting-description" style="margin-bottom: 15px;">
+                            Manage your game data and progress
+                        </div>
+                        
+                        <div class="data-management-controls">
+                            <button class="data-action-btn reset-data-btn" onclick="resetSaveData()">
+                                <span class="action-icon">🗑️</span>
+                                <span class="action-text">Reset Save Data</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div></div>
+    </div>    <!-- Keybind Capture Overlay -->
+    <div class="keybind-capture-overlay" id="keybindCaptureOverlay">
+        <div class="keybind-capture-modal">
+            <div class="keybind-capture-title">Press a Key</div>
+            <div class="keybind-capture-desc">Press the key you want to assign to this action.<br>Press ESC to cancel.</div>
+            <div class="keybind-capture-key" id="keybindCaptureDisplay">Waiting for input...</div>
+        </div>
+    </div>
+
+    <!-- Audio Settings Panel -->
+    <div class="settings-panel-overlay" id="audioSettingsPanel">
+        <div class="settings-panel">
+            <div class="settings-panel-header">
+                <div class="settings-panel-title">
+                    <span>🔊</span>
+                    Audio Settings
+                </div>
+                <button class="settings-panel-close" onclick="closeSettingsPanel('audioSettingsPanel')">&times;</button>
+            </div>
+            <div class="settings-panel-content">
+                <div class="audio-controls">
+                    <div class="volume-control">
+                        <label for="masterVolume">Master Volume</label>
+                        <div class="volume-slider-container">
+                            <input type="range" id="masterVolume" min="0" max="100" value="70" class="volume-slider">
+                            <span class="volume-value" id="masterVolumeValue">70%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="volume-control">
+                        <label for="sfxVolume">Sound Effects</label>
+                        <div class="volume-slider-container">
+                            <input type="range" id="sfxVolume" min="0" max="100" value="80" class="volume-slider">
+                            <span class="volume-value" id="sfxVolumeValue">80%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="volume-control">
+                        <label for="musicVolume">Background Music</label>
+                        <div class="volume-slider-container">
+                            <input type="range" id="musicVolume" min="0" max="100" value="50" class="volume-slider">
+                            <span class="volume-value" id="musicVolumeValue">50%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="audio-buttons">
+                        <button class="audio-btn" onclick="testAudioSounds()">
+                            <span class="audio-btn-icon">🔧</span>
+                            Test Sounds
+                        </button>
+                        <button class="audio-btn" onclick="toggleBackgroundMusic()">
+                            <span class="audio-btn-icon">🎵</span>
+                            <span class="music-mode-text">Start Music</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Music Selector Panel -->
+    <div class="settings-panel-overlay" id="musicSettingsPanel">
+        <div class="settings-panel">
+            <div class="settings-panel-header">
+                <div class="settings-panel-title">
+                    <span>🎵</span>
+                    Music Selector
+                </div>
+                <button class="settings-panel-close" onclick="closeSettingsPanel('musicSettingsPanel')">&times;</button>
+            </div>
+            <div class="settings-panel-content">
+                <div class="music-selector">
+                    <div class="music-selector-title">Choose Background Music</div>
+                    <div id="musicTracksList">
+                        <!-- Music tracks will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile & Stats Panel -->
+    <div class="settings-panel-overlay" id="profileSettingsPanel">
+        <div class="settings-panel">
+            <div class="settings-panel-header">
+                <div class="settings-panel-title">
+                    <span>👤</span>
+                    Profile & Stats
+                </div>
+                <button class="settings-panel-close" onclick="closeSettingsPanel('profileSettingsPanel')">&times;</button>
+            </div>
+            <div class="settings-panel-content">                <div class="profile-grid">
+                    <!-- Login Status Section -->
+                    <div class="login-status">
+                        <div class="login-status-title">🔐 Account Status</div>
+                        <div class="login-info" id="loginInfo">
+                            <div class="login-row">
+                                <span class="login-label">Status:</span>
+                                <span class="login-value" id="loginStatus">Loading...</span>
+                            </div>
+                            <div class="login-row" id="userEmailRow" style="display: none;">
+                                <span class="login-label">Email:</span>
+                                <span class="login-value" id="userEmail">-</span>
+                            </div>
+                            <div class="login-row" id="loginProviderRow" style="display: none;">
+                                <span class="login-label">Login Method:</span>
+                                <span class="login-value" id="loginProvider">-</span>
+                            </div>
+                            <div class="login-actions" id="loginActions">
+                                <button class="login-action-btn" id="loginBtn" onclick="showLoginPrompt()" style="display: none;">
+                                    🔑 Login
+                                </button>
+                                <button class="login-action-btn" id="logoutBtn" onclick="handleLogout()" style="display: none;">
+                                    🚪 Logout
+                                </button>
+                            </div>
+                        </div>                    </div>
+
+                    <!-- Account Management Section -->
+                    <div class="account-management" id="accountManagement" style="display: none;">
+                        <div class="account-management-title">⚙️ Account Settings</div>
+                        
+                        <!-- Change Email Section -->
+                        <div class="account-section">
+                            <div class="account-section-title">📧 Change Email</div>
+                            <div class="account-form">
+                                <div class="account-input-group">
+                                    <label for="newEmail">New Email:</label>
+                                    <input type="email" id="newEmail" placeholder="Enter new email address">
+                                </div>
+                                <div class="account-input-group">
+                                    <label for="emailConfirmPassword">Current Password:</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="emailConfirmPassword" placeholder="Confirm with current password">
+                                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('emailConfirmPassword')">👁️</button>
+                                    </div>
+                                </div>
+                                <button class="account-action-btn" onclick="changeEmail()">
+                                    📧 Update Email
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Change Password Section -->
+                        <div class="account-section">
+                            <div class="account-section-title">🔒 Change Password</div>
+                            <div class="account-form">
+                                <div class="account-input-group">
+                                    <label for="currentPassword">Current Password:</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="currentPassword" placeholder="Enter current password">
+                                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('currentPassword')">👁️</button>
+                                    </div>
+                                </div>
+                                <div class="account-input-group">
+                                    <label for="newPassword">New Password:</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="newPassword" placeholder="Enter new password">
+                                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('newPassword')">👁️</button>
+                                    </div>
+                                </div>
+                                <div class="account-input-group">
+                                    <label for="confirmNewPassword">Confirm New Password:</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="confirmNewPassword" placeholder="Confirm new password">
+                                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('confirmNewPassword')">👁️</button>
+                                    </div>
+                                </div>
+                                <button class="account-action-btn" onclick="changePassword()">
+                                    🔒 Update Password
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Account Actions -->
+                        <div class="account-section">
+                            <div class="account-section-title">🛡️ Account Actions</div>
+                            <div class="account-form">
+                                <button class="account-action-btn danger" onclick="deleteAccount()">
+                                    🗑️ Delete Account
+                                </button>
+                                <div class="account-note">
+                                    ⚠️ This action cannot be undone. All your data will be permanently deleted.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Name Entry -->
+                    <div class="profile-name">
+                        <label for="playerName">Player Name:</label>
+                        <input type="text" id="playerName" maxlength="20" placeholder="Enter your name">
+                    </div>
+
+                    <!-- Stats Display -->
+                    <div class="profile-stats"><div class="stat-row">
+                            <span class="stat-label">Best Score:</span>
+                            <span class="stat-value" id="profileBestScore">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Games Played:</span>
+                            <span class="stat-value" id="profileGamesPlayed">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Total Data Packets:</span>
+                            <span class="stat-value" id="profileTotalPackets">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Play Time:</span>
+                            <span class="stat-value" id="profilePlayTime">0h 0m</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Panel -->
+    <div class="settings-panel-overlay" id="feedbackSettingsPanel">
+        <div class="settings-panel">
+            <div class="settings-panel-header">
+                <div class="settings-panel-title">
+                    <span>💬</span>
+                    Feedback
+                </div>
+                <button class="settings-panel-close" onclick="closeSettingsPanel('feedbackSettingsPanel')">&times;</button>
+            </div>
+            <div class="settings-panel-content">
+                <div style="margin-bottom: 12px;">
+                    <a href="https://forms.office.com/r/mr8ienGv77" target="_blank" class="feedback-link">
+                        📝 Submit Feedback
+                    </a>
+                </div>
+                <div style="font-size: 12px; color: #7d8590; line-height: 1.4;">
+                    Help us improve CodeRunner! Share your thoughts on gameplay, bugs, features, or any suggestions you have.
+                </div>
+            </div>
+        </div>    </div><!-- Shop Overlay (PERMANENTLY DISABLED - using canvas-based shop now) -->
+    <div class="shop-overlay" id="shopOverlay" style="display: none !important;">`
+        <div class="shop-container">
+            <div class="shop-header">
+                <div class="shop-title">
+                    🛒 Shop
+                </div>
+                <div class="shop-currency">
+                    <span class="currency-icon">⚡</span>
+                    <span class="currency-amount" id="shopCurrencyAmount">0</span>
+                </div>
+                <button class="shop-close" onclick="closeShop()">&times;</button>
+            </div>
+              <div class="shop-tabs">
+                <button class="shop-tab active" onclick="switchShopTab('movement')">🏃 Movement</button>
+                <button class="shop-tab" onclick="switchShopTab('score')">💰 Score & Data</button>
+                <button class="shop-tab" onclick="switchShopTab('mechanics')">🛠️ Mechanics</button>
+                <button class="shop-tab" onclick="switchShopTab('cosmetic')">💎 Cosmetics</button>
+            </div>
+            
+            <div class="shop-content">
+                <!-- Movement Upgrades Tab -->
+                <div class="tab-content active" id="movement-tab">
+                    <div class="shop-category-title">🏃 Movement Upgrades</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="speed-boost">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">⚡</span>
+                                    Speed Boost
+                                </div>
+                                <div class="shop-item-price">25 ⚡</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Makes the player run faster for better navigation and higher scores.
+                            </div>
+                            <div class="shop-item-stats">+20% movement speed</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('speed-boost')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="double-jump">                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">⬆️</span>
+                                    Double Jump
+                                </div>
+                                <div class="shop-item-price">50 ⚡</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Adds a second jump in mid-air to reach higher platforms and avoid obstacles.
+                            </div>
+                            <div class="shop-item-stats">Unlock air jump ability</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('double-jump')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="dash">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">💨</span>
+                                    Dash
+                                </div>
+                                <div class="shop-item-price">40 ⚡</div>
+                            </div>                            <div class="shop-item-description">
+                                Lets the player dash forward quickly to avoid obstacles or cross gaps. Press Shift to dash.
+                            </div>                            <div class="shop-item-stats">Fast horizontal movement burst (Shift key)</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('dash')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="health-upgrade">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">❤️</span>
+                                    Health Upgrade
+                                </div>
+                                <div class="shop-item-price">60 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Increases maximum health, allowing you to take more hits before game over.
+                            </div>
+                            <div class="shop-item-stats">+1 maximum health</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('health-upgrade')">Purchase</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Score & Data Upgrades Tab -->
+                <div class="tab-content" id="score-tab">
+                    <div class="shop-category-title">💰 Score & Data Pack Upgrades</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="datapack-multiplier">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">💾</span>
+                                    Datapack Multiplier
+                                </div>
+                                <div class="shop-item-price">75 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Doubles all datapacks collected, significantly boosting your earning potential.
+                            </div>
+                            <div class="shop-item-stats">2x datapack collection</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('datapack-multiplier')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="score-multiplier">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">📊</span>
+                                    Score Multiplier
+                                </div>
+                                <div class="shop-item-price">80 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Increases score gained over time, helping you climb the leaderboards faster.
+                            </div>
+                            <div class="shop-item-stats">+25% score gain</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('score-multiplier')">Purchase</button>                        </div>
+                    </div>
+                </div>
+                
+                <!-- Game-Changing Mechanics Tab -->
+                <div class="tab-content" id="mechanics-tab">
+                    <div class="shop-category-title">🛠️ Game-Changing Mechanics</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="ally-drone">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🤖</span>
+                                    Ally Drone
+                                </div>
+                                <div class="shop-item-price">120 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A small helper that shoots or clears obstacles ahead of you automatically.
+                            </div>
+                            <div class="shop-item-stats">AI obstacle clearing</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('ally-drone')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="extra-lane">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🛤️</span>
+                                    Extra Lane
+                                </div>
+                                <div class="shop-item-price">150 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                Temporarily opens a new running path with more rewards and fewer obstacles.
+                            </div>
+                            <div class="shop-item-stats">Alternative safe path</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('extra-lane')">Purchase</button>
+                        </div>
+                    </div>                </div>                <!-- Cosmetic Unlocks Tab -->
+                <div class="tab-content" id="cosmetic-tab">
+                    <div class="shop-category-title">💎 Cosmetic Unlocks</div>
+                    <div class="shop-items-grid">
+                        <div class="shop-item" data-item="sprite-cosmic">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🌌</span>
+                                    Cosmic Runner
+                                </div>
+                                <div class="shop-item-price">50 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A mystical character sprite with cosmic energy flowing through their form.
+                            </div>
+                            <div class="shop-item-stats">Exclusive character skin</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('sprite-cosmic')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="sprite-neon">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">⚡</span>
+                                    Neon Guardian
+                                </div>
+                                <div class="shop-item-price">75 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A vibrant character with glowing neon accents and futuristic design.
+                            </div>
+                            <div class="shop-item-stats">Exclusive character skin</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('sprite-neon')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="sprite-shadow">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🌑</span>
+                                    Shadow Walker
+                                </div>
+                                <div class="shop-item-price">100 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A mysterious dark figure that moves through shadows with elegance.
+                            </div>
+                            <div class="shop-item-stats">Exclusive character skin</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('sprite-shadow')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="sprite-flame">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">🔥</span>
+                                    Flame Sprinter
+                                </div>
+                                <div class="shop-item-price">125 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A fiery character that leaves trails of ember in their wake.
+                            </div>
+                            <div class="shop-item-stats">Exclusive character skin</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('sprite-flame')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="sprite-ice">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">❄️</span>
+                                    Frost Runner
+                                </div>
+                                <div class="shop-item-price">150 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A cool and collected character with crystalline ice effects.
+                            </div>
+                            <div class="shop-item-stats">Exclusive character skin</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('sprite-ice')">Purchase</button>
+                        </div>
+                        
+                        <div class="shop-item" data-item="sprite-electric">
+                            <div class="shop-item-header">
+                                <div class="shop-item-name">
+                                    <span class="shop-item-icon">⚡</span>
+                                    Electric Dash
+                                </div>
+                                <div class="shop-item-price">200 💾</div>
+                            </div>
+                            <div class="shop-item-description">
+                                A high-energy character crackling with electrical power.
+                            </div>
+                            <div class="shop-item-stats">Exclusive character skin</div>
+                            <button class="shop-item-button" onclick="buyUpgrade('sprite-electric')">Purchase</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <header class="game-header">
+            <h1>🏃‍♂️ <span class="code-text">CodeRunner</span></h1>
+            <p class="subtitle">Phase 1: Core Systems Demo</p>
+        </header>
+
+        <div class="main-content">
+            <div class="canvas-container">
+                <canvas id="gameCanvas" width="1400" height="700"></canvas>
+            </div>
+              <!-- Leaderboard Container (hidden by default) -->
+            <div id="leaderboard-container" style="display: none; margin-top: 20px;">
+                <div style="background: rgba(13, 17, 23, 0.95); border: 1px solid #30363d; border-radius: 8px; padding: 20px; max-width: 600px; margin: 0 auto;">
+                    <h3 style="color: #f0f6fc; text-align: center; margin-top: 0;">🏆 Live Leaderboard</h3>
+                    <ul id="leaderboard" style="list-style: none; padding: 0; margin: 0; color: #f0f6fc; font-family: 'Courier New', monospace;"></ul>
+                    <div style="text-align: center; margin-top: 15px;">
+                        <button onclick="hideLeaderboard()" style="background: #21262d; color: #f0f6fc; border: 1px solid #30363d; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-family: inherit;">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden elements for game compatibility -->
+            <div style="display: none;">
+                <span id="fps">0</span>
+                <span id="gameState">Initializing...</span>                <span id="score">0</span>
+                <span id="bestScore">0</span>
+                <span id="dataPackets">0</span>
+                <span id="playerPos">0, 0</span>
+                <span id="playerMode">LIVE</span>
+                <span id="cameraX">0</span>
+                <span id="worldChunks">0</span>
+                <span id="worldDifficulty">1.0</span>
+            </div>
+        </div>
+    </div>
+      <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+      <!-- Firebase Configuration -->
+    <script>
+        // Leaderboard Firebase configuration (existing project for leaderboards)
+        const leaderboardFirebaseConfig = {
+          apiKey: "AIzaSyC3Sf6r81WojKrRUP-tmirHG9nW5Lytqvc",
+          authDomain: "coderunner-9e199.firebaseapp.com",
+          databaseURL: "https://coderunner-9e199-default-rtdb.firebaseio.com/",
+          projectId: "coderunner-9e199",
+          storageBucket: "coderunner-9e199.firebasestorage.app",
+          messagingSenderId: "593312008496",
+          appId: "1:593312008496:web:fc12738c8ff2946138e0f5",
+        };
+
+        // Authentication Firebase configuration (new shared sign-in project)
+        const authFirebaseConfig = {
+          apiKey: "AIzaSyCo5hr7ULHLL_0UAAst74g8ePZxkB7OHFQ",
+          authDomain: "shared-sign-in.firebaseapp.com",
+          projectId: "shared-sign-in",
+          storageBucket: "shared-sign-in.firebasestorage.app",
+          messagingSenderId: "332039027753",
+          appId: "1:332039027753:web:aa7c6877d543bb90363038",
+          measurementId: "G-KK5XVVLMVN"
+        };
+        
+        // Initialize Firebase apps with names
+        const leaderboardApp = firebase.initializeApp(leaderboardFirebaseConfig, 'leaderboard');
+        const authApp = firebase.initializeApp(authFirebaseConfig, 'auth');
+        
+        // Get database from leaderboard app and auth from auth app
+        const database = firebase.database(leaderboardApp);
+        const auth = firebase.auth(authApp);
+        
+        // Make both available globally for the game
+        window.firebaseDatabase = database;
+        window.firebaseAuth = auth;
+          // Helper functions for leaderboard display
+        function hideLeaderboard() {
+            const container = document.getElementById("leaderboard-container");
+            if (container) {
+                container.style.display = "none";
+            }
+            
+            // Stop live updates when hiding leaderboard
+            if (window.gameInstance && window.gameInstance.leaderboardSystem) {
+                window.gameInstance.leaderboardSystem.stopLiveLeaderboardUpdates();
+            }
+        }
+          // Make function available globally
+        window.hideLeaderboard = hideLeaderboard;        // Dropdown Menu Functions
+        function toggleDropdown() {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            panel.classList.toggle('open');
+            
+            // Hide hamburger menu when panel is open, show when closed
+            if (panel.classList.contains('open')) {
+                hamburger.style.display = 'none';
+            } else {
+                hamburger.style.display = 'block';
+            }
+        }
+        // Make function available globally immediately
+        window.toggleDropdown = toggleDropdown;
+        
+        function closeDropdown() {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            if (panel) {
+                panel.classList.remove('open');
+            }
+            
+            if (hamburger) {
+                hamburger.style.display = 'block'; // Always show hamburger when closing
+            }
+        }
+        // Make function available globally immediately
+        window.closeDropdown = closeDropdown;
+        
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            section.classList.toggle('expanded');
+        }
+        // Make function available globally immediately
+        window.toggleSection = toggleSection;// Settings Panel Functions
+        function openSettingsPanel(panelType) {
+            const panelId = panelType + 'SettingsPanel';
+            const panel = document.getElementById(panelId);
+            
+            if (panel) {
+                // Show the panel first
+                panel.style.display = 'flex';
+                
+                // Trigger the opening animation after a brief delay
+                setTimeout(() => {
+                    panel.classList.add('open');
+                }, 10);
+                
+                // Play menu open sound
+                if (window.gameInstance && window.gameInstance.audioSystem) {
+                    window.gameInstance.audioSystem.onMenuOpen();
+                }
+                
+                // Close dropdown when opening settings panel
+                closeDropdown();
+            }
+        }
+
+        function closeSettingsPanel(panelId) {
+            const panel = document.getElementById(panelId);
+            
+            if (panel) {
+                panel.classList.remove('open');
+                
+                // Hide the panel after animation completes
+                setTimeout(() => {
+                    if (!panel.classList.contains('open')) {
+                        panel.style.display = 'none';
+                    }
+                }, 300);
+                
+                // Play menu close sound
+                if (window.gameInstance && window.gameInstance.audioSystem) {
+                    window.gameInstance.audioSystem.onMenuClose();
+                }
+            }
+        }        // Close settings panels when clicking outside
+        document.addEventListener('click', (e) => {
+            const settingsOverlays = document.querySelectorAll('.settings-panel-overlay.open');
+            
+            settingsOverlays.forEach(overlay => {
+                const panel = overlay.querySelector('.settings-panel');
+                
+                if (overlay.classList.contains('open') && 
+                    !panel.contains(e.target)) {
+                    overlay.classList.remove('open');
+                    
+                    // Hide the panel after animation completes
+                    setTimeout(() => {
+                        if (!overlay.classList.contains('open')) {
+                            overlay.style.display = 'none';
+                        }
+                    }, 300);
+                    
+                    // Play menu close sound
+                    if (window.gameInstance && window.gameInstance.audioSystem) {
+                        window.gameInstance.audioSystem.onMenuClose();
+                    }
+                }
+            });
+        });
+
+        // Keyboard support for settings panels
+        document.addEventListener('keydown', (e) => {
+            // Close settings panel with Escape key
+            if (e.key === 'Escape') {
+                const openPanel = document.querySelector('.settings-panel-overlay.open');
+                if (openPanel) {
+                    openPanel.classList.remove('open');
+                    
+                    // Hide the panel after animation completes
+                    setTimeout(() => {
+                        if (!openPanel.classList.contains('open')) {
+                            openPanel.style.display = 'none';
+                        }
+                    }, 300);
+                      // Play menu close sound
+                    if (window.gameInstance && window.gameInstance.audioSystem) {
+                        window.gameInstance.audioSystem.onMenuClose();
+                    }
+                    
+                    e.preventDefault();
+                }
+            }
+        });
+
+        // Make settings functions globally available
+        window.openSettingsPanel = openSettingsPanel;
+        window.closeSettingsPanel = closeSettingsPanel;
+
+        // Profile System
+        class ProfileManager {
+            constructor() {
+                this.profileData = this.loadProfile();                this.availableSprites = [
+                    { name: 'Default Runner', filename: 'player-sprite.png' },
+                    { name: 'Aqua Spirit', filename: 'Untitled design (1).png' },
+                    { name: 'Crimson Guardian', filename: 'Untitled design (2).png' },
+                    { name: 'Forest Phantom', filename: 'Untitled design (3).png' },
+                    { name: 'Golden Racer', filename: 'Untitled design (4).png' },
+                    { name: 'Violet Shadow', filename: 'Untitled design (5).png' },
+                    { name: 'Neon Sprinter', filename: 'Untitled design (6).png' },
+                    { name: 'Ember Dash', filename: 'Untitled design (7).png' },
+                    { name: 'Frost Glider', filename: 'Untitled design (8).png' },
+                    { name: 'Midnight Runner', filename: 'Untitled design (9).png' },
+                    { name: 'Cyber Scout', filename: 'Untitled design (10).png' },
+                    { name: 'Solar Voyager', filename: 'Untitled design (11).png' },
+                    { name: 'Quantum Strider', filename: 'Untitled design (12).png' },
+                    // Buyable cosmetic sprites from shop
+                    { name: 'Cosmic Runner', filename: 'buyable cosmetics/sprite_0.png' },
+                    { name: 'Neon Guardian', filename: 'buyable cosmetics/sprite_1.png' },
+                    { name: 'Shadow Walker', filename: 'buyable cosmetics/sprite_2.png' },
+                    { name: 'Flame Sprinter', filename: 'buyable cosmetics/sprite_3.png' },
+                    { name: 'Frost Runner', filename: 'buyable cosmetics/sprite_4.png' },
+                    { name: 'Electric Dash', filename: 'buyable cosmetics/sprite_5.png' }
+                ];
+                this.initializeProfile();
+                this.initializeSpriteSelector();
+                this.updateProfileDisplay();
+            }
+
+            loadProfile() {
+                const saved = localStorage.getItem('coderunner_profile');                return saved ? JSON.parse(saved) : {
+                    name: 'Anonymous',
+                    bestScore: 0,
+                    gamesPlayed: 0,
+                    totalPackets: 0,
+                    playTime: 0,
+                    selectedSprite: 'player-sprite.png' // Default sprite
+                };
+            }
+
+            saveProfile() {
+                localStorage.setItem('coderunner_profile', JSON.stringify(this.profileData));
+            }
+
+            initializeProfile() {
+                const nameInput = document.getElementById('playerName');
+                nameInput.value = this.profileData.name;
+                
+                nameInput.addEventListener('input', (e) => {
+                    this.profileData.name = e.target.value || 'Anonymous';
+                    this.saveProfile();
+                });            }
+            
+            initializeSpriteSelector() {
+                const spriteGrid = document.getElementById('spriteGrid');
+                if (!spriteGrid) {
+                    return;
+                }
+                
+                // Clear any existing content first to avoid duplications
+                spriteGrid.innerHTML = '';
+                
+                // Track loaded sprites to prevent duplicates
+                const loadedFilenames = new Set();
+                  this.availableSprites.forEach((sprite, index) => {
+                    // Skip if we already loaded this filename
+                    if (loadedFilenames.has(sprite.filename)) {
+                        return;
+                    }
+                    
+                    loadedFilenames.add(sprite.filename);
+                    
+                    const spriteOption = document.createElement('div');
+                    spriteOption.className = 'sprite-option';
+                    spriteOption.dataset.filename = sprite.filename;
+                    
+                    // Create preview image
+                    const spritePreview = document.createElement('img');
+                    spritePreview.className = 'sprite-preview';
+                    spritePreview.src = `./assets/${sprite.filename}`;
+                    spritePreview.alt = sprite.name;
+                    
+                    let errorHandled = false;                    spritePreview.onerror = () => {
+                        if (!errorHandled) {
+                            errorHandled = true;
+                            // Create error fallback element
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'sprite-preview-error';
+                            errorDiv.textContent = '❌';
+                            spriteOption.replaceChild(errorDiv, spritePreview);
+                        }
+                    };
+                    
+                    spritePreview.onload = () => {
+                        // Sprite loaded successfully
+                    };
+                    
+                    // Create sprite name
+                    const spriteName = document.createElement('div');
+                    spriteName.className = 'sprite-name';
+                    spriteName.textContent = sprite.name;
+                    
+                    spriteOption.appendChild(spritePreview);
+                    spriteOption.appendChild(spriteName);
+                      // Mark as selected if it matches current selection
+                    if (sprite.filename === this.profileData.selectedSprite) {
+                        spriteOption.classList.add('selected');
+                    }
+                    
+                    // Add click handler
+                    spriteOption.addEventListener('click', () => this.selectSprite(sprite.filename, spriteOption));
+                      spriteGrid.appendChild(spriteOption);
+                });            }
+
+            selectSprite(filename, element) {
+             
+                
+                // Remove previous selection
+                const previouslySelected = document.querySelector('.sprite-option.selected');
+                if (previouslySelected) {
+                    previouslySelected.classList.remove('selected');
+                }
+                
+                // Mark new selection
+                element.classList.add('selected');
+                
+                // Save to profile
+                this.profileData.selectedSprite = filename;
+                this.saveProfile();
+              
+                
+                // Update the player sprite in game if game instance exists
+                this.updatePlayerSprite(filename);
+                
+                // Show visual feedback
+                const spriteName = element.querySelector('.sprite-name');
+                if (spriteName) {
+                    const originalText = spriteName.textContent;
+                    spriteName.textContent = '✓ Selected!';
+                    setTimeout(() => {
+                        spriteName.textContent = originalText;
+                    }, 1000);                }
+            }            updatePlayerSprite(filename) {
+                // Validate filename first
+                if (!filename || typeof filename !== 'string') {
+                
+                    return;
+                }
+                
+                // Check if file exists in available sprites
+                const spriteExists = this.availableSprites.some(s => s.filename === filename);
+                if (!spriteExists) {
+                  
+                    return;
+                }
+                
+               
+                
+                // Update the player sprite in the game
+                if (window.gameInstance && window.gameInstance.player) {
+                    const spritePath = `./assets/${filename}`;
+                  
+                    
+                    // Force sprite reload by clearing load status and setting new source
+
+                    const player = window.gameInstance.player;
+                    player.spriteLoaded = false;
+                    
+                    // Reset last rendering path to force re-evaluation
+                    player.lastRenderingPath = null;
+                    
+                    // Call changeSprite which will handle the loading
+                    player.changeSprite(spritePath);
+                    
+                  
+                } else {
+                   
+                }
+            }
+            
+            getSelectedSprite() {
+                // Ensure we always return a valid sprite filename
+                const sprite = this.profileData.selectedSprite;
+                
+                if (!sprite || typeof sprite !== 'string') {
+                    return 'player-sprite.png';
+                }
+                
+                // Validate that the sprite exists in our list
+                const validSprite = this.availableSprites.some(s => s.filename === sprite);
+                return validSprite ? sprite : 'player-sprite.png';
+            }            // Test function to validate sprite selector functionality
+            testSpriteSelector() {
+                const spriteGrid = document.getElementById('spriteGrid');
+                const spriteOptions = spriteGrid ? spriteGrid.querySelectorAll('.sprite-option') : [];
+                
+                const selectedOption = document.querySelector('.sprite-option.selected');
+            }
+
+            updateProfileDisplay() {
+                // Update profile statistics display
+                const nameInput = document.getElementById('playerName');
+                if (nameInput) {
+                    nameInput.value = this.profileData.name;
+                }
+                  // Update any stat displays if they exist
+                const statsElements = {
+                    bestScore: document.querySelector('.best-score'),
+                    gamesPlayed: document.querySelector('.games-played'),
+                    totalPackets: document.querySelector('.total-packets'),
+                    playTime: document.querySelector('.play-time')
+                };
+                
+                if (statsElements.bestScore) {
+                    statsElements.bestScore.textContent = this.profileData.bestScore || 0;
+                }
+                if (statsElements.gamesPlayed) {
+                    statsElements.gamesPlayed.textContent = this.profileData.gamesPlayed || 0;
+                }
+                if (statsElements.totalPackets) {
+                    statsElements.totalPackets.textContent = this.profileData.totalPackets || 0;
+                }                if (statsElements.playTime) {
+                    const minutes = Math.floor((this.profileData.playTime || 0) / 60);
+                    statsElements.playTime.textContent = `${minutes}m`;
+                }
+            }            updateStats(bestScore, gamesPlayed, totalPackets, playTime) {
+                this.profileData.bestScore = Math.max(this.profileData.bestScore || 0, bestScore);
+                this.profileData.gamesPlayed = gamesPlayed;
+                this.profileData.totalPackets = totalPackets;
+                this.profileData.playTime = playTime;
+                this.saveProfile();
+                this.updateProfileDisplay();
+            }            /**
+             * Get the saved player name for leaderboard submission
+             * @returns {string} The player's name or empty string if Anonymous
+             */
+            getSavedPlayerName() {
+                const name = this.profileData.name || '';
+                return (name && name.trim() && name !== 'Anonymous') ? name.trim() : '';
+            }
+        }
+        
+        // Debug flag for verbose logging
+        window.debugMode = false;
+        
+        // Initialize profile manager when page loads
+        let profileManager;
+        document.addEventListener('DOMContentLoaded', () => {
+            profileManager = new ProfileManager();
+            window.profileManager = profileManager;
+            
+            // Update any existing game instance player sprites when ProfileManager becomes available
+            setTimeout(() => {
+                if (window.gameInstance && window.gameInstance.player) {
+                    window.gameInstance.player.refreshSpriteFromProfile();
+                }
+            }, 200);
+        });        // Integration with game stats
+        function updateGameStats() {
+            if (window.gameInstance && profileManager) {
+                const gameStats = {
+                    bestScore: window.gameInstance.score || 0,
+                    gamesPlayed: (profileManager.profileData.gamesPlayed + 1),
+                    totalPackets: window.gameInstance.upgradeSystem ? window.gameInstance.upgradeSystem.getDataPackets() :  0,
+                    playTime: profileManager.profileData.playTime + 1
+                };
+                  profileManager.updateStats(
+                    gameStats.bestScore,
+                    gameStats.gamesPlayed,
+                    gameStats.totalPackets,
+                    gameStats.playTime
+                );
+            }
+        }        // Make function available globally immediately
+        window.updateGameStats = updateGameStats;
+
+        // Login Status Functions
+        function updateLoginStatus() {
+            if (!window.gameInstance || !window.gameInstance.loginSystem) {
+                return;
+            }
+
+            const loginSystem = window.gameInstance.loginSystem;
+            const loginStatusEl = document.getElementById('loginStatus');
+            const userEmailEl = document.getElementById('userEmail');
+            const userEmailRow = document.getElementById('userEmailRow');
+            const loginProviderRow = document.getElementById('loginProviderRow');            const loginProviderEl = document.getElementById('loginProvider');
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');            const accountManagement = document.getElementById('accountManagement');
+            
+            if (loginSystem.isLoggedIn && loginSystem.currentUser) {
+                // User is logged in
+                loginStatusEl.textContent = '✅ Signed In';
+                loginStatusEl.className = 'login-value authenticated';
+                
+                userEmailEl.textContent = loginSystem.currentUser.email || 'N/A';
+                userEmailRow.style.display = 'flex';
+                
+                // Determine login provider
+                let provider = 'Email/Password';
+                let canManageAccount = true;
+                if (loginSystem.currentUser.providerData && loginSystem.currentUser.providerData.length > 0) {
+                    const providerId = loginSystem.currentUser.providerData[0].providerId;
+                    if (providerId === 'google.com') {
+                        provider = '🔗 Google';
+                        canManageAccount = false; // Google users can't change email/password through our UI
+                    }
+                }
+                loginProviderEl.textContent = provider;
+                loginProviderRow.style.display = 'flex';
+                
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+                logoutBtn.className = 'login-action-btn logout';
+                
+                // Show account management for email/password users
+                if (canManageAccount) {
+                    accountManagement.style.display = 'grid';
+                } else {
+                    accountManagement.style.display = 'none';
+                }
+            } else if (loginSystem.isGuest) {
+                // Guest mode
+                loginStatusEl.textContent = '👤 Guest Mode';
+                loginStatusEl.className = 'login-value guest';
+                
+                userEmailRow.style.display = 'none';
+                loginProviderRow.style.display = 'none';
+                accountManagement.style.display = 'none';
+                
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+            } else {
+                // Not logged in
+                loginStatusEl.textContent = '❌ Not Signed In';
+                loginStatusEl.className = 'login-value';
+                
+                userEmailRow.style.display = 'none';
+                loginProviderRow.style.display = 'none';
+                accountManagement.style.display = 'none';
+                
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+            }
+        }
+
+        function showLoginPrompt() {
+            if (window.gameInstance && window.gameInstance.loginSystem) {
+                window.gameInstance.gameState = 'loginPrompt';
+                window.gameInstance.loginSystem.start();
+                closeDropdown(); // Close any open dropdown
+                closeSettingsPanel('profileSettingsPanel'); // Close profile panel
+            }
+        }
+
+        function handleLogout() {
+            if (window.gameInstance && window.gameInstance.loginSystem) {
+                window.gameInstance.loginSystem.logout().then(() => {
+                    updateLoginStatus();
+                    alert('Successfully logged out!');
+                });
+            }
+        }        // Make functions available globally
+        window.updateLoginStatus = updateLoginStatus;
+        window.showLoginPrompt = showLoginPrompt;
+        window.handleLogout = handleLogout;
+
+        // Account Management Functions
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const toggle = input.nextElementSibling;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                toggle.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                toggle.textContent = '👁️';
+            }
+        }
+
+        async function changeEmail() {
+            const newEmail = document.getElementById('newEmail').value.trim();
+            const currentPassword = document.getElementById('emailConfirmPassword').value;
+
+            if (!newEmail || !currentPassword) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            if (!isValidEmail(newEmail)) {
+                alert('Please enter a valid email address');
+                return;
+            }
+
+            if (!window.gameInstance || !window.gameInstance.loginSystem || !window.gameInstance.loginSystem.auth) {
+                alert('Authentication system not available');
+                return;
+            }
+
+            try {
+                const user = window.gameInstance.loginSystem.currentUser;
+                if (!user) {
+                    alert('You must be logged in to change your email');
+                    return;
+                }
+
+                // Re-authenticate user with current password
+                const credential = window.firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
+                await user.reauthenticateWithCredential(credential);
+
+                // Update email
+                await user.updateEmail(newEmail);
+                
+                alert('Email updated successfully! You may need to verify your new email address.');
+                
+                // Clear form
+                document.getElementById('newEmail').value = '';
+                document.getElementById('emailConfirmPassword').value = '';
+                
+                // Update login status display
+                updateLoginStatus();
+                
+            } catch (error) {
+                console.error('Change email error:', error);
+                let errorMessage = 'Failed to change email';
+                
+                switch (error.code) {
+                    case 'auth/wrong-password':
+                        errorMessage = 'Current password is incorrect';
+                        break;
+                    case 'auth/email-already-in-use':
+                        errorMessage = 'This email is already in use by another account';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = 'Please enter a valid email address';
+                        break;
+                    case 'auth/requires-recent-login':
+                        errorMessage = 'Please log out and log back in, then try again';
+                        break;
+                    default:
+                        errorMessage = error.message || 'Failed to change email';
+                }
+                
+                alert(errorMessage);
+            }
+        }
+
+        async function changePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+            if (!currentPassword || !newPassword || !confirmNewPassword) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            if (newPassword !== confirmNewPassword) {
+                alert('New passwords do not match');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                alert('New password must be at least 6 characters long');
+                return;
+            }
+
+            if (!window.gameInstance || !window.gameInstance.loginSystem || !window.gameInstance.loginSystem.auth) {
+                alert('Authentication system not available');
+                return;
+            }
+
+            try {
+                const user = window.gameInstance.loginSystem.currentUser;
+                if (!user) {
+                    alert('You must be logged in to change your password');
+                    return;
+                }
+
+                // Re-authenticate user with current password
+                const credential = window.firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
+                await user.reauthenticateWithCredential(credential);
+
+                // Update password
+                await user.updatePassword(newPassword);
+                
+                alert('Password updated successfully!');
+                
+                // Clear form
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmNewPassword').value = '';
+                
+            } catch (error) {
+                console.error('Change password error:', error);
+                let errorMessage = 'Failed to change password';
+                
+                switch (error.code) {
+                    case 'auth/wrong-password':
+                        errorMessage = 'Current password is incorrect';
+                        break;
+                    case 'auth/weak-password':
+                        errorMessage = 'New password is too weak';
+                        break;
+                    case 'auth/requires-recent-login':
+                        errorMessage = 'Please log out and log back in, then try again';
+                        break;
+                    default:
+                        errorMessage = error.message || 'Failed to change password';
+                }
+                
+                alert(errorMessage);
+            }
+        }
+
+        async function deleteAccount() {
+            if (!window.gameInstance || !window.gameInstance.loginSystem || !window.gameInstance.loginSystem.auth) {
+                alert('Authentication system not available');
+                return;
+            }
+
+            const user = window.gameInstance.loginSystem.currentUser;
+            if (!user) {
+                alert('You must be logged in to delete your account');
+                return;
+            }
+
+            // Double confirmation
+            const confirmDelete = confirm(
+                '⚠️ WARNING: This will permanently delete your account and all associated data.\n\n' +
+                'This action cannot be undone. Are you absolutely sure you want to delete your account?'
+            );
+
+            if (!confirmDelete) return;
+
+            const finalConfirm = prompt(
+                'To confirm account deletion, please type "DELETE MY ACCOUNT" below:'
+            );
+
+            if (finalConfirm !== 'DELETE MY ACCOUNT') {
+                alert('Account deletion cancelled');
+                return;
+            }
+
+            try {
+                // Delete user account
+                await user.delete();
+                
+                alert('Your account has been permanently deleted.');
+                
+                // Reset login system state
+                window.gameInstance.loginSystem.currentUser = null;
+                window.gameInstance.loginSystem.isLoggedIn = false;
+                window.gameInstance.loginSystem.isGuest = true;
+                
+                // Close profile panel and update status
+                closeSettingsPanel('profileSettingsPanel');
+                updateLoginStatus();
+                
+            } catch (error) {
+                console.error('Delete account error:', error);
+                let errorMessage = 'Failed to delete account';
+                
+                if (error.code === 'auth/requires-recent-login') {
+                    errorMessage = 'For security reasons, please log out and log back in, then try again';
+                } else {
+                    errorMessage = error.message || 'Failed to delete account';
+                }
+                
+                alert(errorMessage);
+            }
+        }
+
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
+        // Make account management functions available globally
+        window.togglePasswordVisibility = togglePasswordVisibility;
+        window.changeEmail = changeEmail;
+        window.changePassword = changePassword;
+        window.deleteAccount = deleteAccount;
+
+        // Update login status when profile panel opens
+        const originalOpenSettingsPanel = window.openSettingsPanel;
+        window.openSettingsPanel = function(panelType) {
+            originalOpenSettingsPanel(panelType);
+            if (panelType === 'profile') {
+                setTimeout(updateLoginStatus, 100); // Small delay to ensure elements are rendered
+            }
+        };
+
+        // Update stats every 60 seconds during gameplay
+        setInterval(() => {
+            if (window.gameInstance && window.gameInstance.gameState === 'playing') {
+                updateGameStats();
+            }
+        }, 60000);
+
+        // Quick Action Functions for Dropdown Menu
+        window.showLeaderboard = function() {            if (window.gameInstance && typeof window.gameInstance.showLeaderboard === 'function') {
+                window.gameInstance.showLeaderboard();
+            }};
+
+        window.pauseGame = function() {            if (window.gameInstance && typeof window.gameInstance.togglePause === 'function') {
+                window.gameInstance.togglePause();
+            }
+        };
+        
+        window.restartGame = function() {
+            if (window.gameInstance && typeof window.gameInstance.restart === 'function') {                // Only restart if in valid states
+                if (['PLAYING', 'PAUSED', 'GAME_OVER'].includes(window.gameInstance.gameState)) {
+                    window.gameInstance.restart();
+                }
+            }
+        };
+        
+        window.toggleFullscreen = function() {
+            try {
+                const canvasContainer = document.querySelector('.canvas-container');
+                const canvas = canvasContainer?.querySelector('canvas');
+                
+                if (!document.fullscreenElement) {
+                    // Enter fullscreen on canvas container only
+                    const fullscreenPromise = canvasContainer.requestFullscreen?.() || 
+                                            canvasContainer.webkitRequestFullscreen?.() || 
+                                            canvasContainer.msRequestFullscreen?.();
+                    
+                    if (fullscreenPromise) {
+                        fullscreenPromise.then(() => {
+                            // Aspect ratio handling is now done in the fullscreen change event handler
+                        }).catch(err => {
+                            // Fullscreen request failed
+                        });
+                    }
+                } else {
+                    // Exit fullscreen
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }                }
+            } catch (error) {
+                // Fullscreen operation failed - fail silently
+            }};        // Reset Save Data Function
+        window.resetSaveData = function() {
+            // Use the in-game reset confirmation dialog instead of browser alerts
+            if (window.gameInstance) {
+                window.gameInstance.showResetConfirmationDialog();
+            } else {
+                alert("Game is not fully initialized. Please refresh the page and try again.");
+            }
+        };
+
+        // Language Selection Functions
+        window.showLanguageSelection = function() {
+            const overlay = document.getElementById('languageSelectionOverlay');
+            if (overlay) {
+                overlay.classList.add('active');
+            }
+        };
+
+        window.hideLanguageSelection = function() {
+            const overlay = document.getElementById('languageSelectionOverlay');
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+        };
+
+        window.selectLanguage = function(languageCode) {
+            // Store the selected language
+            localStorage.setItem('selectedLanguage', languageCode);
+            
+            // Update the UI to show selected state
+            document.querySelectorAll('.language-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            document.querySelector(`[data-lang="${languageCode}"]`).classList.add('selected');
+            
+            // Close the language selection after a short delay
+            setTimeout(() => {
+                hideLanguageSelection();
+                
+                // Initialize language system if needed
+                if (window.gameInstance && window.gameInstance.initializeLanguage) {
+                    window.gameInstance.initializeLanguage(languageCode);
+                }
+                
+                console.log(`Language selected: ${languageCode}`);
+            }, 500);
+        };
+
+        window.skipLanguageSelection = function() {
+            // Set English as default if skipped
+            localStorage.setItem('selectedLanguage', 'en');
+            hideLanguageSelection();
+            console.log('Language selection skipped, defaulting to English');
+        };
+
+        window.shouldShowLanguageSelection = function() {
+            // Show language selection if no language has been selected before
+            return !localStorage.getItem('selectedLanguage');
+        };
+
+        // Simple shop opening function for testing
+        window.simpleToggleShop = function() {
+            const shopOverlay = document.getElementById('shopOverlay');
+            if (shopOverlay) {
+                if (shopOverlay.classList.contains('open')) {
+                    shopOverlay.classList.remove('open');
+                } else {
+                    shopOverlay.classList.add('open');
+                }
+            }
+        };
+        
+        // Shop System Functions
+        window.toggleShop = function() {
+            try {
+                const shopOverlay = document.getElementById('shopOverlay');
+                if (shopOverlay) {
+                    if (shopOverlay.classList.contains('open')) {
+                        closeShop();
+                    } else {
+                        openShop();
+                    }
+                }
+            } catch (error) {
+                // Error in toggleShop - fail silently
+            }
+        };
+        
+        function openShop() {
+            const shopOverlay = document.getElementById('shopOverlay');
+            if (shopOverlay) {
+                // Play open menu sound
+                if (window.gameInstance && window.gameInstance.audioSystem) {
+                    window.gameInstance.audioSystem.onMenuOpen();
+                }
+                
+                // Always open the shop, even if game isn't ready
+                shopOverlay.classList.add('open');
+                
+                // Update shop data if game is available
+                updateShopCurrency();
+                updateShopItems();
+                  // Pause game if it's running
+                if (window.gameInstance && window.gameInstance.gameState === 'PLAYING') {
+                    window.gameInstance.togglePause();
+                }
+            }
+        }
+
+        function closeShop() {
+            const shopOverlay = document.getElementById('shopOverlay');
+            if (shopOverlay) {
+                shopOverlay.classList.remove('open');
+                
+                // Play close menu sound
+                if (window.gameInstance && window.gameInstance.audioSystem) {
+                    window.gameInstance.audioSystem.onMenuClose();
+                }
+            }
+        }
+
+        window.closeShop = closeShop;
+
+        function switchShopTab(tabName) {
+            // Remove active class from all tabs and content
+            document.querySelectorAll('.shop-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active class to selected tab and content
+            const selectedTab = document.querySelector(`[onclick="switchShopTab('${tabName}')"]`);
+            const selectedContent = document.getElementById(`${tabName}-tab`);
+            
+            if (selectedTab && selectedContent) {
+                selectedTab.classList.add('active');
+                selectedContent.classList.add('active');
+                
+                // Play menu click sound
+                if (window.gameInstance && window.gameInstance.audioSystem) {
+                    window.gameInstance.audioSystem.onMenuClick();
+                }
+            }
+        }
+
+        window.switchShopTab = switchShopTab;        function updateShopCurrency() {
+            const currencyElement = document.getElementById('shopCurrencyAmount');
+            if (currencyElement && window.gameInstance && window.gameInstance.upgradeSystem) {
+                const dataPackets = window.gameInstance.upgradeSystem.getDataPackets();
+                currencyElement.textContent = dataPackets;
+            } else {
+                // Set default value if game isn't ready
+                if (currencyElement) {
+                    currencyElement.textContent = '0';
+                }
+            }
+        }
+
+        function updateShopItems() {
+            if (!window.gameInstance || !window.gameInstance.shopSystem) {
+                return;
+            }
+            
+            const shopItems = document.querySelectorAll('.shop-item');
+            shopItems.forEach(item => {
+                const itemId = item.dataset.item;
+                const button = item.querySelector('.shop-item-button');
+                const price = item.querySelector('.shop-item-price');
+                
+                if (window.gameInstance.shopSystem.isOwned(itemId)) {
+                    item.classList.add('owned');
+                    button.textContent = 'Owned';
+                    button.classList.add('owned');
+                    button.disabled = true;
+                    
+                    // Add owned badge if not already present
+                    if (!item.querySelector('.owned-badge')) {
+                        const badge = document.createElement('div');
+                        badge.className = 'owned-badge';
+                        badge.textContent = 'OWNED';
+                        item.appendChild(badge);
+                    }
+                } else {
+                    item.classList.remove('owned');
+                    button.textContent = 'Purchase';
+                    button.classList.remove('owned');
+                    button.disabled = false;
+                    
+                    // Remove owned badge if present
+                    const badge = item.querySelector('.owned-badge');
+                    if (badge) {
+                        badge.remove();
+                    }
+                    
+                    // Check if player can afford it
+                    const priceText = price.textContent;
+                    const priceAmount = parseInt(priceText.match(/\d+/)[0]);
+                    const currentCurrency = window.gameInstance.upgradeSystem.getDataPackets();
+                    
+                    if (currentCurrency < priceAmount) {
+                        button.disabled = true;
+                        button.textContent = 'Insufficient Funds';
+                    }
+                }
+            });
+        }        function buyUpgrade(itemId) {
+            console.warn('⚠️ HTML Shop Disabled: Use the canvas-based shop instead!');
+            console.log('💡 Access the working shop by:');
+            console.log('   • Press Q key in-game');
+            console.log('   • Click the 🛒 Shop button in the dropdown menu');
+            console.log('   • Or call: window.gameInstance.toggleShop()');
+            
+            if (!window.gameInstance || !window.gameInstance.shopSystem) {
+                return;
+            }
+            
+            const success = window.gameInstance.shopSystem.purchaseUpgrade(itemId);
+            if (success) {
+                updateShopCurrency();
+                updateShopItems();
+                
+                // Play purchase sound
+                if (window.gameInstance.audioSystem) {
+                    window.gameInstance.audioSystem.onPurchase();
+                }
+                
+                // Show purchase feedback
+                const item = document.querySelector(`[data-item="${itemId}"]`);
+                if (item) {
+                    item.style.transform = 'scale(1.05)';
+                    setTimeout(() => {
+                        item.style.transform = '';
+                    }, 200);
+                }
+            } else {
+                // Show error feedback and play damage sound (for failure)
+                if (window.gameInstance.audioSystem) {
+                   
+                    window.gameInstance.audioSystem.onDamage();
+                }
+            }
+        }
+
+        window.buyUpgrade = buyUpgrade;        // Close shop when clicking outside
+        document.addEventListener('click', (e) => {
+            const shopOverlay = document.getElementById('shopOverlay');
+            const shopContainer = document.querySelector('.shop-container');
+            const shopButton = document.getElementById('dropdown-shop-btn');
+            
+            if (shopOverlay && shopOverlay.classList.contains('open') && 
+                !shopContainer.contains(e.target) && 
+                e.target !== shopButton && 
+                !shopButton?.contains(e.target)) {
+                closeShop();
+            }        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('dropdownPanel');
+            const hamburger = document.querySelector('.hamburger-menu');
+            
+            if (panel && hamburger && !panel.contains(e.target) && !hamburger.contains(e.target)) {
+                panel.classList.remove('open');
+                hamburger.style.display = 'block'; // Show hamburger when closing dropdown
+            }
+        });        // Enhanced fullscreen change handler
+        function handleFullscreenChange() {
+            const canvasContainer = document.querySelector('.canvas-container');
+            const canvas = canvasContainer?.querySelector('canvas');
+              if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement) {
+                // Entering fullscreen - stretch to fill entire screen without letterboxing
+                if (canvas && canvasContainer) {
+                    setTimeout(() => {
+                        // Use full viewport dimensions to eliminate any blank space
+                        const viewportW = window.innerWidth;
+                        const viewportH = window.innerHeight;
+                        
+                        // Get canvas original dimensions for scale calculation
+                        const canvasWidth = 1400;
+                        const canvasHeight = 700;
+                        
+                        // Calculate scale factors to stretch canvas to full viewport
+                        const scaleX = viewportW / canvasWidth;
+                        const scaleY = viewportH / canvasHeight;
+                        
+                        // Apply styles to container to fill entire screen
+                        canvasContainer.style.cssText = `
+                            position: fixed !important;
+                            top: 0 !important;
+                            left: 0 !important;
+                            width: 100vw !important;
+                            height: 100vh !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            border: none !important;
+                            outline: none !important;
+                            background: #0d1117 !important;
+                            box-sizing: border-box !important;
+                            z-index: 2147483647 !important;
+                            display: block !important;
+                            overflow: hidden !important;
+                        `;
+
+                        // Apply styles to canvas to stretch and fill the entire viewport
+                        canvas.style.cssText = `
+                            position: absolute !important;
+                            top: 0 !important;
+                            left: 0 !important;
+                            width: 100vw !important;
+                            height: 100vh !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            border: none !important;
+                            outline: none !important;
+                            background: #161b22 !important;
+                            box-sizing: border-box !important;
+                            display: block !important;
+                            image-rendering: pixelated !important;
+                            image-rendering: -moz-crisp-edges !important;
+                            image-rendering: crisp-edges !important;
+                            object-fit: fill !important;
+                        `;
+                        
+                        // Set fullscreen backdrop
+                        document.documentElement.style.cssText = `
+                            margin: 0 !important; 
+                            padding: 0 !important; 
+                            overflow: hidden !important;
+                            background: #0d1117 !important;
+                        `;
+                        document.body.style.cssText = `
+                            margin: 0 !important; 
+                            padding: 0 !important; 
+                            overflow: hidden !important;
+                            background: #0d1117 !important;
+                        `;
+                        
+                        // Store scale factors for potential game logic use
+                        window.fullscreenScaleFactor = { x: scaleX, y: scaleY };
+                        
+                        // Trigger canvas resize if needed
+                        if (window.gameInstance && typeof window.gameInstance.handleResize === 'function') {
+                            window.gameInstance.handleResize();
+                        }
+                    }, 100); // Slightly longer delay for better browser compatibility
+                }            } else {
+                // Exiting fullscreen - reset all styles
+                if (canvas && canvasContainer) {
+                    canvasContainer.style.cssText = '';
+                    canvas.style.cssText = '';
+                    document.documentElement.style.cssText = '';
+                    document.body.style.cssText = `
+                        margin: 0; 
+                        padding: 15px; 
+                        background: linear-gradient(135deg, #0d1117 0%, #161b22 100%); 
+                        font-family: "Courier New", monospace; 
+                        color: #f0f6fc; 
+                        min-height: 100vh; 
+                        overflow-y: auto; 
+                        overflow-x: hidden;
+                    `;
+                    
+                    // Clear scale factors
+                    window.fullscreenScaleFactor = null;
+                    
+                    // Trigger canvas resize if needed
+                    if (window.gameInstance && typeof window.gameInstance.handleResize === 'function') {
+                        window.gameInstance.handleResize();
+                    }
+                }
+            }
+        }
+        
+        // Add event listeners for all browsers
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+        
+        // Initialize the profile manager when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Create profile manager instance
+            window.profileManager = new ProfileManager();
+            
+            // Update any existing game instance player sprites when ProfileManager becomes available
+            setTimeout(() => {
+                if (window.gameInstance && window.gameInstance.player) {
+                    window.gameInstance.player.refreshSpriteFromProfile();
+                }
+            }, 50);
+            
+            // Make sure the eraser style is applied correctly
+            const eraserElement = document.querySelector('.color-option.eraser');        });
+        
+        // Keybind Management System
+        class KeybindManager {
+            constructor() {
+                this.defaultKeybinds = {
+                    // Movement (supports primary and alternative keys)
+                    left: ['KeyA', 'ArrowLeft'],
+                    right: ['KeyD', 'ArrowRight'],
+                    up: ['KeyW', 'ArrowUp'],
+                    down: ['KeyS', 'ArrowDown'],
+                    
+                    // Actions
+                    space: ['Space'],
+                    x: ['KeyX'],
+                    shift: ['ShiftLeft', 'ShiftRight'],
+                    
+                    // Game controls
+                    pause: ['KeyP'],
+                    restart: ['KeyR'],
+                    confirm: ['Enter'],
+                    continue: ['KeyC'],
+                    skip: ['Escape'],
+                    
+                    // Menu controls
+                    leaderboard: ['KeyL'],
+                    uploadScore: ['KeyE'],
+                    fullscreen: ['KeyF'],
+                    changeName: ['KeyN'],
+                    shop: ['KeyQ'],
+                    togglePerformance: ['F3'],
+                    deleteEntry: ['Delete']
+                };
+                
+                this.keybinds = { ...this.defaultKeybinds };
+                this.reverseMap = {};
+                this.loadKeybinds();
+                this.buildReverseMap();
+                this.setupKeybindUI();
+            }
+
+            loadKeybinds() {
+                try {
+                    const saved = localStorage.getItem('coderunner_keybinds');
+                    if (saved) {
+                        const savedKeybinds = JSON.parse(saved);
+                        // Merge with defaults to ensure all actions have keybinds
+                        this.keybinds = { ...this.defaultKeybinds, ...savedKeybinds };
+                    }
+                } catch (e) {
+                    console.warn('Failed to load keybinds:', e);
+                    this.keybinds = { ...this.defaultKeybinds };
+                }
+            }
+
+            saveKeybinds() {
+                try {
+                    localStorage.setItem('coderunner_keybinds', JSON.stringify(this.keybinds));
+                    this.buildReverseMap();
+                } catch (e) {
+                    console.error('Failed to save keybinds:', e);
+                }
+            }
+
+            buildReverseMap() {
+                this.reverseMap = {};
+                for (const [action, keys] of Object.entries(this.keybinds)) {
+                    for (const key of keys) {
+                        if (!this.reverseMap[key]) {
+                            this.reverseMap[key] = [];
+                        }
+                        this.reverseMap[key].push(action);
+                    }
+                }
+            }
+
+            getActionsForKey(keyCode) {
+                return this.reverseMap[keyCode] || [];
+            }
+
+            setKeybind(action, keyCode, isAlternative = false) {
+                if (!this.keybinds[action]) {
+                    console.warn(`Unknown action: ${action}`);
+                    return false;
+                }
+
+                // Remove this key from any existing bindings
+                this.removeKeyFromAllBindings(keyCode);
+
+                // Set the new binding
+                if (isAlternative && this.keybinds[action].length > 1) {
+                    this.keybinds[action][1] = keyCode;
+                } else {
+                    this.keybinds[action][0] = keyCode;
+                }
+
+                this.saveKeybinds();
+                this.updateKeybindUI();
+                return true;
+            }
+
+            removeKeyFromAllBindings(keyCode) {
+                for (const [action, keys] of Object.entries(this.keybinds)) {
+                    for (let i = 0; i < keys.length; i++) {
+                        if (keys[i] === keyCode) {
+                            // Don't remove the key if it's the only one for this action
+                            if (keys.length > 1) {
+                                keys.splice(i, 1);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            resetToDefaults() {
+                this.keybinds = JSON.parse(JSON.stringify(this.defaultKeybinds));
+                this.saveKeybinds();
+                this.updateKeybindUI();
+            }
+
+            getKeyDisplayName(keyCode) {
+                const keyNames = {
+                    'ArrowLeft': '←', 'ArrowRight': '→', 'ArrowUp': '↑', 'ArrowDown': '↓',
+                    'Space': 'Space', 'Enter': 'Enter', 'Escape': 'Esc',
+                    'ShiftLeft': 'Shift', 'ShiftRight': 'Shift',
+                    'Delete': 'Del', 'Backspace': 'Backspace',
+                    'F3': 'F3'
+                };
+
+                if (keyNames[keyCode]) return keyNames[keyCode];
+                if (keyCode.startsWith('Key')) return keyCode.replace('Key', '');
+                if (keyCode.startsWith('Digit')) return keyCode.replace('Digit', '');
+                return keyCode;
+            }
+
+            setupKeybindUI() {
+                // Add event listeners to all keybind buttons
+                document.querySelectorAll('.keybind-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.captureKeybind(button);
+                    });
+                });
+
+                this.updateKeybindUI();
+            }
+
+            updateKeybindUI() {
+                for (const [action, keys] of Object.entries(this.keybinds)) {
+                    const primaryButton = document.getElementById(`keybind-${action}`);
+                    const altButton = document.getElementById(`keybind-${action}-alt`);
+
+                    if (primaryButton && keys[0]) {
+                        primaryButton.textContent = this.getKeyDisplayName(keys[0]);
+                    }
+
+                    if (altButton && keys[1]) {
+                        altButton.textContent = this.getKeyDisplayName(keys[1]);
+                    }
+                }
+            }
+
+            captureKeybind(button) {
+                const action = button.getAttribute('data-action');
+                const isAlternative = action.endsWith('-alt');
+                const baseAction = isAlternative ? action.replace('-alt', '') : action;
+
+                // Show capture overlay
+                const overlay = document.getElementById('keybindCaptureOverlay');
+                const display = document.getElementById('keybindCaptureDisplay');
+                
+                overlay.classList.add('active');
+                button.classList.add('capturing');
+                display.textContent = 'Waiting for input...';
+
+                // Create key capture handler
+                const handleKeyCapture = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Cancel on Escape
+                    if (e.code === 'Escape') {
+                        this.cancelCapture(overlay, button, handleKeyCapture);
+                        return;
+                    }
+
+                    // Ignore modifier keys alone
+                    if (['ControlLeft', 'ControlRight', 'AltLeft', 'AltRight'].includes(e.code)) {
+                        return;
+                    }
+
+                    // Set the new keybind
+                    this.setKeybind(baseAction, e.code, isAlternative);
+                    this.cancelCapture(overlay, button, handleKeyCapture);
+                };
+
+                // Add temporary event listener
+                document.addEventListener('keydown', handleKeyCapture, true);
+                
+                // Store the handler so we can remove it
+                this.currentCaptureHandler = handleKeyCapture;
+            }
+
+            cancelCapture(overlay, button, handler) {
+                overlay.classList.remove('active');
+                button.classList.remove('capturing');
+                document.removeEventListener('keydown', handler, true);
+                this.currentCaptureHandler = null;
+            }
+        }        // Global keybind manager instance
+        let keybindManager = null;
+
+        // General Settings Management
+        class GeneralSettings {
+            constructor() {
+                this.enableOpeningAnimation = true;
+                this.graphicsQuality = 'medium'; // low, medium, high
+                this.showFpsCounter = false;
+                this.loadSettings();
+            }
+
+            loadSettings() {
+                try {
+                    const saved = localStorage.getItem('coderunner_general_settings');
+                    if (saved) {
+                        const settings = JSON.parse(saved);
+                        this.enableOpeningAnimation = settings.enableOpeningAnimation ?? true;
+                        this.graphicsQuality = settings.graphicsQuality ?? 'medium';
+                        this.showFpsCounter = settings.showFpsCounter ?? false;
+                    }
+                } catch (e) {
+                
+                }
+            }
+
+            saveSettings() {
+                const settings = {
+                    enableOpeningAnimation: this.enableOpeningAnimation,
+                    graphicsQuality: this.graphicsQuality,
+                    showFpsCounter: this.showFpsCounter
+                };
+                
+                localStorage.setItem('coderunner_general_settings', JSON.stringify(settings));
+            }
+
+            setOpeningAnimationEnabled(enabled) {
+                this.enableOpeningAnimation = enabled;
+                this.saveSettings();
+            }
+
+            isOpeningAnimationEnabled() {
+                return this.enableOpeningAnimation;
+            }            setGraphicsQuality(quality) {
+                if (['low', 'medium', 'high'].includes(quality)) {
+                    this.graphicsQuality = quality;
+                    this.saveSettings();
+                    
+                    // Apply graphics quality changes to game systems
+                    if (window.gameInstance) {
+                        window.gameInstance.graphicsQuality = quality;
+                        window.gameInstance.applyGraphicsQuality();
+                    }
+                }
+            }
+
+            getGraphicsQuality() {
+                return this.graphicsQuality;
+            }
+
+            setShowFpsCounter(enabled) {
+                this.showFpsCounter = enabled;
+                this.saveSettings();
+                
+                // Update game FPS display
+                if (window.gameInstance) {
+                    window.gameInstance.showFpsCounter = enabled;
+                }
+            }
+
+            isShowFpsCounterEnabled() {
+                return this.showFpsCounter;
+            }
+
+            applyGraphicsQuality() {
+                if (!window.gameInstance) return;
+                
+                const game = window.gameInstance;
+                
+                // Apply graphics settings based on quality level
+                switch (this.graphicsQuality) {
+                    case 'low':
+                        // Reduce particle effects and visual quality
+                        if (game.world) {
+                            game.world.particleQuality = 0.3;
+                            game.world.tileDetailLevel = 'low';
+                        }
+                        if (game.renderer) {
+                            game.renderer.lightingQuality = 'low';
+                            game.renderer.shadowQuality = 'off';
+                        }
+                        break;
+                    case 'medium':
+                        // Default settings
+                        if (game.world) {
+                            game.world.particleQuality = 0.7;
+                            game.world.tileDetailLevel = 'medium';
+                        }
+                        if (game.renderer) {
+                            game.renderer.lightingQuality = 'medium';
+                            game.renderer.shadowQuality = 'low';
+                        }
+                        break;
+                    case 'high':
+                        // Maximum quality
+                        if (game.world) {
+                            game.world.particleQuality = 1.0;
+                            game.world.tileDetailLevel = 'high';
+                        }
+                        if (game.renderer) {
+                            game.renderer.lightingQuality = 'high';
+                            game.renderer.shadowQuality = 'high';
+                        }
+                        break;
+                }
+            }
+        }        // Global instance
+        let generalSettings = null;
+        
+        function initializeGeneralSettings() {
+            generalSettings = new GeneralSettings();
+            
+            // Make it available globally
+            window.generalSettings = generalSettings;
+            
+            // Initialize keybind manager
+            keybindManager = new KeybindManager();
+              // Initialize UI controls
+            const enableOpeningAnimationCheckbox = document.getElementById('enableOpeningAnimation');
+            if (enableOpeningAnimationCheckbox) {
+                // Set initial state
+                enableOpeningAnimationCheckbox.checked = generalSettings.isOpeningAnimationEnabled();
+                
+                // Add change listener
+                enableOpeningAnimationCheckbox.addEventListener('change', function() {
+                    generalSettings.setOpeningAnimationEnabled(this.checked);
+                });
+            }
+
+            // Initialize Graphics Quality dropdown
+            const graphicsQualitySelect = document.getElementById('graphicsQuality');
+            if (graphicsQualitySelect) {
+                // Set initial state
+                graphicsQualitySelect.value = generalSettings.getGraphicsQuality();
+                
+                // Add change listener
+                graphicsQualitySelect.addEventListener('change', function() {
+                    generalSettings.setGraphicsQuality(this.value);
+                });
+            }            // Initialize Show FPS Counter checkbox
+            const showFpsCounterCheckbox = document.getElementById('showFpsCounter');
+            if (showFpsCounterCheckbox) {
+                // Set initial state
+                showFpsCounterCheckbox.checked = generalSettings.isShowFpsCounterEnabled();
+                
+                // Add change listener
+                showFpsCounterCheckbox.addEventListener('change', function() {
+                    generalSettings.setShowFpsCounter(this.checked);
+                });
+            }
+
+            // Initialize Language dropdown
+            const gameLanguageSelect = document.getElementById('gameLanguage');
+            if (gameLanguageSelect) {
+                // Set initial state from localStorage
+                const savedLanguage = localStorage.getItem('selectedLanguage') || 'en';
+                gameLanguageSelect.value = savedLanguage;
+                
+                // Add change listener
+                gameLanguageSelect.addEventListener('change', function() {
+                    localStorage.setItem('selectedLanguage', this.value);
+                    
+                    // Initialize language system if needed
+                    if (window.gameInstance && window.gameInstance.initializeLanguage) {
+                        window.gameInstance.initializeLanguage(this.value);
+                    }
+                    
+                    console.log(`Language changed to: ${this.value}`);
+                });
+            }
+            
+            // Make globally available
+            window.generalSettings = generalSettings;
+            window.keybindManager = keybindManager;
+        }
+
+        // Global function for reset keybinds button
+        function resetKeybinds() {
+            if (keybindManager) {
+                keybindManager.resetToDefaults();
+            }
+        }
+
+        // Make resetKeybinds globally available
+        window.resetKeybinds = resetKeybinds;
+        
+        // Initialize general settings
+        initializeGeneralSettings();
+    </script>
+    
+    <!-- Audio System -->
+    <script src="src/systems/AudioSystem.js"></script>
+    <script>
+        // Initialize Audio System
+        let audioSystem;        document.addEventListener('DOMContentLoaded', function() {
+            audioSystem = new AudioSystem();
+            
+            // Make audio system globally available
+            window.audioSystem = audioSystem;
+            
+            // Initialize audio controls after a short delay to ensure AudioSystem is fully loaded
+            setTimeout(() => {
+                initializeAudioControls();
+            }, 50);
+            
+            // Initialize music selector after a short delay to ensure AudioSystem is fully loaded
+            setTimeout(() => {
+                initializeMusicSelector();
+            }, 100);
+            
+            // Start background music after user interaction
+            document.addEventListener('click', function startAudioAfterInteraction() {
+                if (audioSystem && !audioSystem.isMuted) {
+                    audioSystem.playMusic('chill');
+                }
+                document.removeEventListener('click', startAudioAfterInteraction);
+            }, { once: true });
+        });
+          function initializeAudioControls() {
+         
+            
+            // Set up volume sliders
+            const masterVolumeSlider = document.getElementById('masterVolume');
+            const sfxVolumeSlider = document.getElementById('sfxVolume');
+            const musicVolumeSlider = document.getElementById('musicVolume');
+            
+            const masterVolumeValue = document.getElementById('masterVolumeValue');
+            const sfxVolumeValue = document.getElementById('sfxVolumeValue');
+            const musicVolumeValue = document.getElementById('musicVolumeValue');
+            
+            // Load saved values
+            if (audioSystem) {
+                
+                
+                masterVolumeSlider.value = Math.round(audioSystem.masterVolume * 100);
+                sfxVolumeSlider.value = Math.round(audioSystem.sfxVolume * 100);
+                musicVolumeSlider.value = Math.round(audioSystem.musicVolume * 100);
+                
+                masterVolumeValue.textContent = masterVolumeSlider.value + '%';
+                sfxVolumeValue.textContent = sfxVolumeSlider.value + '%';
+                musicVolumeValue.textContent = musicVolumeSlider.value + '%';
+                
+                // Update mute button state
+                updateMuteButtonState();
+            } else {
+               
+            }
+              // Add event listeners
+            masterVolumeSlider.addEventListener('input', function() {
+                const value = parseInt(this.value);
+                masterVolumeValue.textContent = value + '%';
+                if (audioSystem) {
+                  
+                    audioSystem.setMasterVolume(value / 100);
+                } else {
+                   
+                }
+            });
+            
+            sfxVolumeSlider.addEventListener('input', function() {
+                const value = parseInt(this.value);
+                sfxVolumeValue.textContent = value + '%';
+                if (audioSystem) {
+                  
+                    audioSystem.setSfxVolume(value / 100);
+                } else {
+                  
+                }
+            });
+            
+            musicVolumeSlider.addEventListener('input', function() {
+                const value = parseInt(this.value);
+                musicVolumeValue.textContent = value + '%';
+                if (audioSystem) {
+                  
+                    audioSystem.setMusicVolume(value / 100);
+                } else {
+                   
+                }
+            });
+        }
+        
+        function initializeMusicSelector() {
+            if (!audioSystem) return;
+            
+            const tracksList = document.getElementById('musicTracksList');
+            if (!tracksList) return;
+            
+            const availableTracks = audioSystem.getAvailableTracks();
+            const currentTrack = audioSystem.getCurrentTrack();
+            
+            // Clear existing content
+            tracksList.innerHTML = '';
+            
+            // Create track elements
+            availableTracks.forEach(track => {
+                const trackElement = document.createElement('div');
+                trackElement.className = 'music-track';
+                trackElement.dataset.filename = track.filename;
+                
+                // Add selected class if this is the current track
+                if (track.filename === currentTrack) {
+                    trackElement.classList.add('selected');
+                }
+                
+                // Add playing class if this track is currently playing
+                if (audioSystem.currentMusic && track.filename === currentTrack && !audioSystem.currentMusic.paused) {
+                    trackElement.classList.add('playing');
+                }
+                
+                trackElement.innerHTML = `
+                    <div class="music-track-info">
+                        <div class="music-track-name">${track.name}</div>
+                        <div class="music-track-description">${track.description}</div>
+                        <div class="music-track-filename">${track.filename}</div>
+                    </div>
+                    <div class="music-track-controls">
+                        <button class="music-control-btn play-btn" onclick="playPreviewTrack('${track.filename}')">
+                            ${audioSystem.currentMusic && track.filename === currentTrack && !audioSystem.currentMusic.paused ? '⏸️' : '▶️'}
+                        </button>
+                        <button class="music-control-btn select-btn" onclick="selectMusicTrack('${track.filename}')">
+                            ${track.filename === currentTrack ? '✅' : '🎵'}
+                        </button>
+                    </div>
+                `;
+                  tracksList.appendChild(trackElement);
+            });
+        }
+        
+        function selectMusicTrack(filename) {
+            if (!audioSystem) return;
+            
+            const wasPlaying = audioSystem.currentMusic && !audioSystem.currentMusic.paused;
+            
+            // Switch to the new track
+            audioSystem.switchTrack(filename);
+            
+            // Refresh the music selector UI
+            initializeMusicSelector();
+            
+            // If music was playing, start the new track
+            if (wasPlaying && !audioSystem.isMuted) {
+                setTimeout(() => {
+                    audioSystem.playMusic(audioSystem.musicMode);
+                    // Update the toggle button
+                    const btn = document.querySelector('.music-mode-text');
+                    if (btn) {
+                        btn.textContent = 'Stop Music';
+                    }
+                    // Refresh UI again to show playing state
+                    setTimeout(() => initializeMusicSelector(), 100);                }, 100);
+            }
+        }
+        
+        function playPreviewTrack(filename) {
+            if (!audioSystem) return;
+            
+            const currentTrack = audioSystem.getCurrentTrack();
+            
+            if (filename === currentTrack && audioSystem.currentMusic) {
+                // Toggle play/pause for current track
+                if (audioSystem.currentMusic.paused) {
+                    audioSystem.playMusic(audioSystem.musicMode);
+                    const btn = document.querySelector('.music-mode-text');
+                    if (btn) {
+                        btn.textContent = 'Stop Music';
+                    }
+                } else {
+                    audioSystem.stopMusic();
+                    const btn = document.querySelector('.music-mode-text');
+                    if (btn) {
+                        btn.textContent = 'Start Music';
+                    }
+                }
+            } else {
+                // Switch to and play the new track
+                audioSystem.switchTrack(filename);
+                setTimeout(() => {
+                    audioSystem.playMusic(audioSystem.musicMode);
+                    const btn = document.querySelector('.music-mode-text');
+                    if (btn) {
+                        btn.textContent = 'Stop Music';
+                    }
+                }, 100);
+            }
+            
+            // Refresh the music selector UI
+            setTimeout(() => initializeMusicSelector(), 200);
+        }
+          function toggleAudioMute() {
+            if (audioSystem) {
+                const isMuted = audioSystem.toggleMute();
+                updateMuteButtonState();
+            }
+        }
+          function updateMuteButtonState() {
+            const muteBtn = document.getElementById('audio-mute-btn');
+            if (muteBtn && audioSystem) {
+                if (audioSystem.isMuted) {
+                    muteBtn.classList.add('muted');
+                    muteBtn.querySelector('.action-icon').textContent = '🔇';
+                    muteBtn.querySelector('.action-text').textContent = 'Unmute Audio';
+                } else {
+                    muteBtn.classList.remove('muted');
+                    muteBtn.querySelector('.action-icon').textContent = '🔊';
+                    muteBtn.querySelector('.action-text').textContent = 'Mute Audio';
+                }
+            }
+            
+            // Refresh music selector to show updated state
+            if (typeof initializeMusicSelector === 'function') {
+                initializeMusicSelector();
+            }
+        }
+        
+        function testAudioSounds() {
+            if (audioSystem) {
+                audioSystem.onJump();
+                setTimeout(() => audioSystem.onCollect(), 200);
+                setTimeout(() => audioSystem.onMenuClick(), 400);
+            }
+        }
+          function toggleBackgroundMusic() {
+            const btn = document.querySelector('.music-mode-text');
+            if (audioSystem && btn) {
+                if (audioSystem.currentMusic) {
+                    audioSystem.stopMusic();
+                    btn.textContent = 'Start Music';
+                } else {
+                    audioSystem.playMusic('chill');
+                    btn.textContent = 'Stop Music';
+                }
+                
+                // Refresh music selector to show updated playing state
+                setTimeout(() => initializeMusicSelector(), 100);
+            }
+        }
+        
+        // Keyboard shortcut for mute
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                if (!['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+                    e.preventDefault();
+                    toggleAudioMute();
+                }
+            }
+        });
+          // Make audioSystem and music functions globally available
+        window.audioSystem = audioSystem;
+        window.selectMusicTrack = selectMusicTrack;
+        window.playPreviewTrack = playPreviewTrack;
+        window.initializeMusicSelector = initializeMusicSelector;
+    </script>
+    
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>

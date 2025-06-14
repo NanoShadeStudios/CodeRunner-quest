@@ -10,6 +10,7 @@ import { UpgradeSystem } from '../systems/UpgradeSystem.js';
 import { LeaderboardSystem } from '../systems/LeaderboardSystem.js';
 import { OpeningAnimationSystem } from '../systems/OpeningAnimationSystem.js';
 import { PopupSystem } from '../systems/PopupSystem.js';
+import { CloudSaveSystem } from '../systems/CloudSaveSystem.js';
 
 
 import { LoginSystem } from '../systems/LoginSystem.js';
@@ -175,10 +176,9 @@ export class Game {
         this.addDebugCommands();
           // Load saved best scores
         this.loadBestScores();
-        
-        // Load saved game data (data packets, etc.)
+          // Load saved game data (data packets, etc.)
         console.log('🎮 Game.init() about to call loadGameData()');
-        this.loadGameData();
+        await this.loadGameData();
         console.log('🎮 Game.init() finished loadGameData()');
           // Start continuous autosave system (runs regardless of game state)
         this.startAutosave();        // Connect rendering modules (after systems are created)
@@ -194,6 +194,7 @@ export class Game {
         this.leaderboardSystem = new LeaderboardSystem(this);
         this.openingAnimation = new OpeningAnimationSystem(this);
         this.popupSystem = new PopupSystem(this.canvas, this.ctx);
+        this.cloudSaveSystem = new CloudSaveSystem(this);
         // this.audioVideoPrompt = new AudioVideoPromptSystem(this); // Removed - going directly to login
         this.loginSystem = new LoginSystem(this);
         // this.userProfileSystem = new UserProfileSystem(this); // TODO: Implement UserProfileSystem
@@ -1270,8 +1271,7 @@ export class Game {
      * Autosave System Methods
      */    /**
      * Save current game data to localStorage
-     */
-    saveGameData() {        try {            // Prepare comprehensive save data
+     */    saveGameData() {        try {            // Prepare comprehensive save data
             const saveData = {
                 // Core game data
                 dataPackets: this.upgradeSystem.getDataPackets(),
@@ -1316,30 +1316,39 @@ export class Game {
                 console.log(`💾 Saving game data - datapackets: ${saveData.dataPackets}, fingerprint changed: ${this.dataFingerprint} -> ${newFingerprint}`);
             }
 
-            // Save to localStorage
-            localStorage.setItem('coderunner_save_data', JSON.stringify(saveData));
-            
-            // Update optimization tracking
-            this.lastSaveData = saveData;
-            this.dataFingerprint = newFingerprint;
-            this.autosaveStatus = 'saved';
-            this.lastSaveTime = Date.now();
-            
-            // Reset prevented saves counter occasionally
-            if (this.savesPrevented > 100) {
+            // Use CloudSaveSystem instead of direct localStorage
+            this.cloudSaveSystem.saveGameData(saveData).then((success) => {
+                if (success) {
+                    // Update optimization tracking
+                    this.lastSaveData = saveData;
+                    this.dataFingerprint = newFingerprint;
+                    this.autosaveStatus = 'saved';
+                    this.lastSaveTime = Date.now();
+                    
+                    // Reset prevented saves counter occasionally
+                    if (this.savesPrevented > 100) {
+                        this.savesPrevented = 0;
+                    }
+                } else {
+                    this.autosaveStatus = 'error';
+                }
                 
-                this.savesPrevented = 0;
-            }
-            
-            // Hide indicator after 2 seconds
-            setTimeout(() => {
-                this.showAutosaveIndicator = false;
-            }, 2000);
+                // Hide indicator after 2-3 seconds
+                setTimeout(() => {
+                    this.showAutosaveIndicator = false;
+                }, success ? 2000 : 3000);
+            }).catch((error) => {
+                console.error('❌ Error in cloud save:', error);
+                this.autosaveStatus = 'error';
+                setTimeout(() => {
+                    this.showAutosaveIndicator = false;
+                }, 3000);
+            });
 
             return true;
 
         } catch (error) {
-            
+            console.error('❌ Error preparing save data:', error);
             this.autosaveStatus = 'error';
             
             // Hide error indicator after 3 seconds
@@ -1349,7 +1358,7 @@ export class Game {
             
             return false;
         }
-    }    /**
+    }/**
      * Create a quick fingerprint/hash of save data for change detection
      */
     createDataFingerprint(data) {
@@ -1367,17 +1376,54 @@ export class Game {
             // Fallback to simple method
             return JSON.stringify(data).length + Object.keys(data).length;
         }
-    }
-
-    /**
+    }    /**
      * Get profile data for save system
-     */
-    getProfileData() {
+     */    getProfileData() {
+        // Get ProfileManager data for character and profile settings
+        let profileManagerData = {};
+        if (window.profileManager && window.profileManager.profileData) {
+            profileManagerData = {
+                name: window.profileManager.profileData.name || '',
+                selectedSprite: window.profileManager.profileData.selectedSprite || 'original',
+                bestScore: window.profileManager.profileData.bestScore || 0,
+                gamesPlayed: window.profileManager.profileData.gamesPlayed || 0,
+                totalPackets: window.profileManager.profileData.totalPackets || 0,
+                playTime: window.profileManager.profileData.playTime || 0
+            };
+        }
+        
+        // Get general settings for UI preferences
+        let generalSettingsData = {};
+        if (window.generalSettings) {
+            generalSettingsData = {
+                enableOpeningAnimation: window.generalSettings.isOpeningAnimationEnabled() || false,
+                graphicsQuality: window.generalSettings.getGraphicsQuality() || 'medium',
+                showFpsCounter: window.generalSettings.isShowFpsCounterEnabled() || false
+            };
+        }
+        
         return {
-            selectedDifficulty: this.selectedDifficulty,
-            difficultyIndex: this.difficultyIndex,
+            // Game settings (ensure no undefined values)
+            selectedDifficulty: this.selectedDifficulty || 'Easy',
+            difficultyIndex: typeof this.difficultyIndex === 'number' ? this.difficultyIndex : 0,
             lastPlayTime: Date.now(),
-            totalPlaySessions: (this.profileData?.totalPlaySessions || 0) + 1
+            totalPlaySessions: (this.profileData?.totalPlaySessions || 0) + 1,
+            
+            // User profile data (character, name, stats)
+            name: profileManagerData.name || '',
+            selectedSprite: profileManagerData.selectedSprite || 'original',
+            bestScore: profileManagerData.bestScore || 0,
+            gamesPlayed: profileManagerData.gamesPlayed || 0,
+            totalPackets: profileManagerData.totalPackets || 0,
+            playTime: profileManagerData.playTime || 0,
+            
+            // UI and gameplay settings
+            showPerformanceDisplay: this.showPerformanceDisplay || false,
+            showFpsCounter: this.showFpsCounter || false,
+            graphicsQuality: this.graphicsQuality || 'medium',
+            
+            // General settings from GeneralSettings
+            ...generalSettingsData
         };
     }
 
@@ -1416,13 +1462,13 @@ export class Game {
         return {
             playerName: '',
             localScores: []
-        };    }
-
-    /**
+        };    }    /**
      * Load profile data from save system
      */    loadProfileData(profileData) {
         try {
             if (profileData && typeof profileData === 'object') {
+                console.log('🔄 Loading profile data from cloud/local save:', profileData);
+                
                 // Restore difficulty settings
                 if (profileData.selectedDifficulty && DIFFICULTY_LEVELS[profileData.selectedDifficulty]) {
                     this.selectedDifficulty = profileData.selectedDifficulty;
@@ -1438,26 +1484,114 @@ export class Game {
                     this.profileData.totalPlaySessions = profileData.totalPlaySessions;
                 }
                 
+                // Restore ProfileManager data (character selection, name, stats)
+                if (window.profileManager && window.profileManager.profileData) {
+                    // Character selection
+                    if (profileData.selectedSprite && typeof profileData.selectedSprite === 'string') {
+                        window.profileManager.profileData.selectedSprite = profileData.selectedSprite;
+                        console.log(`🎨 Restored character selection: ${profileData.selectedSprite}`);
+                        
+                        // Update player sprite immediately if player exists
+                        if (this.player && this.player.changeSprite) {
+                            this.player.changeSprite(`./assets/${profileData.selectedSprite}`);
+                        }
+                        
+                        // Refresh the sprite selector in the UI
+                        if (window.profileManager.refreshSpriteSelector) {
+                            window.profileManager.refreshSpriteSelector();
+                        }
+                    }
+                    
+                    // Player name
+                    if (profileData.name && typeof profileData.name === 'string') {
+                        window.profileManager.profileData.name = profileData.name;
+                        console.log(`👤 Restored player name: ${profileData.name}`);
+                        
+                        // Update name input field if it exists
+                        const nameInput = document.getElementById('playerName');
+                        if (nameInput) {
+                            nameInput.value = profileData.name;
+                        }
+                    }
+                    
+                    // Player statistics
+                    if (typeof profileData.bestScore === 'number') {
+                        window.profileManager.profileData.bestScore = Math.max(
+                            window.profileManager.profileData.bestScore || 0,
+                            profileData.bestScore
+                        );
+                    }
+                    
+                    if (typeof profileData.gamesPlayed === 'number') {
+                        window.profileManager.profileData.gamesPlayed = profileData.gamesPlayed;
+                    }
+                    
+                    if (typeof profileData.totalPackets === 'number') {
+                        window.profileManager.profileData.totalPackets = profileData.totalPackets;
+                    }
+                    
+                    if (typeof profileData.playTime === 'number') {
+                        window.profileManager.profileData.playTime = profileData.playTime;
+                    }
+                    
+                    // Save updated profile to localStorage
+                    window.profileManager.saveProfile();
+                    
+                    // Update profile display in UI
+                    if (window.profileManager.updateProfileDisplay) {
+                        window.profileManager.updateProfileDisplay();
+                    }
+                }
+                  // Restore UI and gameplay settings
+                if (typeof profileData.showPerformanceDisplay === 'boolean') {
+                    this.showPerformanceDisplay = profileData.showPerformanceDisplay;
+                }
                 
+                if (typeof profileData.showFpsCounter === 'boolean') {
+                    this.showFpsCounter = profileData.showFpsCounter;
+                }
+                
+                if (typeof profileData.graphicsQuality === 'string') {
+                    this.graphicsQuality = profileData.graphicsQuality;
+                    // Apply graphics quality settings immediately
+                    this.applyGraphicsQuality();
+                }
+                
+                // Restore general settings if available
+                if (window.generalSettings) {
+                    if (typeof profileData.enableOpeningAnimation === 'boolean') {
+                        window.generalSettings.setOpeningAnimationEnabled(profileData.enableOpeningAnimation);
+                        console.log(`⚙️ Restored opening animation setting: ${profileData.enableOpeningAnimation}`);
+                    }
+                    
+                    if (typeof profileData.graphicsQuality === 'string') {
+                        window.generalSettings.setGraphicsQuality(profileData.graphicsQuality);
+                        console.log(`🎮 Restored graphics quality: ${profileData.graphicsQuality}`);
+                    }
+                    
+                    if (typeof profileData.showFpsCounter === 'boolean') {
+                        window.generalSettings.setShowFpsCounter(profileData.showFpsCounter);
+                        console.log(`📊 Restored FPS counter setting: ${profileData.showFpsCounter}`);
+                    }
+                }
+                
+                console.log('✅ Profile data loaded successfully');
             }
         } catch (error) {
-            
+            console.error('❌ Error loading profile data:', error);
         }
-    }
-
-    /**
-     * Load saved game data from localStorage
+    }/**
+     * Load saved game data from cloud or localStorage
      */
-    loadGameData() {
-        try {
-            const savedData = localStorage.getItem('coderunner_save_data');
+    async loadGameData() {        try {
+            // Use CloudSaveSystem to load data
+            const data = await this.cloudSaveSystem.loadGameData();
             
-            if (savedData) {
+            if (data) {
                 // Show loading popup if popup system is available
                 if (this.popupSystem) {
                     this.popupSystem.showLoadingPopup("Loading game data...");
                 }
-                  const data = JSON.parse(savedData);
                 
                 // Debug logging for load
                 if (window.debugMode) {
@@ -1532,12 +1666,11 @@ export class Game {
                 // Close loading popup and show loaded confirmation
                 if (this.popupSystem) {
                     this.popupSystem.closePopup();
-                    
-                    setTimeout(() => {
+                      setTimeout(() => {
+                        const saveLocation = this.cloudSaveSystem.isUserLoggedIn() ? 'cloud' : 'local storage';
                         this.popupSystem.showConfirmationPopup(
                             "Game Loaded",
-                            `Successfully loaded your saved game!\n\nData Packets: ${data.dataPackets || 0}\nUpgrades: ${data.ownedUpgrades ? data.ownedUpgrades.length : 0} owned`,
-
+                            `Successfully loaded your saved game from ${saveLocation}!\n\nData Packets: ${data.dataPackets || 0}\nUpgrades: ${data.ownedUpgrades ? data.ownedUpgrades.length : 0} owned`,
                             () => {
                                 this.popupSystem.closePopup();
                             }
@@ -1586,13 +1719,32 @@ export class Game {
             this.stopAutosave();
         }
         
+        // Counter for reconnection attempts (try every 30 seconds)
+        this.reconnectionCounter = 0;
         
         this.autosaveInterval = setInterval(() => {
             // Save every second regardless of game state
             // The saveGameData method has built-in change detection to prevent unnecessary saves
             this.saveGameDataOptimized();
+            
+            // Attempt Firestore reconnection every 30 seconds if needed
+            this.reconnectionCounter++;
+            if (this.reconnectionCounter >= 30) {
+                this.reconnectionCounter = 0;
+                if (this.cloudSaveSystem && this.cloudSaveSystem.shouldAttemptReconnection()) {
+                    this.cloudSaveSystem.attemptFirestoreReconnection().then(success => {
+                        if (success) {
+                            console.log('🔄 Firestore reconnected, attempting data migration...');
+                            // Try to migrate any pending local data
+                            this.cloudSaveSystem.migrateLocalDataToCloud();
+                        }
+                    }).catch(error => {
+                        // Silent catch - reconnection will be attempted again later
+                    });
+                }
+            }
         }, this.autosaveDelay);
-    }    /**
+    }/**
      * Optimized autosave that only saves when data changes
      */
     saveGameDataOptimized() {
@@ -2799,14 +2951,21 @@ export class Game {
 
     /**
      * Check if there's saved game data available
-     */
-    hasSavedGame() {
+     */    hasSavedGame() {
         try {
-            const savedData = localStorage.getItem('coderunner_save_data');
-            if (savedData) {
-                const data = JSON.parse(savedData);
-                // Check if the saved data has meaningful progress (more than default starting values)
-                return data.dataPackets > 0 || data.score > 0 || data.bestScore > 0;
+            // Check both cloud and local storage synchronously for immediate rendering
+            // This is a simplified check - the actual loading will be async
+            if (this.cloudSaveSystem.isUserLoggedIn()) {
+                // For logged-in users, we assume there might be cloud data
+                // The actual check happens during load
+                return true; // Will be validated during actual loading
+            } else {
+                // For guest users, check localStorage
+                const savedData = localStorage.getItem('coderunner_save_data');
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    return data.dataPackets > 0 || data.score > 0 || data.bestScore > 0;
+                }
             }
         } catch (error) {
             console.warn('❌ Error checking saved game data:', error);

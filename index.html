@@ -2487,15 +2487,14 @@
                 <span id="worldDifficulty">1.0</span>
             </div>
         </div>
-    </div>
-      <!-- Firebase Scripts -->
+    </div>      <!-- Firebase Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-      <!-- Firebase Configuration -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>      <!-- Firebase Configuration -->
     <script>
-        // Leaderboard Firebase configuration (existing project for leaderboards)
-        const leaderboardFirebaseConfig = {
+        // Main Firebase configuration - using the established coderunner project for everything
+        const firebaseConfig = {
           apiKey: "AIzaSyC3Sf6r81WojKrRUP-tmirHG9nW5Lytqvc",
           authDomain: "coderunner-9e199.firebaseapp.com",
           databaseURL: "https://coderunner-9e199-default-rtdb.firebaseio.com/",
@@ -2505,28 +2504,18 @@
           appId: "1:593312008496:web:fc12738c8ff2946138e0f5",
         };
 
-        // Authentication Firebase configuration (new shared sign-in project)
-        const authFirebaseConfig = {
-          apiKey: "AIzaSyCo5hr7ULHLL_0UAAst74g8ePZxkB7OHFQ",
-          authDomain: "shared-sign-in.firebaseapp.com",
-          projectId: "shared-sign-in",
-          storageBucket: "shared-sign-in.firebasestorage.app",
-          messagingSenderId: "332039027753",
-          appId: "1:332039027753:web:aa7c6877d543bb90363038",
-          measurementId: "G-KK5XVVLMVN"
-        };
+        // Initialize Firebase with single configuration
+        firebase.initializeApp(firebaseConfig);
         
-        // Initialize Firebase apps with names
-        const leaderboardApp = firebase.initializeApp(leaderboardFirebaseConfig, 'leaderboard');
-        const authApp = firebase.initializeApp(authFirebaseConfig, 'auth');
+        // Get services from the default app
+        const database = firebase.database();
+        const auth = firebase.auth();
+        const firestore = firebase.firestore();
         
-        // Get database from leaderboard app and auth from auth app
-        const database = firebase.database(leaderboardApp);
-        const auth = firebase.auth(authApp);
-        
-        // Make both available globally for the game
+        // Make all available globally for the game
         window.firebaseDatabase = database;
         window.firebaseAuth = auth;
+        window.firebaseFirestore = firestore;
           // Helper functions for leaderboard display
         function hideLeaderboard() {
             const container = document.getElementById("leaderboard-container");
@@ -3192,8 +3181,7 @@
                         break;
                     case 'auth/requires-recent-login':
                         errorMessage = 'Please log out and log back in, then try again';
-                        break;
-                    default:
+                        break;                    default:
                         errorMessage = error.message || 'Failed to change email';
                 }
                 

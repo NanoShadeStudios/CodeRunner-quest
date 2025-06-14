@@ -96,8 +96,7 @@ export class LoginSystem {
             // Set up auth state listener
             this.auth.onAuthStateChanged((user) => {
                 const wasLoggedIn = this.isLoggedIn;
-                
-                if (user) {
+                  if (user) {
                     this.currentUser = user;
                     this.isLoggedIn = true;
                     this.isGuest = false;
@@ -108,7 +107,29 @@ export class LoginSystem {
                         console.log('🔑 Firebase Auth: Auth state changed, updating navigation');
                         this.game.determineInitialNavigation();
                     }
-                } else {
+                    
+                    // Migrate local data to cloud when user logs in
+                    if (!wasLoggedIn && this.game && this.game.cloudSaveSystem) {
+                        console.log('☁️ User logged in, checking for data migration...');
+                        this.game.cloudSaveSystem.migrateLocalDataToCloud().then((migrated) => {
+                            if (migrated) {
+                                console.log('☁️ Successfully migrated local data to cloud');
+                                // Optionally show a popup about migration
+                                if (this.game.popupSystem) {
+                                    this.game.popupSystem.showConfirmationPopup(
+                                        "Data Synced",
+                                        "Your local save data has been synced to the cloud!\n\nYour game progress is now backed up and will be available on any device.",
+                                        () => {
+                                            this.game.popupSystem.closePopup();
+                                        }
+                                    );
+                                }
+                            }
+                        }).catch((error) => {
+                            console.error('❌ Error migrating data to cloud:', error);
+                        });
+                    }
+                }else {
                     this.currentUser = null;
                     this.isLoggedIn = false;
                     console.log('🔑 Firebase Auth: User signed out');

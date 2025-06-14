@@ -557,9 +557,25 @@ class AudioSystem {    constructor() {
                 console.log('🎵 No saved settings found, using defaults');
             }
         } catch (e) {
-            console.warn('🎵 Failed to load audio settings:', e);
-        }
-    }    /**
+            console.warn('🎵 Failed to load audio settings:', e);        }
+    }
+    
+    /**
+     * Get current audio settings for saving to cloud/localStorage
+     */
+    getSettings() {
+        return {
+            isMuted: this.isMuted,
+            masterVolume: this.masterVolume,
+            sfxVolume: this.sfxVolume,
+            musicVolume: this.musicVolume,
+            musicMode: this.musicMode,
+            selectedTrack: this.selectedTrack,
+            timestamp: Date.now()
+        };
+    }
+
+    /**
      * Load settings from unified save system
      */
     loadSettings(settingsData) {

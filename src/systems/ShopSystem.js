@@ -206,8 +206,7 @@ export class ShopSystem {
         return true;
     }applyUpgradeEffect(upgradeId, upgrade) {
         const player = this.game.player;
-        
-        // Handle sprite cosmetics
+          // Handle sprite cosmetics
         if (upgrade.effect && upgrade.effect.type === 'sprite') {
             // Apply sprite cosmetic
             if (window.profileManager) {
@@ -219,6 +218,9 @@ export class ShopSystem {
                 if (player) {
                     player.changeSprite(`./assets/${upgrade.effect.value}`);
                 }
+                
+                // Refresh the sprite selector to show the newly unlocked cosmetic
+                window.profileManager.refreshSpriteSelector();
                 
                 console.log(`✨ Applied cosmetic sprite: ${upgrade.effect.value}`);
             }

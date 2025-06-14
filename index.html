@@ -1040,6 +1040,57 @@
             color: #40d158;
         }
 
+        /* Locked Sprite Styles */
+        .sprite-option.locked {
+            position: relative;
+            background: rgba(33, 38, 45, 0.5);
+            border-color: #6e7681;
+            cursor: not-allowed;
+        }
+
+        .sprite-option.locked:hover {
+            border-color: #8b949e;
+            background: rgba(139, 148, 158, 0.1);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .sprite-option.locked .sprite-preview {
+            opacity: 0.3;
+            filter: grayscale(100%);
+        }
+
+        .sprite-option.locked .sprite-name {
+            color: #6e7681;
+        }
+
+        .sprite-lock-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(13, 17, 23, 0.8);
+            border-radius: 6px;
+            z-index: 1;
+        }
+
+        .lock-icon {
+            font-size: 20px;
+            margin-bottom: 4px;
+        }
+
+        .lock-price {
+            font-size: 10px;
+            color: #ffd700;
+            font-weight: bold;
+            text-align: center;
+        }
+
         /* Settings Categories */
         .settings-categories {
             display: flex;
@@ -2499,14 +2550,25 @@
             // Hide hamburger menu when panel is open, show when closed
             if (panel.classList.contains('open')) {
                 hamburger.style.display = 'none';
+                
+                // Pause game when dropdown is opened during gameplay
+                if (window.gameInstance && window.gameInstance.gameState === 'playing') {
+                    window.gameInstance.wasPlayingBeforeDropdown = true;
+                    window.gameInstance.togglePause();
+                }
             } else {
                 hamburger.style.display = 'block';
+                
+                // Resume game if it was playing before dropdown opened
+                if (window.gameInstance && window.gameInstance.wasPlayingBeforeDropdown && window.gameInstance.gameState === 'paused') {
+                    window.gameInstance.wasPlayingBeforeDropdown = false;
+                    window.gameInstance.togglePause();
+                }
             }
         }
         // Make function available globally immediately
         window.toggleDropdown = toggleDropdown;
-        
-        function closeDropdown() {
+          function closeDropdown() {
             const panel = document.getElementById('dropdownPanel');
             const hamburger = document.querySelector('.hamburger-menu');
             
@@ -2516,6 +2578,12 @@
             
             if (hamburger) {
                 hamburger.style.display = 'block'; // Always show hamburger when closing
+            }
+            
+            // Resume game if it was playing before dropdown opened
+            if (window.gameInstance && window.gameInstance.wasPlayingBeforeDropdown && window.gameInstance.gameState === 'paused') {
+                window.gameInstance.wasPlayingBeforeDropdown = false;
+                window.gameInstance.togglePause();
             }
         }
         // Make function available globally immediately
@@ -2592,12 +2660,11 @@
                     }
                 }
             });
-        });
-
-        // Keyboard support for settings panels
+        });        // Keyboard support for settings panels and dropdown
         document.addEventListener('keydown', (e) => {
-            // Close settings panel with Escape key
+            // Close settings panel and dropdown with Escape key
             if (e.key === 'Escape') {
+                // Close settings panel first
                 const openPanel = document.querySelector('.settings-panel-overlay.open');
                 if (openPanel) {
                     openPanel.classList.remove('open');
@@ -2614,6 +2681,13 @@
                     }
                     
                     e.preventDefault();
+                } else {
+                    // If no settings panel is open, check for dropdown
+                    const dropdownPanel = document.getElementById('dropdownPanel');
+                    if (dropdownPanel && dropdownPanel.classList.contains('open')) {
+                        closeDropdown();
+                        e.preventDefault();
+                    }
                 }
             }
         });
@@ -2638,14 +2712,17 @@
                     { name: 'Midnight Runner', filename: 'Untitled design (9).png' },
                     { name: 'Cyber Scout', filename: 'Untitled design (10).png' },
                     { name: 'Solar Voyager', filename: 'Untitled design (11).png' },
-                    { name: 'Quantum Strider', filename: 'Untitled design (12).png' },
-                    // Buyable cosmetic sprites from shop
-                    { name: 'Cosmic Runner', filename: 'buyable cosmetics/sprite_0.png' },
-                    { name: 'Neon Guardian', filename: 'buyable cosmetics/sprite_1.png' },
-                    { name: 'Shadow Walker', filename: 'buyable cosmetics/sprite_2.png' },
-                    { name: 'Flame Sprinter', filename: 'buyable cosmetics/sprite_3.png' },
-                    { name: 'Frost Runner', filename: 'buyable cosmetics/sprite_4.png' },
-                    { name: 'Electric Dash', filename: 'buyable cosmetics/sprite_5.png' }
+                    { name: 'Quantum Strider', filename: 'Untitled design (12).png' }
+                ];
+                
+                // Buyable cosmetic sprites (require purchase)
+                this.buyableSprites = [
+                    { name: 'Cosmic Runner', filename: 'buyable cosmetics/sprite_0.png', shopId: 'sprite-cosmic', price: 50 },
+                    { name: 'Neon Guardian', filename: 'buyable cosmetics/sprite_1.png', shopId: 'sprite-neon', price: 75 },
+                    { name: 'Shadow Walker', filename: 'buyable cosmetics/sprite_2.png', shopId: 'sprite-shadow', price: 100 },
+                    { name: 'Flame Sprinter', filename: 'buyable cosmetics/sprite_3.png', shopId: 'sprite-flame', price: 125 },
+                    { name: 'Frost Runner', filename: 'buyable cosmetics/sprite_4.png', shopId: 'sprite-ice', price: 150 },
+                    { name: 'Electric Dash', filename: 'buyable cosmetics/sprite_5.png', shopId: 'sprite-electric', price: 200 }
                 ];
                 this.initializeProfile();
                 this.initializeSpriteSelector();
@@ -2674,8 +2751,7 @@
                 nameInput.addEventListener('input', (e) => {
                     this.profileData.name = e.target.value || 'Anonymous';
                     this.saveProfile();
-                });            }
-            
+                });            }            
             initializeSpriteSelector() {
                 const spriteGrid = document.getElementById('spriteGrid');
                 if (!spriteGrid) {
@@ -2685,57 +2761,106 @@
                 // Clear any existing content first to avoid duplications
                 spriteGrid.innerHTML = '';
                 
-                // Track loaded sprites to prevent duplicates
-                const loadedFilenames = new Set();
-                  this.availableSprites.forEach((sprite, index) => {
-                    // Skip if we already loaded this filename
-                    if (loadedFilenames.has(sprite.filename)) {
-                        return;
+                // Add free sprites first
+                this.availableSprites.forEach((sprite) => {
+                    this.createSpriteOption(spriteGrid, sprite, true); // true = unlocked
+                });
+                
+                // Add buyable sprites 
+                this.buyableSprites.forEach((sprite) => {
+                    const isOwned = this.isSpriteOwned(sprite.shopId);
+                    this.createSpriteOption(spriteGrid, sprite, isOwned);
+                });
+            }
+            
+            createSpriteOption(spriteGrid, sprite, isUnlocked) {
+                const spriteOption = document.createElement('div');
+                spriteOption.className = 'sprite-option';
+                spriteOption.dataset.filename = sprite.filename;
+                
+                // Add locked class if not unlocked
+                if (!isUnlocked) {
+                    spriteOption.classList.add('locked');
+                }
+                
+                // Create preview image
+                const spritePreview = document.createElement('img');
+                spritePreview.className = 'sprite-preview';
+                spritePreview.src = `./assets/${sprite.filename}`;
+                spritePreview.alt = sprite.name;
+                
+                let errorHandled = false;
+                spritePreview.onerror = () => {
+                    if (!errorHandled) {
+                        errorHandled = true;
+                        // Create error fallback element
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'sprite-preview-error';
+                        errorDiv.textContent = '❌';
+                        spriteOption.replaceChild(errorDiv, spritePreview);
                     }
-                    
-                    loadedFilenames.add(sprite.filename);
-                    
-                    const spriteOption = document.createElement('div');
-                    spriteOption.className = 'sprite-option';
-                    spriteOption.dataset.filename = sprite.filename;
-                    
-                    // Create preview image
-                    const spritePreview = document.createElement('img');
-                    spritePreview.className = 'sprite-preview';
-                    spritePreview.src = `./assets/${sprite.filename}`;
-                    spritePreview.alt = sprite.name;
-                    
-                    let errorHandled = false;                    spritePreview.onerror = () => {
-                        if (!errorHandled) {
-                            errorHandled = true;
-                            // Create error fallback element
-                            const errorDiv = document.createElement('div');
-                            errorDiv.className = 'sprite-preview-error';
-                            errorDiv.textContent = '❌';
-                            spriteOption.replaceChild(errorDiv, spritePreview);
-                        }
-                    };
-                    
-                    spritePreview.onload = () => {
-                        // Sprite loaded successfully
-                    };
-                    
-                    // Create sprite name
-                    const spriteName = document.createElement('div');
-                    spriteName.className = 'sprite-name';
-                    spriteName.textContent = sprite.name;
-                    
-                    spriteOption.appendChild(spritePreview);
-                    spriteOption.appendChild(spriteName);
-                      // Mark as selected if it matches current selection
-                    if (sprite.filename === this.profileData.selectedSprite) {
-                        spriteOption.classList.add('selected');
-                    }
-                    
-                    // Add click handler
+                };
+                
+                // Create sprite name
+                const spriteName = document.createElement('div');
+                spriteName.className = 'sprite-name';
+                spriteName.textContent = sprite.name;
+                
+                // Create lock overlay for locked sprites
+                if (!isUnlocked) {
+                    const lockOverlay = document.createElement('div');
+                    lockOverlay.className = 'sprite-lock-overlay';
+                    lockOverlay.innerHTML = `
+                        <div class="lock-icon">🔒</div>
+                        <div class="lock-price">${sprite.price} 💾</div>
+                    `;
+                    spriteOption.appendChild(lockOverlay);
+                }
+                
+                spriteOption.appendChild(spritePreview);
+                spriteOption.appendChild(spriteName);
+                
+                // Mark as selected if it matches current selection and is unlocked
+                if (sprite.filename === this.profileData.selectedSprite && isUnlocked) {
+                    spriteOption.classList.add('selected');
+                }
+                
+                // Add click handler
+                if (isUnlocked) {
                     spriteOption.addEventListener('click', () => this.selectSprite(sprite.filename, spriteOption));
-                      spriteGrid.appendChild(spriteOption);
-                });            }
+                } else {
+                    spriteOption.addEventListener('click', () => this.handleLockedSpriteClick(sprite));
+                }
+                
+                spriteGrid.appendChild(spriteOption);
+            }
+            
+            isSpriteOwned(shopId) {
+                // Check if game instance and shop system exist
+                if (window.gameInstance && window.gameInstance.shopSystem) {
+                    return window.gameInstance.shopSystem.isOwned(shopId);
+                }
+                return false;
+            }              handleLockedSpriteClick(sprite) {
+                // Use the in-game popup system if available
+                if (window.gameInstance && window.gameInstance.popupSystem) {
+                    window.gameInstance.popupSystem.showConfirmationPopup(
+                        'Locked Cosmetic',
+                        `🔒 ${sprite.name}\n💰 Price: ${sprite.price} 💾\n\nThis cosmetic requires purchase from the shop.\n\nPress OK to open the shop!`,
+                        () => {
+                            // Close the popup and open the shop
+                            window.gameInstance.popupSystem.closePopup();
+                            // Open the shop
+                            if (window.gameInstance.toggleShop) {
+                                window.gameInstance.toggleShop();
+                            }
+                        }
+                    );
+                } else {
+                    // Fallback to browser alert if popup system isn't available
+                    alert(`This sprite requires purchase from the shop!\n\nName: ${sprite.name}\nPrice: ${sprite.price} 💾\n\nPress 'S' during gameplay to open the shop.`);
+                }
+            }
 
             selectSprite(filename, element) {
              
@@ -2810,11 +2935,16 @@
                 if (!sprite || typeof sprite !== 'string') {
                     return 'player-sprite.png';
                 }
-                
-                // Validate that the sprite exists in our list
-                const validSprite = this.availableSprites.some(s => s.filename === sprite);
+                  // Validate that the sprite exists in our list
+                const allSprites = [...this.availableSprites, ...this.buyableSprites];
+                const validSprite = allSprites.some(s => s.filename === sprite);
                 return validSprite ? sprite : 'player-sprite.png';
-            }            // Test function to validate sprite selector functionality
+            }
+            
+            // Refresh sprite selector (call when sprites are purchased)
+            refreshSpriteSelector() {
+                this.initializeSpriteSelector();
+            }// Test function to validate sprite selector functionality
             testSpriteSelector() {
                 const spriteGrid = document.getElementById('spriteGrid');
                 const spriteOptions = spriteGrid ? spriteGrid.querySelectorAll('.sprite-option') : [];

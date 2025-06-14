@@ -9,6 +9,7 @@ import { ShopSystem } from '../systems/ShopSystem.js';
 import { UpgradeSystem } from '../systems/UpgradeSystem.js';
 import { LeaderboardSystem } from '../systems/LeaderboardSystem.js';
 import { OpeningAnimationSystem } from '../systems/OpeningAnimationSystem.js';
+import { PopupSystem } from '../systems/PopupSystem.js';
 
 
 import { LoginSystem } from '../systems/LoginSystem.js';
@@ -79,6 +80,7 @@ export class Game {
         this.gameState = GAME_STATES.INITIALIZING;
         this.previousGameState = null;
         this.isPaused = false;
+        this.wasPlayingBeforeDropdown = false; // Track if game was playing before dropdown opened
         this.lastTime = 0;
         this.deltaTime = 0;
         this.fps = 0;
@@ -187,15 +189,16 @@ export class Game {
         await this.determineInitialNavigation();
         
         this.gameLoop(0);
-    }createSystems() {        this.inputManager = new InputManager();
+    }    createSystems() {        this.inputManager = new InputManager();
         this.shopSystem = new ShopSystem(this);        this.upgradeSystem = new UpgradeSystem();
         this.leaderboardSystem = new LeaderboardSystem(this);
         this.openingAnimation = new OpeningAnimationSystem(this);
+        this.popupSystem = new PopupSystem(this.canvas, this.ctx);
         // this.audioVideoPrompt = new AudioVideoPromptSystem(this); // Removed - going directly to login
         this.loginSystem = new LoginSystem(this);
         // this.userProfileSystem = new UserProfileSystem(this); // TODO: Implement UserProfileSystem
         
-        this.renderer = new GameRenderer(this);        // Set up name input checker for InputManager
+        this.renderer = new GameRenderer(this);// Set up name input checker for InputManager
         this.inputManager.setNameInputChecker(() => {
             // Check if leaderboard name input is active
             const leaderboardInputActive = this.leaderboardSystem && this.leaderboardSystem.nameInputActive;
@@ -477,9 +480,7 @@ export class Game {
                 break;
             }
         }
-    }
-
-    /**
+    }    /**
      * Handle canvas mouse clicks for UI interactions
      */
     handleCanvasClick(e) {
@@ -488,8 +489,18 @@ export class Game {
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
         const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;        // Handle different game states
-        switch (this.gameState) {            case GAME_STATES.VIDEO_INTRO:
+        const y = (e.clientY - rect.top) * scaleY;
+
+        // Check for popup clicks first (popups should work in any state)
+        if (this.popupSystem && this.popupSystem.activePopup) {
+            const handled = this.popupSystem.handleClick(x, y);
+            if (handled) {
+                return; // Popup handled the click, don't process other handlers
+            }
+        }
+
+        // Handle different game states
+        switch (this.gameState) {case GAME_STATES.VIDEO_INTRO:
                 // Video intro system removed - skipping video intro state
                 break;
                   case GAME_STATES.LOGIN_PROMPT:
@@ -534,12 +545,8 @@ export class Game {
                 
             case GAME_STATES.GAME_OVER:
                 this.handleGameOverClick(x, y);
-                break;
-                  default:
-                // Handle popup system clicks if popup is active
-                if (this.popupSystem && this.popupSystem.activePopup) {
-                    this.popupSystem.handleClick(x, y);
-                }
+                break;            default:
+                // No specific handling for this state
                 break;
         }
     }
@@ -1182,11 +1189,14 @@ export class Game {
         if (this.gameState === GAME_STATES.PLAYING) {
             // Batch system updates for better performance
             this.updateCoreGameSystems(deltaTime);
-        }
-
-        // Update visual effects (milestone and speed penalty effects)
+        }        // Update visual effects (milestone and speed penalty effects)
         // These run regardless of game state for smooth transitions
         this.updateVisualEffects(deltaTime);
+        
+        // Update popup system (should work in any game state)
+        if (this.popupSystem) {
+            this.popupSystem.update();
+        }
         
         // Note: TileRenderer is updated by WorldGenerator.update(), not here
     }    /**

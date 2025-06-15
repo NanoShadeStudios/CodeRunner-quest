@@ -203,12 +203,12 @@ export class GameRenderer {
         if (easedProgress < 0.1) return; // Wait for initial fade before showing text
         
         const textAlpha = Math.max(0, (easedProgress - 0.2) / 0.8); // Text fades in after overlay
-        
-        // Game Over title
+          // Game Over title - use random death message
         this.ctx.fillStyle = `rgba(248, 81, 73, ${textAlpha})`;
         this.ctx.font = 'bold 36px Courier New';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 60);
+        const deathMessage = this.game.gameOverMessage || 'GAME OVER';
+        this.ctx.fillText(deathMessage, this.canvas.width / 2, this.canvas.height / 2 - 60);
         
         // High Score Celebration Animation
         if (this.game.isNewHighScore && easedProgress > 0.3) {
@@ -236,35 +236,21 @@ export class GameRenderer {
                 this.ctx.fillText(`Best Score: ${difficultyBestScore}`, this.canvas.width / 2, this.canvas.height / 2 + 50);
             }
         }
-        
-        // Restart instructions (only show when fade is nearly complete)
+          // Restart instructions (only show when fade is nearly complete)
         if (easedProgress > 0.7) {
             const instructionAlpha = Math.max(0, (easedProgress - 0.7) / 0.3);
             this.ctx.fillStyle = `rgba(86, 211, 100, ${instructionAlpha})`;
             this.ctx.font = '18px Courier New';
-            this.ctx.fillText('Press [R] to Restart Current Game', this.canvas.width / 2, this.canvas.height / 2 + 80);
-            
-            // Additional controls
+            this.ctx.fillText('Click to Restart', this.canvas.width / 2, this.canvas.height / 2 + 80);
+              // Additional controls
             this.ctx.fillStyle = `rgba(121, 192, 255, ${instructionAlpha})`;
             this.ctx.font = '14px Courier New';
-            this.ctx.fillText('Press [D] for Difficulty Selection', this.canvas.width / 2, this.canvas.height / 2 + 100);
-            
-            this.ctx.font = '12px Courier New';
-            this.ctx.fillStyle = `rgba(125, 133, 144, ${instructionAlpha})`;
-            this.ctx.fillText('Press [P] to Pause/Resume', this.canvas.width / 2, this.canvas.height / 2 + 120);
-            
-            // Upload score button (only if score is high enough and not already uploaded)
-            if (this.game.score >= 100 && this.game.leaderboardSystem && 
-                this.game.leaderboardSystem.canUploadForDifficulty(this.game.selectedDifficulty)) {
-                this.ctx.fillStyle = `rgba(255, 215, 0, ${instructionAlpha})`;
-                this.ctx.font = 'bold 14px Courier New';
-                this.ctx.fillText('Press [E] to Upload Score to Leaderboard', this.canvas.width / 2, this.canvas.height / 2 + 145);
-            }
+            this.ctx.fillText('Press [Escape] for Difficulty Selection', this.canvas.width / 2, this.canvas.height / 2 + 100);
             
             // Leaderboard access
             this.ctx.fillStyle = `rgba(86, 211, 100, ${instructionAlpha})`;
             this.ctx.font = '12px Courier New';
-            this.ctx.fillText('Press [L] to View Leaderboards', this.canvas.width / 2, this.canvas.height / 2 + 165);
+            this.ctx.fillText('Press [L] to View Leaderboards', this.canvas.width / 2, this.canvas.height / 2 + 120);
         }
         
         this.ctx.textAlign = 'left';

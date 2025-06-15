@@ -215,13 +215,28 @@
             outline: none !important;
             display: block !important;
         }
-        
-        canvas {
+          canvas {
             display: block;
             background: #161b22;
             image-rendering: pixelated;
             image-rendering: -moz-crisp-edges;
             image-rendering: crisp-edges;
+        }
+
+        /* Prevent page scrolling when canvas is focused or during gameplay */
+        canvas:focus,
+        #gameCanvas:focus {
+            outline: none;
+        }
+        
+        /* Prevent arrow key scrolling during gameplay */
+        body:has(canvas:focus) {
+            overflow: hidden;
+        }
+        
+        /* Fallback for browsers that don't support :has() */
+        body.game-focused {
+            overflow: hidden;
         }
 
         /* Hamburger Menu Styles */
@@ -2461,7 +2476,7 @@
 
         <div class="main-content">
             <div class="canvas-container">
-                <canvas id="gameCanvas" width="1400" height="700"></canvas>
+                <canvas id="gameCanvas" width="1400" height="700" tabindex="0"></canvas>
             </div>
               <!-- Leaderboard Container (hidden by default) -->
             <div id="leaderboard-container" style="display: none; margin-top: 20px;">
@@ -2495,14 +2510,14 @@
     <script>
         // Main Firebase configuration - using the established coderunner project for everything
         const firebaseConfig = {
-          apiKey: "AIzaSyC3Sf6r81WojKrRUP-tmirHG9nW5Lytqvc",
-          authDomain: "coderunner-9e199.firebaseapp.com",
-          databaseURL: "https://coderunner-9e199-default-rtdb.firebaseio.com/",
-          projectId: "coderunner-9e199",
-          storageBucket: "coderunner-9e199.firebasestorage.app",
-          messagingSenderId: "593312008496",
-          appId: "1:593312008496:web:fc12738c8ff2946138e0f5",
-        };
+            apiKey: "AIzaSyCo5hr7ULHLL_0UAAst74g8ePZxkB7OHFQ",
+            authDomain: "shared-sign-in.firebaseapp.com",
+            projectId: "shared-sign-in",
+            storageBucket: "shared-sign-in.firebasestorage.app",
+            messagingSenderId: "332039027753",
+            appId: "1:332039027753:web:aa7c6877d543bb90363038",
+            measurementId: "G-KK5XVVLMVN"
+};
 
         // Initialize Firebase with single configuration
         firebase.initializeApp(firebaseConfig);

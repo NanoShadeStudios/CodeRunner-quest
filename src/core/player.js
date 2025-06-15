@@ -4,6 +4,29 @@
 
 import { GAME_CONFIG, COLORS, TILE_TYPES } from '../utils/constants.js';
 
+// Creative death messages for game over screen
+const DEATH_MESSAGES = [
+    "Disconnected from reality.",
+    "Packet lost... forever.",
+    "NullPointerException: Skill not found.",
+    "You ran into a bug. The bug won.",
+    "Next time, try dodging... just a thought.",
+    "404: Survival not found.",
+    "Too slow for the code flow.",
+    "You glitched so hard, even the error log gave up.",
+    "Firewall 1, You 0.",
+    "Oops. You tried to divide by zero.",
+    "Memory overflow. Game crashed. You included.",
+    "Timeline corrupted. Reboot necessary.",
+    "You have been soft-deleted.",
+    "Speed: fast. Reflexes: not so much.",
+    "Nice try. Still trash though.",
+    "That trap had your IP address.",
+    "You got out-coded.",
+    "You're not a bug... you're just bad.",
+    "Sent to the recycle bin."
+];
+
 export class Player {
     constructor(x, y, game = null, upgrades = null) {
         if (isNaN(x) || isNaN(y)) {
@@ -162,10 +185,13 @@ export class Player {
                 }
             }
         }
-    }
-
-    updateMovement(deltaSeconds, inputKeys) {
+    }    updateMovement(deltaSeconds, inputKeys) {
         let moveInput = 0;
+        
+        // DEBUG: Add logging to see what's happening with input
+        if (inputKeys.left || inputKeys.right) {
+            console.log('🎮 Movement input detected:', { left: inputKeys.left, right: inputKeys.right });
+        }
         
         if (inputKeys.left) moveInput -= 1;
         if (inputKeys.right) moveInput += 1;
@@ -356,9 +382,7 @@ export class Player {
         
         if (this.health <= 0) {
             this.die(source);
-        }    }
-
-    die(reason) {
+        }    }    die(reason) {
         if (this.game) {
             this.game.gameOver(reason);
         }

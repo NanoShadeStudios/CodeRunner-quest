@@ -57,28 +57,45 @@ export class InputManager {    constructor() {        this.keys = {
         document.addEventListener('keyup', (e) => this.handleKeyUp(e));
         
         // Handle text input for name entry
-        document.addEventListener('keypress', (e) => this.handleKeyPress(e));
-            // Prevent default behavior for game keys, but not when in name input mode
+        document.addEventListener('keypress', (e) => this.handleKeyPress(e));        // Prevent default behavior for game keys, but not when in name input mode
         document.addEventListener('keydown', (e) => {
             const isInNameInput = this.isNameInputActive && this.isNameInputActive();
-            const isTypingInField = this.isTypingInInputField();            
-            // Only prevent default if not in name input mode AND not typing in any input field
+            const isTypingInField = this.isTypingInInputField();
+            
+            // ALWAYS prevent arrow key scrolling for the game, even if focus is lost
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+                e.preventDefault();
+                console.log(`🎮 Prevented scroll for ${e.code}`);
+            }
+            
+            // DEBUG: Log input state checks
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+                console.log(`🎮 Key ${e.code}: nameInput=${isInNameInput}, typingInField=${isTypingInField}`);
+            }
+            
+            // Only prevent default for other keys if not in name input mode AND not typing in any input field
             if (!isInNameInput && !isTypingInField) {
                 // Get all keybinds and check if this key is bound to any action
                 if (window.keybindManager) {
                     const actions = window.keybindManager.getActionsForKey(e.code);
-                    if (actions.length > 0) {
+                    if (actions.length > 0 && !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+                        console.log(`🎮 Preventing default for ${e.code} (actions: ${actions.join(', ')})`);
                         e.preventDefault();
                     }
                 } else {
                     // Fallback to hardcoded keys if keybind manager not available
-                    if (['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyU', 'KeyC', 'KeyL', 'KeyE', 'KeyF', 'KeyQ', 'KeyX', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+                    if (['Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyU', 'KeyC', 'KeyL', 'KeyE', 'KeyF', 'KeyQ', 'KeyX', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+                        console.log(`🎮 Preventing default for ${e.code} (fallback)`);
                         e.preventDefault();
                     }
                 }
+            } else {
+                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+                    console.log(`🎮 NOT preventing default for ${e.code} (nameInput=${isInNameInput}, typingInField=${isTypingInField})`);
+                }
             }
         });
-    }handleKeyDown(e) {
+    }    handleKeyDown(e) {
         // If we're in name input mode or typing in any input field, only handle special keys
         const isInNameInput = this.isNameInputActive && this.isNameInputActive();
         const isTypingInField = this.isTypingInInputField();
@@ -86,32 +103,65 @@ export class InputManager {    constructor() {        this.keys = {
         // Get actions for this key from keybind manager
         const actions = window.keybindManager ? window.keybindManager.getActionsForKey(e.code) : [];
         
-        // Handle movement keys (continuous input)
+        // DEBUG: Log key detection for movement keys
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) {
+            console.log(`🎮 Key ${e.code} pressed, actions: [${actions.join(', ')}], keybindManager exists: ${!!window.keybindManager}`);
+        }
+          // Handle movement keys (continuous input)
         if (!isInNameInput && !isTypingInField) {
             if (actions.includes('left')) {
                 this.keys.left = true;
+                console.log('🎮 LEFT key detected');
             }
             if (actions.includes('right')) {
                 this.keys.right = true;
+                console.log('🎮 RIGHT key detected');
             }
             if (actions.includes('up')) {
                 this.keys.up = true;
+                console.log('🎮 UP key detected');
                 // Handle shop scroll up
                 if (this.callbacks.shopScrollUp) this.callbacks.shopScrollUp();
             }
             if (actions.includes('down')) {
                 this.keys.down = true;
+                console.log('🎮 DOWN key detected');
                 // Handle shop scroll down
                 if (this.callbacks.shopScrollDown) this.callbacks.shopScrollDown();
             }
             if (actions.includes('space')) {
                 this.keys.space = true;
+                console.log('🎮 SPACE key detected');
             }
             if (actions.includes('x')) {
                 this.keys.x = true;
-            }
-            if (actions.includes('shift')) {
+            }            if (actions.includes('shift')) {
                 this.keys.shift = true;
+            }
+        }
+        
+        // FALLBACK: If keybindManager fails or no actions found, handle arrow keys directly
+        if (!isInNameInput && !isTypingInField && actions.length === 0) {
+            console.log(`🎮 FALLBACK: No actions found for ${e.code}, using direct key mapping`);
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+                this.keys.left = true;
+                console.log('🎮 FALLBACK LEFT key detected');
+            }
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+                this.keys.right = true;
+                console.log('🎮 FALLBACK RIGHT key detected');
+            }
+            if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+                this.keys.up = true;
+                console.log('🎮 FALLBACK UP key detected');
+            }
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                this.keys.down = true;
+                console.log('🎮 FALLBACK DOWN key detected');
+            }
+            if (e.code === 'Space') {
+                this.keys.space = true;
+                console.log('🎮 FALLBACK SPACE key detected');
             }
         }
 

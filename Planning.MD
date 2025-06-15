@@ -194,3 +194,83 @@ Task Breakdown
  Randomize names and descriptions slightly for flavor
 
  Log chosen hacks in run summary screen
+
+
+
+
+
+🏆 Core Progress Achievements
+These reward distance and survival milestones:
+
+Booted Up
+Make your first run.
+➤ Unlock when the player starts the game for the first time.
+
+Packet Runner
+Reach 500m in a single run.
+
+Mainframe Breaker
+Reach 2000m in one run.
+
+Infinite Loop
+Survive 5 memory mazes.
+
+Glitch Master
+Complete a full run without dying once (reach the distance cap or final zone if you add one).
+
+⚡ Skill-Based Achievements
+Rewards for doing well with timing, survival, or risk:
+
+Perfect Sync
+Survive a memory maze without stepping on a single trap.
+
+Data Phantom
+Swap timelines 10 times in one run.
+
+Firewall Jumper
+Dodge 50 hazards in one run.
+
+Risk Taker
+Take 3 hack upgrades in a single run.
+
+Echo Runner
+Trigger a speed glitch (dash + timeline swap combo).
+
+💀 Death-Based Achievements
+Funny or ironic ones for dying:
+
+404 – Skill Not Found
+Die within the first 100m.
+
+Fatal Exception
+Die in the memory maze 3 times.
+
+System Crash
+Trigger 5 traps in one run and survive anyway.
+
+🎨 Customization Achievements
+Encourage exploring player features:
+
+Style.exe
+Equip a cosmetic skin.
+
+Pixel You
+Draw and save a custom profile picture.
+
+Title Hacker
+Set your display name from the profile screen.
+
+🧠 Meta Achievements
+Cool stuff that shows deep play:
+
+All the Hacks
+Unlock and use every available hack upgrade.
+
+Debugging Champ
+Finish a full run in debug mode.
+
+Collector Glitch
+Collect 10,000 coins total across all runs.
+
+Data Godspeed
+Reach 1000m in under 2 minutes.

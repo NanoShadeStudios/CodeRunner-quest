@@ -844,8 +844,8 @@ export class GameDialogs {    constructor(game) {
         // Instructions
         ctx.fillStyle = '#8b949e';
         ctx.font = '16px Courier New';        ctx.fillText('Press [Space] to Resume', width / 2, height / 2 + 85);
-        ctx.fillText('Press [R] to Restart', width / 2, height / 2 + 115);
-        ctx.fillText('Press [D] to Change Difficulty', width / 2, height / 2 + 145);
+        ctx.fillText('Click to Restart', width / 2, height / 2 + 115);
+        ctx.fillText('Press [Escape] to Change Difficulty', width / 2, height / 2 + 145);
         ctx.fillText('Press [L] to View Leaderboards', width / 2, height / 2 + 175);
     }
     
@@ -867,12 +867,12 @@ export class GameDialogs {    constructor(game) {
         // Semi-transparent overlay with animation
         ctx.fillStyle = `rgba(13, 17, 23, ${0.7 * easedProgress})`;
         ctx.fillRect(0, 0, width, height);
-        
-        // Game over text with fade in
+          // Game over text with fade in - use random death message
         const textAlpha = easedProgress;        ctx.fillStyle = `rgba(248, 81, 73, ${textAlpha})`;
         ctx.font = 'bold 36px Courier New';
         ctx.textAlign = 'center';
-        ctx.fillText('GAME OVER', width / 2, height / 2 - 50);
+        const deathMessage = this.game.gameOverMessage || 'GAME OVER';
+        ctx.fillText(deathMessage, width / 2, height / 2 - 50);
         
         // Death reason if available
         if (this.game.gameOverReason) {
@@ -898,12 +898,11 @@ export class GameDialogs {    constructor(game) {
             const instructionAlpha = Math.max(0, (easedProgress - 0.7) / 0.3);
             ctx.fillStyle = `rgba(86, 211, 100, ${instructionAlpha})`;
             ctx.font = '18px Courier New';
-            ctx.fillText('Press [R] to Restart', width / 2, height / 2 + 80);
-            
-            // Additional controls
+            ctx.fillText('Click to Restart', width / 2, height / 2 + 80);
+              // Additional controls
             ctx.fillStyle = `rgba(121, 192, 255, ${instructionAlpha})`;
             ctx.font = '14px Courier New';
-            ctx.fillText('Press [D] to Change Difficulty', width / 2, height / 2 + 100);
+            ctx.fillText('Press [Escape] to Change Difficulty', width / 2, height / 2 + 100);
               
             ctx.font = '12px Courier New';
             ctx.fillStyle = `rgba(125, 133, 144, ${instructionAlpha})`;
@@ -1723,7 +1722,7 @@ export class GameDialogs {    constructor(game) {
             '• Collect data packets (📦) to earn upgrade points',
             '• Press Q to open the upgrade shop anytime',
             '• Health regenerates over time (depends on difficulty)',
-            '• Press P to pause and view your progress',
+            '• Click anywhere to pause and view your progress',
             '• Try different difficulties for varied experiences!',
             '• 🎯 Pro Tip: Customize your controls in the settings menu'
         ];

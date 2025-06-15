@@ -28,6 +28,29 @@ import { UpgradeTestHelper } from '../debug/UpgradeTestHelper.js';
 // Module integration helper
 import { connectRenderingModules } from './game-module-bridge.js';
 
+// Creative death messages for game over screen
+const DEATH_MESSAGES = [
+    "Disconnected from reality.",
+    "Packet lost... forever.",
+    "NullPointerException: Skill not found.",
+    "You ran into a bug. The bug won.",
+    "Next time, try dodging... just a thought.",
+    "404: Survival not found.",
+    "Too slow for the code flow.",
+    "You glitched so hard, even the error log gave up.",
+    "Firewall 1, You 0.",
+    "Oops. You tried to divide by zero.",
+    "Memory overflow. Game crashed. You included.",
+    "Timeline corrupted. Reboot necessary.",
+    "You have been soft-deleted.",
+    "Speed: fast. Reflexes: not so much.",
+    "Nice try. Still trash though.",
+    "That trap had your IP address.",
+    "You got out-coded.",
+    "You're not a bug... you're just bad.",
+    "Sent to the recycle bin."
+];
+
 export class Game {
     constructor() {
         // Canvas and context
@@ -119,10 +142,10 @@ export class Game {
             EXTREME: 0,
             IMPOSSIBLE: 0
         };
-        
-        // Game timing
+          // Game timing
         this.startTime = 0;
         this.gameOverReason = null;
+        this.gameOverMessage = null;
         this.gameOverStartTime = null;
         this.isNewHighScore = false;
         
@@ -221,11 +244,43 @@ export class Game {
         // Mouse state tracking
         this.mousePos = { x: 0, y: 0 };
         this.hoveredDifficulty = -1;
-        this.hoveredHomeButton = -1;
-          this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+        this.hoveredHomeButton = -1;          this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.canvas.addEventListener('wheel', (e) => this.handleMouseWheel(e));    }
-    
+        this.canvas.addEventListener('wheel', (e) => this.handleMouseWheel(e));
+        
+        // Add focus/blur listeners to manage scrolling prevention
+        this.canvas.addEventListener('focus', () => {
+            document.body.classList.add('game-focused');
+            console.log('🎮 Canvas focused - preventing page scroll');
+        });
+        
+        this.canvas.addEventListener('blur', () => {
+            document.body.classList.remove('game-focused');
+            console.log('🎮 Canvas blurred - allowing page scroll');
+        });
+    }
+      /**
+     * Ensure the canvas has focus for keyboard input
+     */
+    ensureCanvasFocus() {
+        try {
+            // Make sure canvas is focusable
+            if (!this.canvas.hasAttribute('tabindex')) {
+                this.canvas.setAttribute('tabindex', '0');
+            }
+            
+            // Add body class to prevent scrolling
+            document.body.classList.add('game-focused');
+            
+            // Focus the canvas to ensure keyboard events are captured
+            this.canvas.focus({ preventScroll: true });
+            
+            console.log('🎮 Canvas focused for keyboard input');
+        } catch (error) {
+            console.warn('⚠️ Could not focus canvas:', error);
+        }
+    }
+
     /**
      * Resize canvas to fill the window while maintaining aspect ratio
      */
@@ -591,11 +646,17 @@ export class Game {
                 break;
             }
         }
-    }
-
-    /**
+    }    /**
      * Start the game with the selected difficulty
      */    startGame() {
+        // CRITICAL FIX: Clear all input states to prevent stuck keys when starting new game
+        if (this.inputManager) {
+            this.inputManager.clearInputs();
+        }
+        
+        // Ensure canvas has focus for keyboard input
+        this.ensureCanvasFocus();
+        
         // Initialize world generator
         this.world = new WorldGenerator(this);
         
@@ -645,9 +706,7 @@ export class Game {
         
         // Change game state to playing
         this.gameState = GAME_STATES.PLAYING;
-    }
-
-    /**
+    }    /**
      * Restart the current game with the same difficulty
      */
     restart() {        // Reset milestone tracking
@@ -662,8 +721,16 @@ export class Game {
         this.gameOverStartTime = null;
         this.isNewHighScore = false;
         
-        // Restart the game using the same initialization logic as startGame
+        // CRITICAL FIX: Reset leaderboard input state so movement keys work immediately
+        if (this.leaderboardSystem) {
+            this.leaderboardSystem.resetInputState();
+        }
+        
+          // Restart the game using the same initialization logic as startGame
         this.startGame();
+        
+        // CRITICAL FIX: Ensure canvas has focus after restart so arrow keys work
+        this.ensureCanvasFocus();
           // Play restart sound if available
         if (this.audioSystem) {
             this.audioSystem.onMenuClick();
@@ -689,9 +756,7 @@ export class Game {
                 break;
             }
         }
-    }
-
-    /**
+    }    /**
      * Handle clicks in game over screen
      */
     handleGameOverClick(x, y) {
@@ -705,7 +770,13 @@ export class Game {
         
         // Restart the game
         this.restart();
-    }    /**
+        
+        // CRITICAL FIX: Add a small delay to ensure focus is properly restored after click
+        setTimeout(() => {
+            this.ensureCanvasFocus();
+            console.log('🎮 Extra focus applied after click restart');
+        }, 100);
+    }/**
      * Handle clicks in shop screen
      */
     handleShopClick(x, y) {
@@ -1202,10 +1273,13 @@ export class Game {
         // Note: TileRenderer is updated by WorldGenerator.update(), not here
     }    /**
      * Batch update core game systems for better performance
-     */    updateCoreGameSystems(deltaTime) {
-        // Update systems in order of dependency
+     */    updateCoreGameSystems(deltaTime) {        // Update systems in order of dependency
         if (this.player) {
             try {
+                // DEBUG: Log that player update is being called
+                if (Date.now() % 1000 < 50) { // Log once per second
+                    console.log('🎮 Player update called, gameState:', this.gameState, 'inputKeys:', this.inputManager.getKeys());
+                }
                 this.player.update(deltaTime, this.inputManager.getKeys(), this.world, this.physics);
             } catch (error) {
                 console.error('🚨 Error in player.update():', error);
@@ -2050,6 +2124,7 @@ export class Game {
         const currentTime = Date.now();
         const distanceFromLastCheckpoint = distanceTraveled - (this.speedPenalty.lastCheckpoint - this.player.startX);
         
+               
         // Check if player has traveled the required segment distance (100 meters = 1000 pixels)
         if (distanceFromLastCheckpoint >= this.speedPenalty.segmentDistance) {
             const timeTaken = currentTime - this.speedPenalty.segmentStartTime;
@@ -2177,9 +2252,7 @@ export class Game {
         
         // Change game state to playing
         this.gameState = GAME_STATES.PLAYING;
-    }
-
-    /**
+    }    /**
      * Restart the current game with the same difficulty
      */
     restart() {        // Reset milestone tracking
@@ -2194,8 +2267,16 @@ export class Game {
         this.gameOverStartTime = null;
         this.isNewHighScore = false;
         
+        // CRITICAL FIX: Reset leaderboard input state so movement keys work immediately
+        if (this.leaderboardSystem) {
+            this.leaderboardSystem.resetInputState();
+        }
+        
         // Restart the game using the same initialization logic as startGame
         this.startGame();
+        
+        // CRITICAL FIX: Ensure canvas has focus after restart so arrow keys work
+        this.ensureCanvasFocus();
           // Play restart sound if available
         if (this.audioSystem) {
             this.audioSystem.onMenuClick();
@@ -2243,12 +2324,15 @@ export class Game {
     gameOver(reason) {
         if (this.gameState === GAME_STATES.GAME_OVER) {
             return; // Already in game over state
-        }
-
-        // Set game over state
+        }        // Set game over state
         this.gameState = GAME_STATES.GAME_OVER;
         this.gameOverStartTime = Date.now();
-        this.gameOverReason = reason || 'Unknown';        // Check for new high score
+        this.gameOverReason = reason || 'Unknown';
+        
+        // Set a random death message to replace "GAME OVER"
+        this.gameOverMessage = DEATH_MESSAGES[Math.floor(Math.random() * DEATH_MESSAGES.length)];
+        
+        // Check for new high score
         const currentBestScore = this.bestScores[this.selectedDifficulty] || 0;
         if (this.score > currentBestScore) {
             this.isNewHighScore = true;

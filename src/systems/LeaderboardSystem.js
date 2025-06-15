@@ -836,9 +836,18 @@ export class LeaderboardSystem {
     
     /**
      * Clear upload result message
-     */
-    clearResult() {
+     */    clearResult() {
         this.uploadResult = null;
+    }
+
+    /**
+     * Reset input state - clears name input active flag and related state
+     */
+    resetInputState() {
+        this.nameInputActive = false;
+        this.showUploadPrompt = false;
+        this.currentUpload = null;
+        console.log('🔄 LeaderboardSystem input state reset');
     }
     
     /**
@@ -1331,10 +1340,13 @@ export class LeaderboardSystem {
             return;
         }
         
-        const allBestScores = this.getAllBestScores();
-        Object.keys(allBestScores).forEach(difficulty => {
-            gameInstance.bestScores[difficulty] = allBestScores[difficulty];
-        });
+        // DO NOT overwrite the user's personal best scores with global leaderboard scores
+        // The game's bestScores should represent the user's personal achievements
+        // This method should only be used to compare or display global leaderboard data,
+        // but not to replace personal best scores
+        
+        // Note: Personal best scores are managed by the Game class itself in the gameOver() method
+        // and are saved/loaded through the save/load system
     }
     /**
      * Get all difficulty tabs

@@ -1299,44 +1299,6 @@ export class WorldGenerator {
     }
 
     /**
-     * Periodic cleanup of old chunks and obstacle tracking
-     */
-    periodicCleanup(cameraX) {
-        const currentTime = Date.now();
-        
-        // Clean up every 5 seconds
-        if (currentTime - this.lastObstaclesCleanup < 5000) {
-            return;
-        }
-        
-        this.lastObstaclesCleanup = currentTime;
-        
-        // Clean up old obstacle positions to prevent memory bloat
-        const cleanupDistance = cameraX - 3000; // Keep 3000 units behind camera
-        this.obstaclePositions = this.obstaclePositions.filter(pos => pos.x > cleanupDistance);
-        this.sawPositions = this.sawPositions.filter(pos => pos.x > cleanupDistance);
-        
-        // Clean up old chunks that are far behind
-        const oldChunks = [];
-        this.chunks.forEach((chunk, chunkX) => {
-            const chunkWorldX = chunkX * GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE;
-            if (chunkWorldX < cleanupDistance) {
-                oldChunks.push(chunkX);
-            }
-        });
-        
-        // Remove old chunks
-        oldChunks.forEach(chunkX => {
-            this.chunks.delete(chunkX);
-            this.clearChunkCache(chunkX);
-        });
-        
-        if (oldChunks.length > 0) {
-            console.log(`🧹 Cleaned up ${oldChunks.length} old chunks and ${this.obstaclePositions.length} obstacle positions`);
-        }
-    }
-
-    /**
      * Reset world state for new game
      */
     reset() {

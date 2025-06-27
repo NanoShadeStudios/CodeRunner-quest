@@ -2759,36 +2759,6 @@ export class Game {
             // Generate initial world chunks to ensure spawn area is ready
             this.world.generateChunksForCamera(this.camera);
             
-            // 🧪 TESTING: Add guaranteed quantum dash powerup at spawn - ALWAYS!
-            console.log('🧪 Adding guaranteed quantum dash powerup for testing');
-            
-            // Get the quantum dash definition
-            const quantumDashDef = this.powerUpSystem.powerUpDefinitions['quantum-dash'];
-            console.log('🔍 DEBUG: quantumDashDef:', quantumDashDef);
-            
-            // Create quantum dash powerup right near spawn
-            const testPowerUp = {
-                id: 'test-quantum-dash-' + Date.now(),
-                x: this.player.x + 150, // Just ahead of player spawn
-                y: this.player.y - 30,   // Slightly above player
-                width: 32,
-                height: 32,
-                collected: false,
-                definition: quantumDashDef,
-                animationTime: 0,
-                pulsePhase: Math.random() * Math.PI * 2,
-                isTestPowerUp: true // Mark as test powerup
-            };
-            
-            console.log('🔍 DEBUG: Created test powerup:', testPowerUp);
-            console.log('🔍 DEBUG: Current spawned powerups count before:', this.powerUpSystem.spawnedPowerUps.length);
-            
-            // Add directly to PowerUpSystem's spawned powerups array
-            this.powerUpSystem.spawnedPowerUps.push(testPowerUp);
-            
-            console.log('✨ Test quantum dash powerup added to spawned powerups at:', testPowerUp.x, testPowerUp.y);
-            console.log('🚀 Spawned powerups count after:', this.powerUpSystem.spawnedPowerUps.length);
-            
             // Play start game sound
             if (this.audioSystem) {
                 this.audioSystem.onMenuClick(); // Use existing menu click sound for game start

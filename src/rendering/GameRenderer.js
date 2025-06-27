@@ -718,8 +718,8 @@ export class GameRenderer {
     /**
      * Render matrix-style digital rain
      */
-    renderMatrixRain(time, particleQuality = 1.0) {
-        const columns = Math.max(5, Math.floor(this.canvas.width / 20 * particleQuality));
+    renderMatrixRain(time) {
+        const columns = Math.floor(this.canvas.width / 20);
         
         for (let i = 0; i < columns; i++) {
             const x = i * 20;
@@ -727,11 +727,10 @@ export class GameRenderer {
             const offset = (time * speed + i * 100) % (this.canvas.height + 100);
             
             // Draw multiple characters in each column
-            const charCount = Math.max(2, Math.floor(5 * particleQuality));
-            for (let j = 0; j < charCount; j++) {
+            for (let j = 0; j < 5; j++) {
                 const y = offset - j * 20;
                 if (y > -20 && y < this.canvas.height + 20) {
-                    const alpha = Math.max(0, 0.3 - j * 0.05) * (0.8 + Math.sin(time * 3 + i) * 0.2) * particleQuality;
+                    const alpha = Math.max(0, 0.3 - j * 0.05) * (0.8 + Math.sin(time * 3 + i) * 0.2);
                     const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
                     const char = chars[Math.floor(Math.sin(time * 2 + i * 7 + j) * chars.length/2 + chars.length/2)];
                     
@@ -746,17 +745,16 @@ export class GameRenderer {
     /**
      * Render floating code snippets
      */
-    renderFloatingCode(time, particleQuality = 1.0) {
+    renderFloatingCode(time) {
         const codeSnippets = [
             'function()', 'console.log', 'return null;', 'if (true)', 'await fetch', 
             'const x =', '=> {', '...args', 'new Promise', 'try { catch'
         ];
         
-        const snippetCount = Math.max(2, Math.floor(6 * particleQuality));
-        for (let i = 0; i < snippetCount; i++) {
+        for (let i = 0; i < 6; i++) {
             const x = (Math.sin(time * 0.2 + i * 2) * 0.7 + 0.15) * this.canvas.width;
             const y = ((time * 0.03 + i * 0.15) % 1) * this.canvas.height;
-            const alpha = (0.03 + Math.sin(time * 2 + i) * 0.02) * particleQuality;
+            const alpha = 0.03 + Math.sin(time * 2 + i) * 0.02;
             
             this.ctx.fillStyle = `rgba(100, 200, 255, ${alpha})`;
             this.ctx.font = '10px monospace';
@@ -767,13 +765,12 @@ export class GameRenderer {
     /**
      * Render glowing particles
      */
-    renderGlowParticles(time, particleQuality = 1.0) {
-        const particleCount = Math.max(4, Math.floor(12 * particleQuality));
-        for (let i = 0; i < particleCount; i++) {
+    renderGlowParticles(time) {
+        for (let i = 0; i < 12; i++) {
             const x = (Math.sin(time * 0.4 + i * 0.8) * 0.8 + 0.1) * this.canvas.width;
             const y = (Math.cos(time * 0.3 + i * 1.2) * 0.8 + 0.1) * this.canvas.height;
             const size = 3 + Math.sin(time * 3 + i) * 2;
-            const alpha = (0.4 + Math.sin(time * 2 + i) * 0.3) * particleQuality;
+            const alpha = 0.4 + Math.sin(time * 2 + i) * 0.3;
             
             // Create glow effect
             const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, size * 3);
@@ -791,9 +788,9 @@ export class GameRenderer {
     /**
      * Render connected nodes network
      */
-    renderConnectedNodes(time, particleQuality = 1.0) {
+    renderConnectedNodes(time) {
         const nodes = [];
-        const nodeCount = Math.max(4, Math.floor(8 * particleQuality));
+        const nodeCount = 8;
         
         // Generate node positions
         for (let i = 0; i < nodeCount; i++) {
@@ -804,7 +801,7 @@ export class GameRenderer {
         }
         
         // Draw connections
-        this.ctx.strokeStyle = `rgba(0, 255, 255, ${0.1 * particleQuality})`;
+        this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
         this.ctx.lineWidth = 1;
         
         for (let i = 0; i < nodes.length; i++) {
@@ -815,7 +812,7 @@ export class GameRenderer {
                 );
                 
                 if (dist < 200) {
-                    const alpha = (200 - dist) / 200 * 0.2 * particleQuality;
+                    const alpha = (200 - dist) / 200 * 0.2;
                     this.ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
                     this.ctx.beginPath();
                     this.ctx.moveTo(nodes[i].x, nodes[i].y);
@@ -827,7 +824,7 @@ export class GameRenderer {
         
         // Draw nodes
         nodes.forEach((node, i) => {
-            const pulse = (0.5 + Math.sin(time * 2 + i) * 0.3) * particleQuality;
+            const pulse = 0.5 + Math.sin(time * 2 + i) * 0.3;
             this.ctx.fillStyle = `rgba(0, 255, 255, ${pulse})`;
             this.ctx.beginPath();
             this.ctx.arc(node.x, node.y, 3, 0, Math.PI * 2);

@@ -4,20 +4,30 @@
  */
 
 import { GAME_CONFIG, GAME_STATES, DIFFICULTY_LEVELS } from '../utils/constants.js';
-import { InputManager } from '../systems/InputManager.js';
+import { InputManager } from '../systems/inputmanager.js';
 import { ShopSystem } from '../systems/ShopSystem.js';
 import { UpgradeSystem } from '../systems/UpgradeSystem.js';
 import { LeaderboardSystem } from '../systems/LeaderboardSystem.js';
+import { AchievementSystem } from '../systems/AchievementSystem.js';
+import { AudioSystem } from '../systems/AudioSystem.js';
 import { OpeningAnimationSystem } from '../systems/OpeningAnimationSystem.js';
 import { PopupSystem } from '../systems/PopupSystem.js';
 import { CloudSaveSystem } from '../systems/CloudSaveSystem.js';
-
+import { PowerUpSystem } from '../systems/PowerUpSystem.js';
+import { LifeBoxSystem } from '../systems/LifeBoxSystem.js';
+import { QuantumDashAnimationSystem } from '../systems/QuantumDashAnimationSystem.js';
+import { TutorialSystem } from '../systems/TutorialSystem.js';
+import { HomeScreenSystem } from '../systems/HomeScreenSystem.js';
+import { OptionsSystem } from '../systems/OptionsSystem.js';
+import { SettingsSystem } from '../systems/SettingsSystem.js';
+import { CreditsSystem } from '../systems/CreditsSystem.js';
+import { LoadingScreenSystem } from '../systems/LoadingScreenSystem.js';
 
 import { LoginSystem } from '../systems/LoginSystem.js';
 // import { UserProfileSystem } from '../systems/UserProfileSystem.js'; // TODO: Implement UserProfileSystem
 import { WorldGenerator } from './WorldGenerator.js';
-import { Player } from './Player.js';
-import { PhysicsEngine } from '../physics/PhysicsEngine.js';
+import { Player } from './player.js';
+import { PhysicsEngine } from '../physics/physicsengine.js';
 import { GameRenderer } from '../rendering/GameRenderer.js';
 import { GameUI } from '../rendering/GameUI.js';
 import { GameDialogs } from '../rendering/GameDialogs.js';
@@ -31,7 +41,6 @@ import { connectRenderingModules } from './game-module-bridge.js';
 // Creative death messages for game over screen
 const DEATH_MESSAGES = [
     "Disconnected from reality.",
-    "Packet lost... forever.",
     "NullPointerException: Skill not found.",
     "You ran into a bug. The bug won.",
     "Next time, try dodging... just a thought.",
@@ -46,8 +55,7 @@ const DEATH_MESSAGES = [
     "Speed: fast. Reflexes: not so much.",
     "Nice try. Still trash though.",
     "That trap had your IP address.",
-    "You got out-coded.",
-    "You're not a bug... you're just bad.",
+    "That's not a bug... you're just bad.",
     "Sent to the recycle bin."
 ];
 
@@ -57,7 +65,7 @@ export class Game {
         this.canvas = document.getElementById(GAME_CONFIG.CANVAS_ID);        
         this.ctx = this.canvas.getContext('2d');
         
-        // Set canvas size to fill the window
+        // Set canvas size
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
           // Initialize performance metrics
@@ -65,7 +73,10 @@ export class Game {
             frameTime: 0,
             updateTime: 0,
             renderTime: 0,
-            fpsHistory: []
+            fpsHistory: [],
+            lowFpsCounter: 0,
+            adaptiveOptimizationLevel: 0,
+            lastOptimizationCheck: 0
         };        // Visual effects arrays
         this.milestoneEffects = [];
         this.speedPenaltyEffects = [];
@@ -101,14 +112,17 @@ export class Game {
         };
         
         // Game state and timing
-        this.gameState = GAME_STATES.INITIALIZING;
+        this.gameState = GAME_STATES.LOADING;
         this.previousGameState = null;
+        this.pendingGameState = null; // State to transition to after loading screen
+        this.initializationComplete = false;
         this.isPaused = false;
         this.wasPlayingBeforeDropdown = false; // Track if game was playing before dropdown opened
-        this.lastTime = 0;
-        this.deltaTime = 0;
+        this.wasAutoPaused = false; // Track if game was auto-paused due to focus loss
+        this.lastTime = 0;        this.deltaTime = 0;
         this.fps = 0;
         this.frameCount = 0;
+        this.lastFrameCount = 0;
         this.lastFpsUpdate = 0;
         this.lastRenderTime = 0;
         this.lastMetricsUpdate = 0;
@@ -120,6 +134,11 @@ export class Game {
         this.physics = null;
         this.camera = { x: 0, y: 0 };
         
+        // Screen shake system
+        this.screenShake = true;
+        this.shakeIntensity = 1.0;
+        this.currentShake = { x: 0, y: 0, intensity: 0, duration: 0 };
+        
         // Game systems
         this.inputManager = null;
         this.upgradeSystem = null;
@@ -128,9 +147,28 @@ export class Game {
         
         // Graphics settings
         this.graphicsQuality = 'medium'; // Will be updated from settings
+        this.showParticles = true;
+        this.screenShake = true;
+        this.showFpsCounter = false;
+        this.backgroundParticles = true;
+        
+        // Gameplay settings
+        this.autoSave = true;
+        this.pauseOnFocusLoss = true;
+        this.skipDeathAnimation = false;
+        this.showLoadingScreen = true; // Setting to control loading screen display
+        this.showOpeningAnimation = true; // Setting to control opening animation display
           // Difficulty level settings
         this.selectedDifficulty = 'EASY';
         this.difficultyKeys = Object.keys(DIFFICULTY_LEVELS);
+        
+        // Adaptive difficulty system
+        this.adaptiveDifficulty = false;
+        this.adaptiveDifficultyMultiplier = 1.0;
+        this.playerPerformanceHistory = [];
+        this.lastPerformanceCheck = 0;
+        this.consecutiveSuccesses = 0;
+        this.consecutiveFailures = 0;
         
         // Score and game state
         this.score = 0;
@@ -141,17 +179,12 @@ export class Game {
             HARD: 0,
             EXTREME: 0,
             IMPOSSIBLE: 0
-        };
-          // Game timing
+        };          // Game timing
         this.startTime = 0;
         this.gameOverReason = null;
         this.gameOverMessage = null;
         this.gameOverStartTime = null;
         this.isNewHighScore = false;
-        
-        // Health regeneration
-        this.healthRegenRate = 1000;
-        this.lastHealthRegenTime = 0;
         
         // Speed penalty system
         this.speedPenalty = {
@@ -163,39 +196,112 @@ export class Game {
             segmentStartTime: 0,
             totalPenalties: 0,
             totalPenaltyPoints: 0
-        };
-        
-        // UI state
+        };        // UI state
         this.tabHitAreas = [];
-        this.difficultyHitAreas = [];
-        this.shopHitAreas = [];
-        this.homeHitAreas = [];
-        this.creditsHitAreas = [];
-        this.mousePos = { x: 0, y: 0 };
-        this.hoveredDifficulty = -1;
-        this.hoveredHomeButton = -1;
+        this.difficultyHitAreas = [];        this.shopHitAreas = [];        this.homeHitAreas = [];
+        this.optionsHitAreas = [];
+        this.creditsHitAreas = [];        this.achievementsHitAreas = [];        this.gameOverHitAreas = [];
+        this.pauseHitAreas = [];
+        this.settingsHitAreas = [];        this.mousePos = { x: 0, y: 0 };
+        this.hoveredDifficulty = -1;        this.hoveredHomeButton = -1;
+        this.hoveredOptionsButton = -1;
+        this.hoveredGameOverButton = -1;
+        this.hoveredPauseButton = -1;        this.hoveredSettingsButton = null;
+        this.achievementsScrollOffset = 0;
+        this.shopScrollOffset = 0;
         
-        // Initialize the game asynchronously
-        this.initAsync();
-    }async initAsync() {
+        // Slider drag state
+        this.isDraggingSlider = false;
+        this.dragSliderData = null;
+        
+        // Navigation history for back button functionality
+        this.navigationHistory = [];
+        this.previousGameState = null;
+        
+        // Check if loading screen should be shown (from settings)
+        const shouldShowLoadingScreen = this.getShouldShowLoadingScreen();
+        
+        if (shouldShowLoadingScreen) {
+            // Initialize loading screen system immediately
+            this.loadingScreenSystem = new LoadingScreenSystem(this);
+            
+            // Start the game loop immediately to show loading screen
+            requestAnimationFrame((ts) => this.gameLoop(ts));
+            
+            // Initialize the game asynchronously after a brief delay to show loading screen
+            setTimeout(() => this.initAsync(), 100);
+        } else {
+            // Skip loading screen and go directly to initialization
+            this.gameState = GAME_STATES.INITIALIZING;
+            
+            // Start game loop for normal game states
+            requestAnimationFrame((ts) => this.gameLoop(ts));
+            
+            // Start initialization immediately
+            this.initAsync();
+        }
+    }
+    
+    /**
+     * Check if loading screen should be shown based on settings
+     */
+    getShouldShowLoadingScreen() {
         try {
+            const saved = localStorage.getItem('coderunner_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                // Default to true if setting doesn't exist
+                return settings.showLoadingScreen !== false;
+            }
+            return true; // Default to showing loading screen
+        } catch (error) {
+            console.warn('Could not load showLoadingScreen setting:', error);
+            return true; // Default to showing loading screen
+        }
+    }
+    
+    /**
+     * Check if opening animation should be shown based on settings
+     */
+    getShouldShowOpeningAnimation() {
+        try {
+            const saved = localStorage.getItem('coderunner_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                // Default to true if setting doesn't exist
+                return settings.showOpeningAnimation !== false;
+            }
+            return true; // Default to showing opening animation
+        } catch (error) {
+            console.warn('Could not load showOpeningAnimation setting:', error);
+            return true; // Default to showing opening animation
+        }
+    }    async initAsync() {
+        try {
+            console.log('🔄 Starting game initialization...');
             await this.init();
+            
+            // Mark initialization as complete
+            this.initializationComplete = true;
+            console.log('🔄 Game initialization completed');
         } catch (error) {
             console.error('🎮 Game initialization failed:', error);
             // Fallback to basic initialization
             this.gameState = GAME_STATES.HOME;
-            this.gameLoop(0);
+            // Mark as complete even if failed
+            this.initializationComplete = true;
         }
-    }
-
-    async init() {console.log('🎮 Game.init() started');
+    }    async init() {console.log('🎮 Game.init() started');
+        
+        // Make game instance available globally for HTML UI
+        window.gameInstance = this;
+        
         this.createSystems();
         this.setupInputCallbacks();
         
         // Initialize graphics quality from settings
         this.initializeGraphicsSettings();
-        
-        // Add debug commands for testing upgrades (after systems are created)
+          // Add debug commands for testing upgrades (after systems are created)
         this.addDebugCommands();
           // Load saved best scores
         this.loadBestScores();
@@ -205,24 +311,52 @@ export class Game {
         console.log('🎮 Game.init() finished loadGameData()');
           // Start continuous autosave system (runs regardless of game state)
         this.startAutosave();        // Connect rendering modules (after systems are created)
-        connectRenderingModules(this);
-        
-        // Check authentication state and determine initial navigation
+        connectRenderingModules(this);        // Check authentication state and determine initial navigation
         console.log('🔑 Checking authentication state for automatic navigation...');
         await this.determineInitialNavigation();
         
-        this.gameLoop(0);
-    }    createSystems() {        this.inputManager = new InputManager();
-        this.shopSystem = new ShopSystem(this);        this.upgradeSystem = new UpgradeSystem();
+        // Update HTML UI with initial login status
+        if (window.updateLoginStatus) {
+            console.log('🔑 Calling initial updateLoginStatus');
+            window.updateLoginStatus();
+        }
+        
+        console.log('🎮 Game initialization completed');
+    }    createSystems() {
+        this.inputManager = new InputManager();
+        this.shopSystem = new ShopSystem(this);        this.upgradeSystem = new UpgradeSystem(this);
         this.leaderboardSystem = new LeaderboardSystem(this);
-        this.openingAnimation = new OpeningAnimationSystem(this);
+        this.achievementSystem = new AchievementSystem(this);
+        this.audioSystem = new AudioSystem();
+        
+        // Make audio system globally available for HTML UI
+        window.audioSystem = this.audioSystem;
+        
         this.popupSystem = new PopupSystem(this.canvas, this.ctx);
         this.cloudSaveSystem = new CloudSaveSystem(this);
-        // this.audioVideoPrompt = new AudioVideoPromptSystem(this); // Removed - going directly to login
+        this.homeScreenSystem = new HomeScreenSystem(this);
+        this.optionsSystem = new OptionsSystem(this);
+        this.settingsSystem = new SettingsSystem(this);
+        this.creditsSystem = new CreditsSystem(this);
+        // this.audioVideoPrompt = new AudioVideoPromptSystem(this); // Removed - going directly to login        
         this.loginSystem = new LoginSystem(this);
         // this.userProfileSystem = new UserProfileSystem(this); // TODO: Implement UserProfileSystem
+        this.openingAnimation = new OpeningAnimationSystem(this); // Create after loginSystem
         
-        this.renderer = new GameRenderer(this);// Set up name input checker for InputManager
+        try {
+            this.powerUpSystem = new PowerUpSystem(this);
+            console.log('✅ PowerUpSystem initialized successfully');
+        } catch (error) {
+            console.error('❌ PowerUpSystem initialization failed:', error);
+            this.powerUpSystem = null;
+        }
+        this.lifeBoxSystem = new LifeBoxSystem(this);
+        this.quantumDashAnimation = new QuantumDashAnimationSystem(this);        this.tutorialSystem = new TutorialSystem(this);
+        
+        this.renderer = new GameRenderer(this);
+        this.gameDialogs = new GameDialogs(this);
+        
+        // Set up name input checker for InputManager
         this.inputManager.setNameInputChecker(() => {
             // Check if leaderboard name input is active
             const leaderboardInputActive = this.leaderboardSystem && this.leaderboardSystem.nameInputActive;
@@ -234,18 +368,21 @@ export class Game {
             //                          Object.values(this.userProfileSystem.inputFields || {}).some(field => field.focused);
             
             return leaderboardInputActive || loginInputActive; // || profileInputActive;
-        });// Add mouse click listener for leaderboard tabs and menus
+        });        // Add mouse click listener for leaderboard tabs and menus
         this.tabHitAreas = [];
         this.difficultyHitAreas = [];
         this.shopHitAreas = [];
         this.homeHitAreas = [];
+        this.optionsHitAreas = [];
         this.creditsHitAreas = [];
         
         // Mouse state tracking
         this.mousePos = { x: 0, y: 0 };
         this.hoveredDifficulty = -1;
-        this.hoveredHomeButton = -1;          this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+        this.hoveredHomeButton = -1;        this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
         this.canvas.addEventListener('wheel', (e) => this.handleMouseWheel(e));
         
         // Add focus/blur listeners to manage scrolling prevention
@@ -257,6 +394,15 @@ export class Game {
         this.canvas.addEventListener('blur', () => {
             document.body.classList.remove('game-focused');
             console.log('🎮 Canvas blurred - allowing page scroll');
+        });
+
+        // Add window focus/blur listeners for settings functionality
+        window.addEventListener('focus', () => {
+            this.handleWindowFocus();
+        });
+        
+        window.addEventListener('blur', () => {
+            this.handleWindowBlur();
         });
     }
       /**
@@ -315,15 +461,16 @@ export class Game {
         this.inputManager.setCallback('textInput', (char) => this.handleTextInput(char));
         this.inputManager.setCallback('backspace', () => this.handleBackspace());
         this.inputManager.setCallback('deleteEntry', () => this.handleDeleteEntry());
-        this.inputManager.setCallback('changeName', () => this.handleChangeName());
+        this.inputManager.setCallback('changeName', () => this.handleChangeName());        // Shop functionality
+        this.inputManager.setCallback('shop', () => this.handleShopToggle());        this.inputManager.setCallback('shopScrollUp', () => this.handleShopScroll(-1)); // Up arrow = scroll up (decrease offset)        this.inputManager.setCallback('shopScrollDown', () => this.handleShopScroll(1)); // Down arrow = scroll down (increase offset)
         
-        // Shop functionality
-        this.inputManager.setCallback('shop', () => this.handleShopToggle());
-        this.inputManager.setCallback('shopScrollUp', () => this.handleShopScroll(-1));
-        this.inputManager.setCallback('shopScrollDown', () => this.handleShopScroll(1));
-          // System controls
+        // Achievements scrolling functionality
+        this.inputManager.setCallback('achievementsScrollUp', () => this.handleAchievementsScroll(-30)); // Up arrow = scroll up
+        this.inputManager.setCallback('achievementsScrollDown', () => this.handleAchievementsScroll(30)); // Down arrow = scroll down          // System controls
         this.inputManager.setCallback('togglePerformance', () => this.togglePerformanceDisplay());
+        this.inputManager.setCallback('tutorial', () => this.handleTutorialToggle());
         this.inputManager.setCallback('fullscreen', () => this.toggleFullscreen());
+        this.inputManager.setCallback('home', () => this.handleHomeKey());
     }
 
     /**
@@ -344,35 +491,51 @@ export class Game {
      * Apply graphics quality settings to game systems
      */
     applyGraphicsQuality() {
+        console.log('🎨 Applying graphics quality:', this.graphicsQuality);
+        
         // Apply settings based on quality level
         switch (this.graphicsQuality) {
             case 'low':
                 // Reduce particle effects and visual quality
-                this.particleQuality = 0.3;
+                this.particleQuality = 0.2;
+                this.particleCount = 0.3; // Reduce particle count
                 this.tileDetailLevel = 'low';
                 this.lightingQuality = 'low';
                 this.shadowQuality = 'off';
+                this.screenShakeIntensity = 0.5;
+                this.gradientComplexity = 'low';
+                this.backgroundAnimations = false;
                 break;
             case 'medium':
                 // Default settings
                 this.particleQuality = 0.7;
+                this.particleCount = 0.7;
                 this.tileDetailLevel = 'medium';
                 this.lightingQuality = 'medium';
                 this.shadowQuality = 'low';
+                this.screenShakeIntensity = 0.75;
+                this.gradientComplexity = 'medium';
+                this.backgroundAnimations = true;
                 break;
             case 'high':
                 // Maximum quality
                 this.particleQuality = 1.0;
+                this.particleCount = 1.0;
                 this.tileDetailLevel = 'high';
                 this.lightingQuality = 'high';
                 this.shadowQuality = 'high';
+                this.screenShakeIntensity = 1.0;
+                this.gradientComplexity = 'high';
+                this.backgroundAnimations = true;
                 break;
         }
         
         // Apply to existing world if available
         if (this.world) {
             this.world.particleQuality = this.particleQuality;
+            this.world.particleCount = this.particleCount;
             this.world.tileDetailLevel = this.tileDetailLevel;
+            this.world.backgroundAnimations = this.backgroundAnimations;
         }
         
         // Apply renderer optimizations based on quality
@@ -380,13 +543,22 @@ export class Game {
             this.renderer.setRenderOptimizations({
                 skipBackgroundParticles: this.graphicsQuality === 'low',
                 reduceGradientComplexity: this.graphicsQuality === 'low',
-                cacheGradients: this.graphicsQuality !== 'low'
+                cacheGradients: this.graphicsQuality !== 'low',
+                particleQuality: this.particleQuality,
+                shadowQuality: this.shadowQuality,
+                lightingQuality: this.lightingQuality
             });
         }
         
         // Apply tile renderer optimizations
         if (this.world?.tileRenderer) {
             this.world.tileRenderer.setHighPerformanceMode(this.graphicsQuality === 'low');
+            this.world.tileRenderer.setDetailLevel(this.tileDetailLevel);
+        }
+        
+        // Apply to particle systems
+        if (this.player) {
+            this.player.particleQuality = this.particleQuality;
         }
     }
 
@@ -407,27 +579,55 @@ export class Game {
         switch (this.gameState) {            case GAME_STATES.VIDEO_INTRO:
                 // Video intro system removed - skipping video intro state
                 break;
-                
-            case GAME_STATES.HOME:
+                  case GAME_STATES.HOME:
                 this.handleHomeHover(x, y);
                 break;
                 
+            case GAME_STATES.OPTIONS:
+                this.handleOptionsHover(x, y);
+                break;
+                
+            case GAME_STATES.CREDITS:
+                this.handleCreditsHover(x, y);
+                break;
+                  
             case GAME_STATES.DIFFICULTY_SELECT:
                 this.handleDifficultyHover(x, y);
                 break;
-                
-            case GAME_STATES.LEADERBOARD:
+                  case GAME_STATES.LEADERBOARD:
                 // Pass through to leaderboard system if needed
                 break;
                 
             case GAME_STATES.SHOP:
                 // Handle shop hover effects if needed
                 break;
+                  case GAME_STATES.GAME_OVER:
+                this.handleGameOverHover(x, y);
+                break;
                 
-            default:
+            case GAME_STATES.SETTINGS:
+                this.handleSettingsHover(x, y);
+                break;
+                  case GAME_STATES.PAUSED:
+                this.handlePauseHover(x, y);
+                break;
+                  default:
                 // Reset hover states for other game states
                 this.hoveredDifficulty = -1;
-                break;
+                this.hoveredHomeButton = -1;
+                this.hoveredOptionsButton = -1;
+                this.hoveredGameOverButton = -1;
+                this.hoveredPauseButton = -1;
+                break;        }
+        
+        // Handle slider dragging in settings
+        if (this.gameState === GAME_STATES.SETTINGS && this.gameDialogs) {
+            this.gameDialogs.handleMouseMove(x, y);
+        }
+        
+        // Handle slider dragging (legacy - may be removed)
+        if (this.isDraggingSlider && this.dragSliderData) {
+            this.updateSliderValue(this.dragSliderData, x);
         }
         
         // Handle popup system mouse movement if popup is active
@@ -452,19 +652,67 @@ export class Game {
      * Handle mouse hover effects for home screen
      */
     handleHomeHover(x, y) {
-        this.hoveredHomeButton = -1;
-        
-        // Check if mouse is over any home button
-        if (this.homeHitAreas) {
-            for (let i = 0; i < this.homeHitAreas.length; i++) {
-                const area = this.homeHitAreas[i];
-                if (x >= area.x && x <= area.x + area.width && 
-                    y >= area.y && y <= area.y + area.height) {
-                    this.hoveredHomeButton = i;
-                    break;
-                }
-            }
+        if (this.homeScreenSystem && this.homeHitAreas) {
+            this.homeScreenSystem.handleMouseMove(x, y, this.homeHitAreas);
         }
+    }
+
+    /**
+     * Handle mouse hover effects for options menu
+     */
+    handleOptionsHover(x, y) {
+        if (this.optionsSystem && this.optionsHitAreas) {
+            this.optionsSystem.handleMouseMove(x, y, this.optionsHitAreas);
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for credits screen
+     */
+    handleCreditsHover(x, y) {
+        if (this.creditsSystem && this.creditsHitAreas) {
+            this.creditsSystem.handleMouseMove(x, y, this.creditsHitAreas);
+        }
+    }    /**
+     * Navigate to a new game state and track previous state for back navigation
+     */
+    navigateToState(newState) {        
+        // Don't track navigation to/from certain states
+        const skipTracking = [
+            GAME_STATES.LOGIN_PROMPT,
+            GAME_STATES.VIDEO_INTRO,
+            GAME_STATES.OPENING_ANIMATION,
+            GAME_STATES.POST_ANIMATION_POPUP,
+            GAME_STATES.PLAYING
+            // Note: PAUSED removed from skipTracking so pause menu navigation works properly
+            // Note: GAME_OVER removed from skipTracking so death menu navigation works properly
+        ];
+        
+        // Store previous state if current state should be tracked
+        if (this.gameState && !skipTracking.includes(this.gameState) && !skipTracking.includes(newState)) {
+            this.previousGameState = this.gameState;
+            console.log(`🔄 Navigation: ${this.gameState} → ${newState} (previous: ${this.previousGameState})`);
+        }
+        
+        this.gameState = newState;
+        
+        // Reset animations for menu systems when entering them
+        if (newState === GAME_STATES.OPTIONS && this.optionsSystem) {
+            this.optionsSystem.resetAnimations();
+        } else if (newState === GAME_STATES.SETTINGS && this.settingsSystem) {
+            this.settingsSystem.resetAnimations();
+        } else if (newState === GAME_STATES.CREDITS && this.creditsSystem) {
+            this.creditsSystem.resetAnimations();
+        } else if (newState === GAME_STATES.HOME && this.homeScreenSystem) {
+            this.homeScreenSystem.resetAnimations();
+        }
+    }
+
+    /**
+     * Show leaderboard screen
+     */
+    showLeaderboard() {
+        this.navigateToState(GAME_STATES.LEADERBOARD);
     }
 
     /**
@@ -482,13 +730,24 @@ export class Game {
                 // Play menu click sound
                 if (this.audioSystem) {
                     this.audioSystem.onMenuClick();
-                }
-                  // Handle different button actions
+                }                // Handle different button actions
                 if (area.action === 'play') {
-                    this.gameState = GAME_STATES.DIFFICULTY_SELECT;
+                    this.navigateToState(GAME_STATES.DIFFICULTY_SELECT);
+                } else if (area.action === 'options') {
+                    this.navigateToState(GAME_STATES.OPTIONS);
+                } else if (area.action === 'tutorial') {
+                    this.navigateToState(GAME_STATES.TUTORIAL);
+                    if (this.tutorialSystem) {
+                        this.tutorialSystem.startTutorial('welcome');
+                    }
+                } else if (area.action === 'achievements') {
+                    this.achievementsScrollOffset = 0; // Reset scroll to top when opening achievements
+                    this.navigateToState(GAME_STATES.ACHIEVEMENTS);                } else if (area.action === 'settings') {
+                    this.navigateToState(GAME_STATES.SETTINGS);
+                    // Check if settings tutorial should be shown
+                    setTimeout(() => this.checkSettingsTutorial(), 100);
                 } else if (area.action === 'credits') {
-                    this.previousGameState = GAME_STATES.HOME;
-                    this.gameState = GAME_STATES.CREDITS;
+                    this.navigateToState(GAME_STATES.CREDITS);
                 } else if (area.action === 'profile') {
                     this.showProfile();
                 }
@@ -498,36 +757,51 @@ export class Game {
     }
 
     /**
-     * Handle clicks in credits screen
+     * Handle clicks in options menu
      */
-    handleCreditsClick(x, y) {
-        if (!this.creditsHitAreas) return;
-        
-        // Check if back button was clicked
-        for (const area of this.creditsHitAreas) {
-            if (x >= area.x && x <= area.x + area.width && 
-                y >= area.y && y <= area.y + area.height) {
-                
-                // Play menu click sound
-                if (this.audioSystem) {
-                    this.audioSystem.onMenuClick();
+    handleOptionsClick(x, y) {
+        if (this.optionsSystem && this.optionsHitAreas) {
+            const action = this.optionsSystem.handleClick(x, y, this.optionsHitAreas);
+            
+            if (action) {
+                if (action === 'tutorial') {
+                    this.navigateToState(GAME_STATES.TUTORIAL);
+                    if (this.tutorialSystem) {
+                        this.tutorialSystem.startTutorial('welcome');
+                    }
+                } else if (action === 'achievements') {
+                    this.achievementsScrollOffset = 0;
+                    this.navigateToState(GAME_STATES.ACHIEVEMENTS);
+                } else if (action === 'shop') {
+                    this.navigateToState(GAME_STATES.SHOP);
+                } else if (action === 'settings') {
+                    this.navigateToState(GAME_STATES.SETTINGS);
+                    if (this.settingsSystem) {
+                        this.settingsSystem.resetAnimations();
+                    }
+                } else if (action === 'back') {
+                    this.navigateToState(GAME_STATES.HOME);
                 }
-                
-                if (area.action === 'back') {
-                    this.gameState = GAME_STATES.HOME;
-                }
-                break;
             }
         }
     }
 
     /**
+     * Handle clicks in credits screen
+     */
+    handleCreditsClick(x, y) {
+        if (this.creditsSystem && this.creditsHitAreas) {
+            const action = this.creditsSystem.handleClick(x, y, this.creditsHitAreas);
+            
+            if (action === 'back') {
+                this.navigateToState(GAME_STATES.HOME);
+            }
+        }
+    }    /**
      * Handle mouse hover effects for difficulty selection
      */
     handleDifficultyHover(x, y) {
         this.hoveredDifficulty = -1;
-        
-        // Check if mouse is over any difficulty button
         for (let i = 0; i < this.difficultyHitAreas.length; i++) {
             const area = this.difficultyHitAreas[i];
             if (x >= area.x && x <= area.x + area.width && 
@@ -536,7 +810,140 @@ export class Game {
                 break;
             }
         }
-    }    /**
+    }
+
+    /**
+     * Handle mouse hover effects for game over screen
+     */
+    handleGameOverHover(x, y) {
+        this.hoveredGameOverButton = -1;
+        
+        // Check if there are game over hit areas to hover over
+        if (this.gameOverHitAreas) {
+            for (let i = 0; i < this.gameOverHitAreas.length; i++) {
+                const area = this.gameOverHitAreas[i];
+                if (x >= area.x && x <= area.x + area.width && 
+                    y >= area.y && y <= area.y + area.height) {
+                    this.hoveredGameOverButton = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for pause screen
+     */
+    handlePauseHover(x, y) {
+        this.hoveredPauseButton = -1;
+        
+        // Check if there are pause hit areas to hover over
+        if (this.pauseHitAreas) {
+            for (let i = 0; i < this.pauseHitAreas.length; i++) {
+                const area = this.pauseHitAreas[i];
+                if (x >= area.x && x <= area.x + area.width && 
+                    y >= area.y && y <= area.y + area.height) {
+                    this.hoveredPauseButton = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for settings screen
+     */
+    handleSettingsHover(x, y) {
+        if (this.settingsSystem && this.settingsHitAreas) {
+            this.settingsSystem.handleMouseMove(x, y, this.settingsHitAreas);
+        }
+    }
+
+    /**
+     * Handle clicks in settings screen
+     */
+    handleSettingsClick(x, y) {
+        console.log('🎯 Settings click at:', x, y);
+        if (this.settingsSystem && this.settingsHitAreas) {
+            const action = this.settingsSystem.handleClick(x, y, this.settingsHitAreas);
+            console.log('⚡ Settings action:', action);
+            
+            if (action === 'back') {
+                console.log('🏠 Navigating back to OPTIONS');
+                this.navigateToState(GAME_STATES.OPTIONS);
+            }
+        }
+        
+        // Close any expanded dropdowns if clicking outside them
+        if (this.settingsSystem && this.settingsSystem.expandedDropdown) {
+            let clickedOnDropdown = false;
+            
+            // Check if the click was on a dropdown or its options
+            for (const area of this.settingsHitAreas || []) {
+                if (x >= area.x && x <= area.x + area.width && 
+                    y >= area.y && y <= area.y + area.height) {
+                    if (area.action === 'dropdown' || area.action === 'dropdown-option') {
+                        clickedOnDropdown = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Close dropdown if not clicked on dropdown
+            if (!clickedOnDropdown) {
+                this.settingsSystem.expandedDropdown = null;
+            }
+        }
+    }
+
+    /**
+     * Handle clicks in game over screen
+     */
+    handleGameOverClick(x, y) {
+        if (!this.gameOverHitAreas) return;
+        
+        // Check if any game over button was clicked
+        for (let i = 0; i < this.gameOverHitAreas.length; i++) {
+            const area = this.gameOverHitAreas[i];
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
+                
+                // Play menu click sound
+                if (this.audioSystem) {
+                    this.audioSystem.onMenuClick();
+                }
+                
+                // Handle different button actions
+                switch (area.action) {
+                    case 'restart':
+                        this.startNewGame();
+                        break;
+                    case 'difficulty':
+                        this.navigateToState(GAME_STATES.DIFFICULTY_SELECT);
+                        break;
+                    case 'home':
+                        this.navigateToState(GAME_STATES.HOME);
+                        break;
+                    case 'leaderboard':
+                        this.navigateToState(GAME_STATES.LEADERBOARD);
+                        break;
+                    case 'shop':
+                        this.navigateToState(GAME_STATES.SHOP);
+                        break;
+                    case 'settings':
+                        this.navigateToState(GAME_STATES.SETTINGS);
+                        break;
+                    default:
+                        console.warn(`Unknown game over action: ${area.action}`);
+                        break;
+                }
+                
+                break; // Stop checking other areas once we find a match
+            }
+        }
+    }
+
+    /**
      * Handle canvas mouse clicks for UI interactions
      */
     handleCanvasClick(e) {
@@ -558,11 +965,17 @@ export class Game {
         // Handle different game states
         switch (this.gameState) {case GAME_STATES.VIDEO_INTRO:
                 // Video intro system removed - skipping video intro state
-                break;
-                  case GAME_STATES.LOGIN_PROMPT:
+                break;            case GAME_STATES.LOGIN_PROMPT:
                 // Handle login prompt clicks (delegate to login system)
                 if (this.loginSystem) {
                     this.loginSystem.handleClick(x, y);
+                }
+                break;
+
+            case GAME_STATES.TUTORIAL:
+                // Handle tutorial clicks (delegate to tutorial system)
+                if (this.tutorialSystem) {
+                    this.tutorialSystem.handleClick({ clientX: e.clientX, clientY: e.clientY });
                 }
                 break;
                   case GAME_STATES.PROFILE:
@@ -576,9 +989,12 @@ export class Game {
             case GAME_STATES.POST_ANIMATION_POPUP:
                 this.handlePostAnimationPopupClick(x, y);
                 break;
-                
-            case GAME_STATES.HOME:
+                  case GAME_STATES.HOME:
                 this.handleHomeClick(x, y);
+                break;
+                
+            case GAME_STATES.OPTIONS:
+                this.handleOptionsClick(x, y);
                 break;
                 
             case GAME_STATES.CREDITS:
@@ -588,51 +1004,740 @@ export class Game {
             case GAME_STATES.DIFFICULTY_SELECT:
                 this.handleDifficultyClick(x, y);
                 break;
-                
-            case GAME_STATES.LEADERBOARD:
+                  case GAME_STATES.LEADERBOARD:
                 this.handleLeaderboardClick(x, y);
                 break;
-                  case GAME_STATES.SHOP:
+                
+            case GAME_STATES.ACHIEVEMENTS:
+                this.handleAchievementsClick(x, y);
+                break;            case GAME_STATES.SHOP:
                 this.handleShopClick(x, y);
+                break;
+                
+            case GAME_STATES.SETTINGS:
+                this.handleSettingsClick(x, y);
                 break;
                   case GAME_STATES.RESET_CONFIRM:
                 this.handleResetConfirmClick(x, y);
                 break;
-                
-            case GAME_STATES.GAME_OVER:
+                  case GAME_STATES.GAME_OVER:
                 this.handleGameOverClick(x, y);
-                break;            default:
+                break;
+                
+            case GAME_STATES.PAUSED:
+                this.handlePauseClick(x, y);
+                break;default:
                 // No specific handling for this state
                 break;
         }
-    }
-
-    /**
-     * Handle mouse wheel scrolling for shop interface
+    }    /**
+     * Handle escape key presses to go back to previous screen
      */
-    handleMouseWheel(e) {
-        // Only handle wheel events in shop state
-        if (this.gameState !== GAME_STATES.SHOP) {
-            return;
+    handleEscape() {
+        // Play menu click sound
+        if (this.audioSystem) {
+            this.audioSystem.onMenuClick();
         }
 
-        // Prevent default scroll behavior
-        e.preventDefault();
-
-        // Determine scroll direction (deltaY > 0 = scroll down, deltaY < 0 = scroll up)
-        const direction = e.deltaY > 0 ? 1 : -1;
-        
-        // Use existing scroll handler
-        this.handleShopScroll(direction);
+        // Navigate back based on current state
+        switch (this.gameState) {
+            case GAME_STATES.PLAYING:
+                // Pause the game
+                this.togglePause();
+                break;
+                
+            case GAME_STATES.SETTINGS:
+            case GAME_STATES.OPTIONS:
+            case GAME_STATES.CREDITS:
+            case GAME_STATES.ACHIEVEMENTS:
+            case GAME_STATES.LEADERBOARD:
+            case GAME_STATES.SHOP:
+            case GAME_STATES.DIFFICULTY_SELECT:
+                // Go back to previous state, or home if no previous state
+                const backState = this.previousGameState || GAME_STATES.HOME;
+                console.log(`🔙 Escape pressed: Going from ${this.gameState} back to ${backState}`);
+                this.navigateToState(backState);
+                break;
+                
+            case GAME_STATES.PAUSED:
+                // Resume game
+                this.togglePause();
+                break;
+                
+            case GAME_STATES.GAME_OVER:
+                // Go to home screen
+                this.navigateToState(GAME_STATES.HOME);
+                break;
+                
+            case GAME_STATES.POST_ANIMATION_POPUP:
+                // Close popup and go to home
+                this.gameState = GAME_STATES.HOME;
+                break;
+                
+            case GAME_STATES.HOME:
+                // Don't do anything when already at home screen
+                console.log(`🏠 Already at home screen, ignoring escape`);
+                break;
+                
+            default:
+                // For other states, try to go to home
+                if (this.gameState !== GAME_STATES.HOME && this.gameState !== GAME_STATES.PLAYING) {
+                    this.navigateToState(GAME_STATES.HOME);
+                }
+                break;
+        }
     }
 
     /**
      * Handle clicks in difficulty selection screen
      */
     handleDifficultyClick(x, y) {
+        console.log('🎯 Difficulty click at:', x, y);
+        console.log('🎯 Hit areas:', this.difficultyHitAreas);
+        
+        if (!this.difficultyHitAreas) return;
+        
         // Check if any difficulty button was clicked
         for (let i = 0; i < this.difficultyHitAreas.length; i++) {
             const area = this.difficultyHitAreas[i];
+            console.log(`🎯 Checking area ${i}:`, area);
+            
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
+                
+                console.log(`✅ Hit detected on area ${i}:`, area);
+                
+                // Play menu click sound
+                if (this.audioSystem) {
+                    this.audioSystem.onMenuClick();
+                }
+
+                // Handle different button actions
+                if (area.action === 'back') {
+                    console.log('🔙 Back button clicked');
+                    this.navigateToState(GAME_STATES.HOME);
+                } else if (area.action === 'difficulty') {
+                    // Set selected difficulty and start game
+                    this.selectedDifficulty = area.difficulty;
+                    console.log(`🎮 Selected difficulty: ${this.selectedDifficulty}`);
+                    this.startGame();
+                }
+                break;
+            }
+        }
+    }
+    /**
+     * Main game loop - handles updating and rendering
+     */
+    gameLoop(timestamp) {
+        try {
+            const frameStartTime = performance.now();
+            
+            // Calculate delta time with frame limiting
+            const currentTime = timestamp || performance.now();
+            this.deltaTime = Math.min(currentTime - this.lastTime, 16.67); // Cap at ~60fps
+            this.lastTime = currentTime;
+            
+            // Track frame timing for performance metrics
+            const updateStartTime = performance.now();
+            
+            // Update FPS counter
+            this.updateFPS(currentTime);
+            
+            // Update game state
+            this.update();
+            
+            // Track update time
+            this.performanceMetrics.updateTime = performance.now() - updateStartTime;
+            
+            // Track render start time
+            const renderStartTime = performance.now();
+            
+            // Render everything
+            this.render();
+            
+            // Track render time
+            this.performanceMetrics.renderTime = performance.now() - renderStartTime;
+            
+            // Track total frame time
+            this.performanceMetrics.frameTime = performance.now() - frameStartTime;
+            
+            // Adaptive performance optimization
+            this.checkAndApplyAdaptiveOptimizations();
+            
+            // Continue the game loop
+            requestAnimationFrame((ts) => this.gameLoop(ts));
+        } catch (error) {
+            console.error('🎮 Game loop error:', error);
+            // Continue the loop even if there's an error to prevent the game from completely freezing
+            requestAnimationFrame((ts) => this.gameLoop(ts));
+        }
+    }
+
+    /**
+     * Update FPS counter and performance metrics
+     */
+    updateFPS(currentTime) {
+        this.frameCount++;
+        
+        if (currentTime - this.lastFpsUpdate >= 1000) {
+            this.fps = Math.round((this.frameCount - this.lastFrameCount) * 1000 / (currentTime - this.lastFpsUpdate));
+            this.lastFrameCount = this.frameCount;
+            this.lastFpsUpdate = currentTime;
+            
+            // Store FPS history for performance monitoring
+            if (this.performanceMetrics) {
+                this.performanceMetrics.fpsHistory.push(this.fps);
+                if (this.performanceMetrics.fpsHistory.length > 60) {
+                    this.performanceMetrics.fpsHistory.shift();
+                }
+            }
+        }
+    }
+
+    /**
+     * Get performance metrics for UI display
+     */
+    getPerformanceMetrics() {
+        return {
+            fps: this.fps || 0,
+            frameTime: this.performanceMetrics.frameTime || 0,
+            updateTime: this.performanceMetrics.updateTime || 0,
+            renderTime: this.performanceMetrics.renderTime || 0,
+            fpsHistory: this.performanceMetrics.fpsHistory || []
+        };
+    }
+
+    /**
+     * Update game logic
+     */
+    update() {
+        // Input manager uses event listeners, no update needed
+        
+        // Update systems based on game state
+        switch (this.gameState) {
+            case GAME_STATES.LOADING:
+                if (this.loadingScreenSystem) {
+                    this.loadingScreenSystem.update(this.deltaTime);
+                }
+                break;
+                
+            case GAME_STATES.PLAYING:
+                this.updateGameplay();
+                break;
+                
+            case GAME_STATES.OPENING_ANIMATION:
+                if (this.openingAnimation) {
+                    this.openingAnimation.update(this.deltaTime);
+                }
+                break;
+                
+            case GAME_STATES.TUTORIAL:
+                if (this.tutorialSystem) {
+                    this.tutorialSystem.update(this.deltaTime);
+                }
+                break;
+                
+            default:
+                // Update background systems that should always run
+                if (this.popupSystem) {
+                    this.popupSystem.update(this.deltaTime);
+                }
+                break;        }
+        
+        // Audio system doesn't need per-frame updates (event-driven)
+    }
+
+    /**
+     * Update gameplay logic when in playing state
+     */
+    updateGameplay() {
+        if (!this.player || !this.world) return;
+        
+        // Always update quantum dash animation (even when paused, since it controls the pause)
+        if (this.quantumDashAnimation) {
+            this.quantumDashAnimation.update(this.deltaTime);
+        }
+        
+        // Skip other updates if paused
+        if (this.isPaused) return;
+        
+        // Get input keys from input manager
+        const inputKeys = this.inputManager ? this.inputManager.getKeys() : {};
+        
+        // Update player with all required parameters
+        this.player.update(this.deltaTime, inputKeys, this.world, this.physics);
+        
+        // Update world
+        this.world.update(this.deltaTime, this.camera);
+        
+        // Update physics
+        if (this.physics) {
+            this.physics.update(this.deltaTime);
+        }
+        
+        // Update game systems
+        if (this.powerUpSystem) {
+            this.powerUpSystem.update(this.deltaTime);
+        }
+        
+        if (this.lifeBoxSystem) {
+            this.lifeBoxSystem.update(this.deltaTime);
+        }
+        
+        // Update camera
+        this.updateCamera();
+        
+        // Update screen shake
+        this.updateScreenShake(this.deltaTime);
+        
+        // Update adaptive difficulty
+        this.updateAdaptiveDifficulty();
+        
+        // Update score
+        this.updateScore();
+        
+        // Update adaptive difficulty
+        this.updateAdaptiveDifficulty();
+    }
+
+    /**
+     * Update camera position to follow player
+     */
+    updateCamera() {
+        if (this.player) {
+            this.camera.x = this.player.x - this.canvas.width / 2;
+            this.camera.y = this.player.y - this.canvas.height / 2;
+            
+            // Prevent camera from showing empty space to the left of the world
+            // Keep camera.x at minimum 0 so the left edge of the world is always at screen edge
+            this.camera.x = Math.max(0, this.camera.x);
+        }
+    }
+
+    /**
+     * Update game score
+     */
+    updateScore() {
+        if (this.player && this.gameState === GAME_STATES.PLAYING) {
+            // Update score based on distance traveled
+            const distanceScore = Math.floor(this.player.x / 10);
+            this.score = distanceScore + this.bonusScore;
+        }
+    }
+
+    /**
+     * Update adaptive difficulty based on player performance
+     */
+    updateAdaptiveDifficulty() {
+        if (!this.adaptiveDifficulty || !this.player) return;
+        
+        const currentTime = Date.now();
+        if (currentTime - this.lastPerformanceCheck < 5000) return; // Check every 5 seconds
+        
+        this.lastPerformanceCheck = currentTime;
+        
+        // Analyze player performance
+        const survivalTime = (currentTime - this.startTime) / 1000;
+        const currentScore = this.score;
+        const recentDamage = this.player.lastDamageTime && (currentTime - this.player.lastDamageTime) < 10000;
+        
+        // Performance metrics
+        const scoreRate = survivalTime > 0 ? currentScore / survivalTime : 0;
+        const expectedScoreRate = this.getExpectedScoreRate();
+        const performanceRatio = scoreRate / expectedScoreRate;
+        
+        // Record performance
+        this.playerPerformanceHistory.push(performanceRatio);
+        if (this.playerPerformanceHistory.length > 10) {
+            this.playerPerformanceHistory.shift(); // Keep only last 10 entries
+        }
+        
+        // Calculate average performance
+        const avgPerformance = this.playerPerformanceHistory.reduce((a, b) => a + b, 0) / this.playerPerformanceHistory.length;
+        
+        // Adjust difficulty based on performance
+        if (avgPerformance > 1.2) { // Player performing well
+            this.consecutiveSuccesses++;
+            this.consecutiveFailures = 0;
+            if (this.consecutiveSuccesses >= 3) {
+                this.adaptiveDifficultyMultiplier = Math.min(1.5, this.adaptiveDifficultyMultiplier + 0.1);
+                this.consecutiveSuccesses = 0;
+                console.log(`🎮 Adaptive difficulty increased: ${this.adaptiveDifficultyMultiplier.toFixed(2)}x`);
+            }
+        } else if (avgPerformance < 0.8 || recentDamage) { // Player struggling
+            this.consecutiveFailures++;
+            this.consecutiveSuccesses = 0;
+            if (this.consecutiveFailures >= 2) {
+                this.adaptiveDifficultyMultiplier = Math.max(0.7, this.adaptiveDifficultyMultiplier - 0.1);
+                this.consecutiveFailures = 0;
+                console.log(`🎮 Adaptive difficulty decreased: ${this.adaptiveDifficultyMultiplier.toFixed(2)}x`);
+            }
+        }
+    }
+
+    /**
+     * Get expected score rate for current difficulty
+     */
+    getExpectedScoreRate() {
+        const difficultyConfig = DIFFICULTY_LEVELS[this.selectedDifficulty];
+        if (!difficultyConfig) return 100; // Default expected rate
+        
+        // Base expected score rate varies by difficulty
+        const baseRates = {
+            'EASY': 150,
+            'MEDIUM': 120,
+            'HARD': 100,
+            'EXTREME': 80,
+            'IMPOSSIBLE': 60
+        };
+        
+        return baseRates[this.selectedDifficulty] || 100;
+    }
+
+    /**
+     * Handle mouse movement for UI interactions
+     */
+    handleMouseMove(e) {
+        // Get mouse position relative to canvas
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        // Update mouse position
+        this.mousePos.x = x;
+        this.mousePos.y = y;        // Handle different game states
+        switch (this.gameState) {            case GAME_STATES.VIDEO_INTRO:
+                // Video intro system removed - skipping video intro state
+                break;
+                  case GAME_STATES.HOME:
+                this.handleHomeHover(x, y);
+                break;
+                
+            case GAME_STATES.OPTIONS:
+                this.handleOptionsHover(x, y);
+                break;
+                
+            case GAME_STATES.CREDITS:
+                this.handleCreditsHover(x, y);
+                break;
+                  
+            case GAME_STATES.DIFFICULTY_SELECT:
+                this.handleDifficultyHover(x, y);
+                break;
+                  case GAME_STATES.LEADERBOARD:
+                // Pass through to leaderboard system if needed
+                break;
+                
+            case GAME_STATES.SHOP:
+                // Handle shop hover effects if needed
+                break;
+                  case GAME_STATES.GAME_OVER:
+                this.handleGameOverHover(x, y);
+                break;
+                
+            case GAME_STATES.SETTINGS:
+                this.handleSettingsHover(x, y);
+                break;
+                  case GAME_STATES.PAUSED:
+                this.handlePauseHover(x, y);
+                break;
+                  default:
+                // Reset hover states for other game states
+                this.hoveredDifficulty = -1;
+                this.hoveredHomeButton = -1;
+                this.hoveredOptionsButton = -1;
+                this.hoveredGameOverButton = -1;
+                this.hoveredPauseButton = -1;
+                break;        }
+        
+        // Handle slider dragging in settings
+        if (this.gameState === GAME_STATES.SETTINGS && this.gameDialogs) {
+            this.gameDialogs.handleMouseMove(x, y);
+        }
+        
+        // Handle slider dragging (legacy - may be removed)
+        if (this.isDraggingSlider && this.dragSliderData) {
+            this.updateSliderValue(this.dragSliderData, x);
+        }
+        
+        // Handle popup system mouse movement if popup is active
+        if (this.popupSystem && this.popupSystem.activePopup) {
+            this.popupSystem.handleMouseMove(x, y);
+        }
+    }    /**
+     * Handle clicks in post animation popup
+     */
+    handlePostAnimationPopupClick(x, y) {
+        // For the popup, any click anywhere should close it and go to home
+        // Play menu click sound
+        if (this.audioSystem) {
+            this.audioSystem.onMenuClick();
+        }
+        
+        // Transition to home screen
+        this.gameState = GAME_STATES.HOME;
+    }
+
+    /**
+     * Handle mouse hover effects for home screen
+     */
+    handleHomeHover(x, y) {
+        if (this.homeScreenSystem && this.homeHitAreas) {
+            this.homeScreenSystem.handleMouseMove(x, y, this.homeHitAreas);
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for options menu
+     */
+    handleOptionsHover(x, y) {
+        if (this.optionsSystem && this.optionsHitAreas) {
+            this.optionsSystem.handleMouseMove(x, y, this.optionsHitAreas);
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for credits screen
+     */
+    handleCreditsHover(x, y) {
+        if (this.creditsSystem && this.creditsHitAreas) {
+            this.creditsSystem.handleMouseMove(x, y, this.creditsHitAreas);
+        }
+    }    /**
+     * Navigate to a new game state and track previous state for back navigation
+     */
+    navigateToState(newState) {        
+        // Don't track navigation to/from certain states
+        const skipTracking = [
+            GAME_STATES.LOGIN_PROMPT,
+            GAME_STATES.VIDEO_INTRO,
+            GAME_STATES.OPENING_ANIMATION,
+            GAME_STATES.POST_ANIMATION_POPUP,
+            GAME_STATES.PLAYING
+            // Note: PAUSED removed from skipTracking so pause menu navigation works properly
+            // Note: GAME_OVER removed from skipTracking so death menu navigation works properly
+        ];
+        
+        // Store previous state if current state should be tracked
+        if (this.gameState && !skipTracking.includes(this.gameState) && !skipTracking.includes(newState)) {
+            this.previousGameState = this.gameState;
+            console.log(`🔄 Navigation: ${this.gameState} → ${newState} (previous: ${this.previousGameState})`);
+        }
+        
+        this.gameState = newState;
+        
+        // Reset animations for menu systems when entering them
+        if (newState === GAME_STATES.OPTIONS && this.optionsSystem) {
+            this.optionsSystem.resetAnimations();
+        } else if (newState === GAME_STATES.SETTINGS && this.settingsSystem) {
+            this.settingsSystem.resetAnimations();
+        } else if (newState === GAME_STATES.CREDITS && this.creditsSystem) {
+            this.creditsSystem.resetAnimations();
+        } else if (newState === GAME_STATES.HOME && this.homeScreenSystem) {
+            this.homeScreenSystem.resetAnimations();
+        }
+    }
+
+    /**
+     * Show leaderboard screen
+     */
+    showLeaderboard() {
+        this.navigateToState(GAME_STATES.LEADERBOARD);
+    }
+
+    /**
+     * Handle clicks in home screen
+     */
+    handleHomeClick(x, y) {
+        if (!this.homeHitAreas) return;
+        
+        // Check if any home button was clicked
+        for (let i = 0; i < this.homeHitAreas.length; i++) {
+            const area = this.homeHitAreas[i];
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
+                
+                // Play menu click sound
+                if (this.audioSystem) {
+                    this.audioSystem.onMenuClick();
+                }                // Handle different button actions
+                if (area.action === 'play') {
+                    this.navigateToState(GAME_STATES.DIFFICULTY_SELECT);
+                } else if (area.action === 'options') {
+                    this.navigateToState(GAME_STATES.OPTIONS);
+                } else if (area.action === 'tutorial') {
+                    this.navigateToState(GAME_STATES.TUTORIAL);
+                    if (this.tutorialSystem) {
+                        this.tutorialSystem.startTutorial('welcome');
+                    }
+                } else if (area.action === 'achievements') {
+                    this.achievementsScrollOffset = 0; // Reset scroll to top when opening achievements
+                    this.navigateToState(GAME_STATES.ACHIEVEMENTS);                } else if (area.action === 'settings') {
+                    this.navigateToState(GAME_STATES.SETTINGS);
+                    // Check if settings tutorial should be shown
+                    setTimeout(() => this.checkSettingsTutorial(), 100);
+                } else if (area.action === 'credits') {
+                    this.navigateToState(GAME_STATES.CREDITS);
+                } else if (area.action === 'profile') {
+                    this.showProfile();
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * Handle clicks in options menu
+     */
+    handleOptionsClick(x, y) {
+        if (this.optionsSystem && this.optionsHitAreas) {
+            const action = this.optionsSystem.handleClick(x, y, this.optionsHitAreas);
+            
+            if (action) {
+                if (action === 'tutorial') {
+                    this.navigateToState(GAME_STATES.TUTORIAL);
+                    if (this.tutorialSystem) {
+                        this.tutorialSystem.startTutorial('welcome');
+                    }
+                } else if (action === 'achievements') {
+                    this.achievementsScrollOffset = 0;
+                    this.navigateToState(GAME_STATES.ACHIEVEMENTS);
+                } else if (action === 'shop') {
+                    this.navigateToState(GAME_STATES.SHOP);
+                } else if (action === 'settings') {
+                    this.navigateToState(GAME_STATES.SETTINGS);
+                    if (this.settingsSystem) {
+                        this.settingsSystem.resetAnimations();
+                    }
+                } else if (action === 'back') {
+                    this.navigateToState(GAME_STATES.HOME);
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle clicks in credits screen
+     */
+    handleCreditsClick(x, y) {
+        if (this.creditsSystem && this.creditsHitAreas) {
+            const action = this.creditsSystem.handleClick(x, y, this.creditsHitAreas);
+            
+            if (action === 'back') {
+                this.navigateToState(GAME_STATES.HOME);
+            }
+        }
+    }    /**
+     * Handle mouse hover effects for difficulty selection
+     */
+    handleDifficultyHover(x, y) {
+        this.hoveredDifficulty = -1;
+        for (let i = 0; i < this.difficultyHitAreas.length; i++) {
+            const area = this.difficultyHitAreas[i];
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
+                this.hoveredDifficulty = i;
+                break;
+            }
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for game over screen
+     */
+    handleGameOverHover(x, y) {
+        this.hoveredGameOverButton = -1;
+        
+        // Check if there are game over hit areas to hover over
+        if (this.gameOverHitAreas) {
+            for (let i = 0; i < this.gameOverHitAreas.length; i++) {
+                const area = this.gameOverHitAreas[i];
+                if (x >= area.x && x <= area.x + area.width && 
+                    y >= area.y && y <= area.y + area.height) {
+                    this.hoveredGameOverButton = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for pause screen
+     */
+    handlePauseHover(x, y) {
+        this.hoveredPauseButton = -1;
+        
+        // Check if there are pause hit areas to hover over
+        if (this.pauseHitAreas) {
+            for (let i = 0; i < this.pauseHitAreas.length; i++) {
+                const area = this.pauseHitAreas[i];
+                if (x >= area.x && x <= area.x + area.width && 
+                    y >= area.y && y <= area.y + area.height) {
+                    this.hoveredPauseButton = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle mouse hover effects for settings screen
+     */
+    handleSettingsHover(x, y) {
+        if (this.settingsSystem && this.settingsHitAreas) {
+            this.settingsSystem.handleMouseMove(x, y, this.settingsHitAreas);
+        }
+    }
+
+    /**
+     * Handle clicks in settings screen
+     */
+    handleSettingsClick(x, y) {
+        console.log('🎯 Settings click at:', x, y);
+        if (this.settingsSystem && this.settingsHitAreas) {
+            const action = this.settingsSystem.handleClick(x, y, this.settingsHitAreas);
+            console.log('⚡ Settings action:', action);
+            
+            if (action === 'back') {
+                console.log('🏠 Navigating back to OPTIONS');
+                this.navigateToState(GAME_STATES.OPTIONS);
+            }
+        }
+        
+        // Close any expanded dropdowns if clicking outside them
+        if (this.settingsSystem && this.settingsSystem.expandedDropdown) {
+            let clickedOnDropdown = false;
+            
+            // Check if the click was on a dropdown or its options
+            for (const area of this.settingsHitAreas || []) {
+                if (x >= area.x && x <= area.x + area.width && 
+                    y >= area.y && y <= area.y + area.height) {
+                    if (area.action === 'dropdown' || area.action === 'dropdown-option') {
+                        clickedOnDropdown = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Close dropdown if not clicked on dropdown
+            if (!clickedOnDropdown) {
+                this.settingsSystem.expandedDropdown = null;
+            }
+        }
+    }
+
+    /**
+     * Handle clicks in game over screen
+     */
+    handleGameOverClick(x, y) {
+        if (!this.gameOverHitAreas) return;
+        
+        // Check if any game over button was clicked
+        for (let i = 0; i < this.gameOverHitAreas.length; i++) {
+            const area = this.gameOverHitAreas[i];
             if (x >= area.x && x <= area.x + area.width && 
                 y >= area.y && y <= area.y + area.height) {
                 
@@ -641,99 +1746,1182 @@ export class Game {
                     this.audioSystem.onMenuClick();
                 }
                 
-                // Select the difficulty and start the game
-                this.selectedDifficulty = this.difficultyKeys[i];                this.startGame();
+                // Handle different button actions
+                switch (area.action) {
+                    case 'restart':
+                        this.startNewGame();
+                        break;
+                    case 'difficulty':
+                        this.navigateToState(GAME_STATES.DIFFICULTY_SELECT);
+                        break;
+                    case 'home':
+                        this.navigateToState(GAME_STATES.HOME);
+                        break;
+                    case 'leaderboard':
+                        this.navigateToState(GAME_STATES.LEADERBOARD);
+                        break;
+                    case 'shop':
+                        this.navigateToState(GAME_STATES.SHOP);
+                        break;
+                    case 'settings':
+                        this.navigateToState(GAME_STATES.SETTINGS);
+                        break;
+                    default:
+                        console.warn(`Unknown game over action: ${area.action}`);
+                        break;
+                }
+                
+                break; // Stop checking other areas once we find a match
+            }
+        }
+    }
+
+    /**
+     * Handle canvas mouse clicks for UI interactions
+     */
+    handleCanvasClick(e) {
+        // Get click position relative to canvas
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        // Check for popup clicks first (popups should work in any state)
+        if (this.popupSystem && this.popupSystem.activePopup) {
+            const handled = this.popupSystem.handleClick(x, y);
+            if (handled) {
+                return; // Popup handled the click, don't process other handlers
+            }
+        }
+
+        // Handle different game states
+        switch (this.gameState) {case GAME_STATES.VIDEO_INTRO:
+                // Video intro system removed - skipping video intro state
+                break;            case GAME_STATES.LOGIN_PROMPT:
+                // Handle login prompt clicks (delegate to login system)
+                if (this.loginSystem) {
+                    this.loginSystem.handleClick(x, y);
+                }
+                break;
+
+            case GAME_STATES.TUTORIAL:
+                // Handle tutorial clicks (delegate to tutorial system)
+                if (this.tutorialSystem) {
+                    this.tutorialSystem.handleClick({ clientX: e.clientX, clientY: e.clientY });
+                }
+                break;
+                  case GAME_STATES.PROFILE:
+                // Handle profile system clicks (delegate to profile system)
+                // TODO: Re-enable when UserProfileSystem is implemented
+                // if (this.userProfileSystem) {
+                //     this.userProfileSystem.handleClick(x, y);
+                // }
+                break;
+                
+            case GAME_STATES.POST_ANIMATION_POPUP:
+                this.handlePostAnimationPopupClick(x, y);
+                break;
+                  case GAME_STATES.HOME:
+                this.handleHomeClick(x, y);
+                break;
+                
+            case GAME_STATES.OPTIONS:
+                this.handleOptionsClick(x, y);
+                break;
+                
+            case GAME_STATES.CREDITS:
+                this.handleCreditsClick(x, y);
+                break;
+                
+            case GAME_STATES.DIFFICULTY_SELECT:
+                this.handleDifficultyClick(x, y);
+                break;
+                  case GAME_STATES.LEADERBOARD:
+                this.handleLeaderboardClick(x, y);
+                break;
+                
+            case GAME_STATES.ACHIEVEMENTS:
+                this.handleAchievementsClick(x, y);
+                break;            case GAME_STATES.SHOP:
+                this.handleShopClick(x, y);
+                break;
+                
+            case GAME_STATES.SETTINGS:
+                this.handleSettingsClick(x, y);
+                break;
+                  case GAME_STATES.RESET_CONFIRM:
+                this.handleResetConfirmClick(x, y);
+                break;
+                  case GAME_STATES.GAME_OVER:
+                this.handleGameOverClick(x, y);
+                break;
+                
+            case GAME_STATES.PAUSED:
+                this.handlePauseClick(x, y);
+                break;default:
+                // No specific handling for this state
+                break;
+        }
+    }    /**
+     * Handle escape key presses to go back to previous screen
+     */
+    handleEscape() {
+        // Play menu click sound
+        if (this.audioSystem) {
+            this.audioSystem.onMenuClick();
+        }
+
+        // Navigate back based on current state
+        switch (this.gameState) {
+            case GAME_STATES.PLAYING:
+                // Pause the game
+                this.togglePause();
+                break;
+                
+            case GAME_STATES.SETTINGS:
+            case GAME_STATES.OPTIONS:
+            case GAME_STATES.CREDITS:
+            case GAME_STATES.ACHIEVEMENTS:
+            case GAME_STATES.LEADERBOARD:
+            case GAME_STATES.SHOP:
+            case GAME_STATES.DIFFICULTY_SELECT:
+                // Go back to previous state, or home if no previous state
+                const backState = this.previousGameState || GAME_STATES.HOME;
+                console.log(`🔙 Escape pressed: Going from ${this.gameState} back to ${backState}`);
+                this.navigateToState(backState);
+                break;
+                
+            case GAME_STATES.PAUSED:
+                // Resume game
+                this.togglePause();
+                break;
+                
+            case GAME_STATES.GAME_OVER:
+                // Go to home screen
+                this.navigateToState(GAME_STATES.HOME);
+                break;
+                
+            case GAME_STATES.POST_ANIMATION_POPUP:
+                // Close popup and go to home
+                this.gameState = GAME_STATES.HOME;
+                break;
+                
+            case GAME_STATES.HOME:
+                // Don't do anything when already at home screen
+                console.log(`🏠 Already at home screen, ignoring escape`);
+                break;
+                
+            default:
+                // For other states, try to go to home
+                if (this.gameState !== GAME_STATES.HOME && this.gameState !== GAME_STATES.PLAYING) {
+                    this.navigateToState(GAME_STATES.HOME);
+                }
+                break;
+        }
+    }
+
+    /**
+     * Handle clicks in difficulty selection screen
+     */
+    handleDifficultyClick(x, y) {
+        console.log('🎯 Difficulty click at:', x, y);
+        console.log('🎯 Hit areas:', this.difficultyHitAreas);
+        
+        if (!this.difficultyHitAreas) return;
+        
+        // Check if any difficulty button was clicked
+        for (let i = 0; i < this.difficultyHitAreas.length; i++) {
+            const area = this.difficultyHitAreas[i];
+            console.log(`🎯 Checking area ${i}:`, area);
+            
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
+                
+                console.log(`✅ Hit detected on area ${i}:`, area);
+                
+                // Play menu click sound
+                if (this.audioSystem) {
+                    this.audioSystem.onMenuClick();
+                }
+
+                // Handle different button actions
+                if (area.action === 'back') {
+                    console.log('🔙 Back button clicked');
+                    this.navigateToState(GAME_STATES.HOME);
+                } else if (area.action === 'difficulty') {
+                    // Set selected difficulty and start game
+                    this.selectedDifficulty = area.difficulty;
+                    console.log(`🎮 Selected difficulty: ${this.selectedDifficulty}`);
+                    this.startGame();
+                }
                 break;
             }
         }
-    }    /**
-     * Start the game with the selected difficulty
-     */    startGame() {
-        // CRITICAL FIX: Clear all input states to prevent stuck keys when starting new game
-        if (this.inputManager) {
-            this.inputManager.clearInputs();
-        }
-        
-        // Ensure canvas has focus for keyboard input
-        this.ensureCanvasFocus();
-        
-        // Initialize world generator
-        this.world = new WorldGenerator(this);
-        
-        // Initialize physics engine with world reference
-        this.physics = new PhysicsEngine(this.world);
-        
-        // Find a safe spawn position using the world generator
-        const spawnPosition = this.world.findSafeSpawnPosition();
-        
-        // Create player at spawn position without upgrades (shop system handles upgrades)
-        this.player = new Player(spawnPosition.x, spawnPosition.y, this, null);
-        
-        // Apply shop upgrades to player if available
-        if (this.shopSystem) {
-            this.shopSystem.applyAllOwnedUpgrades(this.player);
-        }
-        
-        // Set camera position so player appears on far left of screen (no void behind)
-        this.camera.x = this.player.x - 50; // Position player 50px from left edge
-        this.camera.y = this.player.y - this.canvas.height / 2;
-        
-        // Generate initial chunks for the camera position to ensure world is visible on spawn
-        this.world.generateChunksForCamera(this.camera);
-        
-        // Force update visible chunks for immediate rendering on first frame
-        const startChunk = Math.floor(this.camera.x / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE)) - 1;
-        const endChunk = Math.ceil((this.camera.x + this.canvas.width) / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE)) + 1;
-        this.world.updateVisibleChunks(startChunk, endChunk);
-        this.world.lastCameraX = this.camera.x; // Update camera tracking to prevent immediate re-update
-        
-        // Reset game state variables
-        this.score = 0;
-        this.bonusScore = 0;
-        this.gameOverReason = null;
-        this.gameOverStartTime = null;
-        this.isNewHighScore = false;
-          // Record start time for survival tracking
-        this.startTime = Date.now();
-        
-        // Set last health regen time to current time
-        this.lastHealthRegenTime = this.startTime;
-          // Initialize speed penalty system
-        this.speedPenalty.lastCheckpoint = this.player.x;
-        this.speedPenalty.segmentStartTime = this.startTime;
-        this.speedPenalty.totalPenalties = 0;
-        this.speedPenalty.totalPenaltyPoints = 0;
-        
-        // Change game state to playing
-        this.gameState = GAME_STATES.PLAYING;
-    }    /**
-     * Restart the current game with the same difficulty
+    }
+    /**
+     * Main game loop - handles updating and rendering
      */
-    restart() {        // Reset milestone tracking
-        this.lastMilestone = 0;
-        this.milestoneEffects = [];
+    gameLoop(timestamp) {
+        try {
+            const frameStartTime = performance.now();
+            
+            // Calculate delta time with frame limiting
+            const currentTime = timestamp || performance.now();
+            this.deltaTime = Math.min(currentTime - this.lastTime, 16.67); // Cap at ~60fps
+            this.lastTime = currentTime;
+            
+            // Track frame timing for performance metrics
+            const updateStartTime = performance.now();
+            
+            // Update FPS counter
+            this.updateFPS(currentTime);
+            
+            // Update game state
+            this.update();
+            
+            // Track update time
+            this.performanceMetrics.updateTime = performance.now() - updateStartTime;
+            
+            // Track render start time
+            const renderStartTime = performance.now();
+            
+            // Render everything
+            this.render();
+            
+            // Track render time
+            this.performanceMetrics.renderTime = performance.now() - renderStartTime;
+            
+            // Track total frame time
+            this.performanceMetrics.frameTime = performance.now() - frameStartTime;
+            
+            // Adaptive performance optimization
+            this.checkAndApplyAdaptiveOptimizations();
+            
+            // Continue the game loop
+            requestAnimationFrame((ts) => this.gameLoop(ts));
+        } catch (error) {
+            console.error('🎮 Game loop error:', error);
+            // Continue the loop even if there's an error to prevent the game from completely freezing
+            requestAnimationFrame((ts) => this.gameLoop(ts));
+        }
+    }
+
+    /**
+     * Update FPS counter and performance metrics
+     */
+    updateFPS(currentTime) {
+        this.frameCount++;
         
-        // Reset speed penalty effects
-        this.speedPenaltyEffects = [];
+        if (currentTime - this.lastFpsUpdate >= 1000) {
+            this.fps = Math.round((this.frameCount - this.lastFrameCount) * 1000 / (currentTime - this.lastFpsUpdate));
+            this.lastFrameCount = this.frameCount;
+            this.lastFpsUpdate = currentTime;
+            
+            // Store FPS history for performance monitoring
+            if (this.performanceMetrics) {
+                this.performanceMetrics.fpsHistory.push(this.fps);
+                if (this.performanceMetrics.fpsHistory.length > 60) {
+                    this.performanceMetrics.fpsHistory.shift();
+                }
+            }
+        }
+    }
+
+    /**
+     * Get performance metrics for UI display
+     */
+    getPerformanceMetrics() {
+        return {
+            fps: this.fps || 0,
+            frameTime: this.performanceMetrics.frameTime || 0,
+            updateTime: this.performanceMetrics.updateTime || 0,
+            renderTime: this.performanceMetrics.renderTime || 0,
+            fpsHistory: this.performanceMetrics.fpsHistory || []
+        };
+    }
+
+    /**
+     * Update game logic
+     */
+    update() {
+        // Input manager uses event listeners, no update needed
         
-        // Clear any existing game over state
-        this.gameOverReason = null;
-        this.gameOverStartTime = null;
-        this.isNewHighScore = false;
+        // Update systems based on game state
+        switch (this.gameState) {
+            case GAME_STATES.LOADING:
+                if (this.loadingScreenSystem) {
+                    this.loadingScreenSystem.update(this.deltaTime);
+                }
+                break;
+                
+            case GAME_STATES.PLAYING:
+                this.updateGameplay();
+                break;
+                
+            case GAME_STATES.OPENING_ANIMATION:
+                if (this.openingAnimation) {
+                    this.openingAnimation.update(this.deltaTime);
+                }
+                break;
+                
+            case GAME_STATES.TUTORIAL:
+                if (this.tutorialSystem) {
+                    this.tutorialSystem.update(this.deltaTime);
+                }
+                break;
+                
+            default:
+                // Update background systems that should always run
+                if (this.popupSystem) {
+                    this.popupSystem.update(this.deltaTime);
+                }
+                break;        }
         
-        // CRITICAL FIX: Reset leaderboard input state so movement keys work immediately
-        if (this.leaderboardSystem) {
-            this.leaderboardSystem.resetInputState();
+        // Audio system doesn't need per-frame updates (event-driven)
+    }
+
+    /**
+     * Update gameplay logic when in playing state
+     */
+    updateGameplay() {
+        if (!this.player || !this.world) return;
+        
+        // Always update quantum dash animation (even when paused, since it controls the pause)
+        if (this.quantumDashAnimation) {
+            this.quantumDashAnimation.update(this.deltaTime);
         }
         
-          // Restart the game using the same initialization logic as startGame
-        this.startGame();
+        // Skip other updates if paused
+        if (this.isPaused) return;
         
-        // CRITICAL FIX: Ensure canvas has focus after restart so arrow keys work
-        this.ensureCanvasFocus();
-          // Play restart sound if available
+        // Get input keys from input manager
+        const inputKeys = this.inputManager ? this.inputManager.getKeys() : {};
+        
+        // Update player with all required parameters
+        this.player.update(this.deltaTime, inputKeys, this.world, this.physics);
+        
+        // Update world
+        this.world.update(this.deltaTime, this.camera);
+        
+        // Update physics
+        if (this.physics) {
+            this.physics.update(this.deltaTime);
+        }
+        
+        // Update game systems
+        if (this.powerUpSystem) {
+            this.powerUpSystem.update(this.deltaTime);
+        }
+        
+        if (this.lifeBoxSystem) {
+            this.lifeBoxSystem.update(this.deltaTime);
+        }
+        
+        // Update camera
+        this.updateCamera();
+        
+        // Update screen shake
+        this.updateScreenShake(this.deltaTime);
+        
+        // Update adaptive difficulty
+        this.updateAdaptiveDifficulty();
+        
+        // Update score
+        this.updateScore();
+        
+        // Update adaptive difficulty
+        this.updateAdaptiveDifficulty();
+    }
+
+    /**
+     * Update camera position to follow player
+     */
+    updateCamera() {
+        if (this.player) {
+            this.camera.x = this.player.x - this.canvas.width / 2;
+            this.camera.y = this.player.y - this.canvas.height / 2;
+            
+            // Prevent camera from showing empty space to the left of the world
+            // Keep camera.x at minimum 0 so the left edge of the world is always at screen edge
+            this.camera.x = Math.max(0, this.camera.x);
+        }
+    }
+
+    /**
+     * Update game score
+     */
+    updateScore() {
+        if (this.player && this.gameState === GAME_STATES.PLAYING) {
+            // Update score based on distance traveled
+            const distanceScore = Math.floor(this.player.x / 10);
+            this.score = distanceScore + this.bonusScore;
+        }
+    }
+
+    /**
+     * Update adaptive difficulty based on player performance
+     */
+    updateAdaptiveDifficulty() {
+        if (!this.adaptiveDifficulty || !this.player) return;
+        
+        const currentTime = Date.now();
+        if (currentTime - this.lastPerformanceCheck < 5000) return; // Check every 5 seconds
+        
+        this.lastPerformanceCheck = currentTime;
+        
+        // Analyze player performance
+        const survivalTime = (currentTime - this.startTime) / 1000;
+        const currentScore = this.score;
+        const recentDamage = this.player.lastDamageTime && (currentTime - this.player.lastDamageTime) < 10000;
+        
+        // Performance metrics
+        const scoreRate = survivalTime > 0 ? currentScore / survivalTime : 0;
+        const expectedScoreRate = this.getExpectedScoreRate();
+        const performanceRatio = scoreRate / expectedScoreRate;
+        
+        // Record performance
+        this.playerPerformanceHistory.push(performanceRatio);
+        if (this.playerPerformanceHistory.length > 10) {
+            this.playerPerformanceHistory.shift(); // Keep only last 10 entries
+        }
+        
+        // Calculate average performance
+        const avgPerformance = this.playerPerformanceHistory.reduce((a, b) => a + b, 0) / this.playerPerformanceHistory.length;
+        
+        // Adjust difficulty based on performance
+        if (avgPerformance > 1.2) { // Player performing well
+            this.consecutiveSuccesses++;
+            this.consecutiveFailures = 0;
+            if (this.consecutiveSuccesses >= 3) {
+                this.adaptiveDifficultyMultiplier = Math.min(1.5, this.adaptiveDifficultyMultiplier + 0.1);
+                this.consecutiveSuccesses = 0;
+                console.log(`🎮 Adaptive difficulty increased: ${this.adaptiveDifficultyMultiplier.toFixed(2)}x`);
+            }
+        } else if (avgPerformance < 0.8 || recentDamage) { // Player struggling
+            this.consecutiveFailures++;
+            this.consecutiveSuccesses = 0;
+            if (this.consecutiveFailures >= 2) {
+                this.adaptiveDifficultyMultiplier = Math.max(0.7, this.adaptiveDifficultyMultiplier - 0.1);
+                this.consecutiveFailures = 0;
+                console.log(`🎮 Adaptive difficulty decreased: ${this.adaptiveDifficultyMultiplier.toFixed(2)}x`);
+            }
+        }
+    }
+
+    /**
+     * Get expected score rate for current difficulty
+     */
+    getExpectedScoreRate() {
+        const difficultyConfig = DIFFICULTY_LEVELS[this.selectedDifficulty];
+        if (!difficultyConfig) return 100; // Default expected rate
+        
+        // Base expected score rate varies by difficulty
+        const baseRates = {
+            'EASY': 150,
+            'MEDIUM': 120,
+            'HARD': 100,
+            'EXTREME': 80,
+            'IMPOSSIBLE': 60
+        };
+        
+        return baseRates[this.selectedDifficulty] || 100;
+    }
+
+    /**
+     * Check performance and apply adaptive optimizations if needed
+     */
+    checkAndApplyAdaptiveOptimizations() {
+        const currentTime = Date.now();
+        
+        // Only check every 2 seconds to avoid overhead
+        if (currentTime - this.performanceMetrics.lastOptimizationCheck < 2000) {
+            return;
+        }
+        
+        this.performanceMetrics.lastOptimizationCheck = currentTime;
+        
+        // Check if FPS is consistently low
+        if (this.fps < 45) {
+            this.performanceMetrics.lowFpsCounter++;
+        } else if (this.fps > 55) {
+            this.performanceMetrics.lowFpsCounter = Math.max(0, this.performanceMetrics.lowFpsCounter - 1);
+        }
+        
+        // Apply optimizations based on performance
+        if (this.performanceMetrics.lowFpsCounter >= 3 && this.performanceMetrics.adaptiveOptimizationLevel < 3) {
+            this.applyNextOptimizationLevel();
+        } else if (this.performanceMetrics.lowFpsCounter === 0 && this.performanceMetrics.adaptiveOptimizationLevel > 0) {
+            this.reduceOptimizationLevel();
+        }
+    }
+
+    /**
+     * Apply the next level of performance optimization
+     */
+    applyNextOptimizationLevel() {
+        this.performanceMetrics.adaptiveOptimizationLevel++;
+        console.log(`🚀 Applying optimization level ${this.performanceMetrics.adaptiveOptimizationLevel}`);
+        
+        switch (this.performanceMetrics.adaptiveOptimizationLevel) {
+            case 1:
+                // Level 1: Reduce background particles
+                if (this.renderer) {
+                    this.renderer.setRenderOptimizations({
+                        skipBackgroundParticles: true,
+                        particleQuality: 0.5
+                    });
+                }
+                break;
+            case 2:
+                // Level 2: Reduce graphics quality
+                if (this.graphicsQuality !== 'low') {
+                    this.graphicsQuality = 'low';
+                    this.applyGraphicsQuality();
+                }
+                break;
+            case 3:
+                // Level 3: Enable high performance mode on tile renderer
+                if (this.world?.tileRenderer) {
+                    this.world.tileRenderer.setHighPerformanceMode(true);
+                }
+                break;
+        }
+        
+        this.performanceMetrics.lowFpsCounter = 0;
+    }
+
+    /**
+     * Reduce optimization level when performance improves
+     */
+    reduceOptimizationLevel() {
+        if (this.performanceMetrics.adaptiveOptimizationLevel > 0) {
+            this.performanceMetrics.adaptiveOptimizationLevel--;
+            console.log(`🔄 Reducing optimization level to ${this.performanceMetrics.adaptiveOptimizationLevel}`);
+            
+            // Restore previous settings as performance improves
+            // Note: This is a conservative approach - we don't immediately restore all settings
+        }
+    }
+
+    /**
+     * Render everything
+     */
+    render() {
+        if (!this.ctx || !this.renderer) return;
+        
+        try {
+            // Clear the canvas
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Delegate rendering to the renderer
+            this.renderer.render();
+            
+            // Render popup system on top if active
+            if (this.popupSystem && this.popupSystem.activePopup) {
+                this.popupSystem.render();
+            }
+            
+            // Render FPS counter if enabled
+            if (this.showFpsCounter) {
+                this.renderFPS();
+            }
+            
+        } catch (error) {
+            console.error('🎮 Render error:', error);
+        }
+    }    /**
+     * Render FPS counter
+     */
+    renderFPS() {
+        this.ctx.save();
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '16px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText(`FPS: ${this.fps}`, 10, 30);
+        this.ctx.restore();
+    }
+
+    /**
+     * Render milestone effects (visual feedback for reaching score milestones)
+     */
+    renderMilestoneEffects(ctx) {
+        // Placeholder for milestone visual effects
+        // This could include particle effects, screen flashes, or other visual feedback
+        // when the player reaches certain score milestones
+        
+        // For now, this is a stub to prevent runtime errors
+        // TODO: Implement milestone visual effects if needed
+    }
+
+    /**
+     * Add debug commands for testing
+     */
+    addDebugCommands() {
+        // Add debug commands to window for testing
+        if (typeof window !== 'undefined') {
+            window.gameDebug = {
+                upgradeTest: () => {
+                    if (this.upgradeSystem && window.UpgradeTestHelper) {
+                        window.UpgradeTestHelper.runUpgradeTests(this.upgradeSystem);
+                    }
+                },
+                toggleAudio: () => {
+                    if (this.audioSystem) {
+                        this.audioSystem.toggleMute();
+                        console.log('Audio muted:', this.audioSystem.getIsMuted());
+                    }
+                },
+                setVolume: (volume) => {
+                    if (this.audioSystem) {
+                        this.audioSystem.setMasterVolume(volume);
+                        console.log('Master volume set to:', volume);
+                    }
+                }
+            };
+            console.log('🐛 Debug commands added to window.gameDebug');
+        }
+    }
+
+    /**
+     * Load saved best scores from localStorage
+     */
+    loadBestScores() {
+        try {
+            const saved = localStorage.getItem('bestScores');
+            if (saved) {
+                this.bestScores = { ...this.bestScores, ...JSON.parse(saved) };
+                console.log('✅ Best scores loaded:', this.bestScores);
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not load best scores:', error);
+        }
+    }
+
+    /**
+     * Load saved game data
+     */
+    async loadGameData() {
+        try {            // Load upgrade system data
+            if (this.upgradeSystem) {
+                await this.upgradeSystem.loadUpgradeData();            }
+            
+            // Achievement system loads data in constructor
+            // Shop system loads data in constructor
+                        
+            console.log('✅ Game data loaded successfully');
+        } catch (error) {
+            console.warn('⚠️ Could not load some game data:', error);
+        }
+    }
+
+    /**
+     * Start autosave system
+     */
+    startAutosave() {
+        // Save game data every 30 seconds
+        setInterval(() => {
+            // Check if autosave is enabled
+            if (!this.autoSave) {
+                console.log('💾 Autosave skipped (disabled in settings)');
+                return;
+            }
+            
+            try {
+                // Save best scores
+                localStorage.setItem('bestScores', JSON.stringify(this.bestScores));
+                
+                // Save system data
+                if (this.upgradeSystem) {
+                    this.upgradeSystem.saveUpgradeData();
+                }
+                if (this.achievementSystem) {
+                    this.achievementSystem.saveAchievementData();
+                }
+                if (this.shopSystem) {
+                    this.shopSystem.saveOwnedUpgrades();
+                }
+                
+                console.log('💾 Autosave completed');
+            } catch (error) {
+                console.warn('⚠️ Autosave failed:', error);
+            }
+        }, 30000); // Save every 30 seconds
+        
+        console.log('💾 Autosave system started');
+    }
+
+    /**
+     * Determine initial navigation state
+     */
+    async determineInitialNavigation() {        
+        try {
+            // If loading screen is active, don't change the state yet
+            if (this.loadingScreenSystem && this.loadingScreenSystem.isActiveLoading()) {
+                console.log('🔑 Loading screen still active, deferring navigation...');
+                // Store the intended state but don't set it yet
+                const shouldShowOpeningAnimation = this.getShouldShowOpeningAnimation();
+                
+                if (shouldShowOpeningAnimation) {
+                    this.pendingGameState = GAME_STATES.OPENING_ANIMATION;
+                } else if (this.loginSystem && this.loginSystem.isUserAuthenticated()) {
+                    this.pendingGameState = GAME_STATES.HOME;
+                } else {
+                    this.pendingGameState = GAME_STATES.HOME;
+                }
+                return;
+            }
+            
+            // Check if opening animation should be shown
+            const shouldShowOpeningAnimation = this.getShouldShowOpeningAnimation();
+            
+            if (shouldShowOpeningAnimation) {
+                console.log('🎮 Showing opening animation');
+                this.setGameState(GAME_STATES.OPENING_ANIMATION);
+            } else if (this.loginSystem && this.loginSystem.isUserAuthenticated()) {
+                console.log('🔑 Skipping opening animation, user is logged in, going to home screen');
+                this.setGameState(GAME_STATES.HOME);
+            } else {
+                console.log('🔑 Skipping opening animation, going to home screen');
+                this.setGameState(GAME_STATES.HOME);
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not determine navigation state:', error);
+            this.setGameState(GAME_STATES.HOME);
+        }
+    }
+    
+    /**
+     * Utility function to wrap text to fit within specified width
+     * @param {CanvasRenderingContext2D} ctx - Canvas rendering context
+     * @param {string} text - Text to wrap
+     * @param {number} maxWidth - Maximum width in pixels
+     * @param {number} lineHeight - Height between lines (optional)
+     * @return {Array} Array of text lines
+     */
+    static wrapText(ctx, text, maxWidth, lineHeight = 16) {
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+        
+        for (let i = 0; i < words.length; i++) {
+            const testLine = currentLine + (currentLine ? ' ' : '') + words[i];
+            const metrics = ctx.measureText(testLine);
+            
+            if (metrics.width > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = words[i];
+            } else {
+                currentLine = testLine;
+            }
+        }
+        
+        if (currentLine) {
+            lines.push(currentLine);
+        }
+        
+        return lines;
+    }
+    
+    /**
+     * Draw wrapped text at specified position
+     * @param {CanvasRenderingContext2D} ctx - Canvas rendering context
+     * @param {string} text - Text to draw
+     * @param {number} x - X position
+     * @param {number} y - Y position (top of first line)
+     * @param {number} maxWidth - Maximum width in pixels
+     * @param {number} lineHeight - Height between lines
+     */
+    static drawWrappedText(ctx, text, x, y, maxWidth, lineHeight = 16) {
+        const lines = Game.wrapText(ctx, text, maxWidth, lineHeight);
+        
+        lines.forEach((line, index) => {
+            ctx.fillText(line, x, y + (index * lineHeight));
+        });
+        
+        return lines.length * lineHeight; // Return total height used
+    }
+
+    /**
+     * Handle achievements scrolling with proper bounds checking
+     */
+    handleAchievementsScroll(delta) {
+        if (this.gameState !== GAME_STATES.ACHIEVEMENTS || !this.achievementSystem) {
+            return;
+        }
+
+        // Get current filter from achievement system
+        const currentFilter = this.achievementSystem.currentCategoryFilter || 'all';
+        
+        // Calculate max scroll offset based on current filter
+        const maxScrollOffset = this.achievementSystem.getMaxScrollOffset(
+            this.canvas.width, 
+            this.canvas.height, 
+            currentFilter
+        );
+
+        // Update scroll offset with bounds checking
+        this.achievementsScrollOffset += delta;
+        this.achievementsScrollOffset = Math.max(0, Math.min(this.achievementsScrollOffset, maxScrollOffset));
+    }
+
+    /**
+     * Handle clicks in achievements screen
+     */
+    handleAchievementsClick(x, y) {
+        if (!this.achievementsHitAreas || !this.achievementSystem) return;
+        
+        // Check if any achievements button was clicked
+        for (let i = 0; i < this.achievementsHitAreas.length; i++) {
+            const area = this.achievementsHitAreas[i];
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
+                
+                // Play menu click sound
+                if (this.audioSystem) {
+                    this.audioSystem.onMenuClick();
+                }
+                
+                // Handle different button actions
+                if (area.action === 'back') {
+                    this.navigateToState(this.previousGameState || GAME_STATES.OPTIONS);
+                } else if (area.action === 'filter') {
+                    // Set category filter and reset scroll
+                    this.achievementSystem.currentCategoryFilter = area.category;
+                    this.achievementsScrollOffset = 0;
+                } else if (area.action === 'achievement') {
+                    // Could show achievement details or play a sound
+                    if (this.audioSystem) {
+                        this.audioSystem.onMenuClick();
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * Handle mouse down events for slider dragging
+     */
+    handleMouseDown(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        // Only handle slider interactions in settings state
+        if (this.gameState === GAME_STATES.SETTINGS) {
+            if (this.gameDialogs) {
+                this.gameDialogs.handleMouseDown(x, y);
+            }
+        }
+    }    /**
+     * Handle mouse up events for slider dragging
+     */
+    handleMouseUp(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+          // Only handle slider interactions in settings state
+        if (this.gameState === GAME_STATES.SETTINGS) {
+            if (this.gameDialogs) {
+                this.gameDialogs.handleMouseUp(x, y);
+            }
+        }
+    }
+
+    /**
+     * Handle shop toggle functionality
+     */
+    handleShopToggle() {
+        if (this.gameState === GAME_STATES.SHOP) {
+            // Exit shop, return to previous state
+            this.navigateToState(this.previousGameState || GAME_STATES.HOME);
+        } else {
+            // Enter shop from current state
+            this.previousGameState = this.gameState;
+            this.navigateToState(GAME_STATES.SHOP);
+            this.shopScrollOffset = 0; // Reset scroll when entering shop
+        }
+    }
+
+    /**
+     * Handle shop scrolling with bounds checking
+     */
+    handleShopScroll(delta) {
+        if (this.gameState !== GAME_STATES.SHOP || !this.shopSystem) {
+            return;
+        }
+
+        // Update scroll offset with bounds checking
+        const maxScrollOffset = this.getShopMaxScrollOffset();
+        this.shopScrollOffset += delta * 30; // Scale factor for smoother scrolling
+        this.shopScrollOffset = Math.max(0, Math.min(this.shopScrollOffset, maxScrollOffset));
+    }
+
+    /**
+     * Handle mouse wheel events for shop and settings scrolling
+     */
+    handleMouseWheel(event) {
+        // Prevent default scrolling behavior
+        event.preventDefault();
+        
+        // Handle wheel events based on current state
+        if (this.gameState === GAME_STATES.SHOP) {
+            // Get wheel direction (positive = scroll down, negative = scroll up)
+            const delta = Math.sign(event.deltaY);
+            this.handleShopScroll(delta);
+        } else if (this.gameState === GAME_STATES.SETTINGS && this.settingsSystem) {
+            // Handle settings scrolling
+            this.settingsSystem.handleWheel(event.deltaY);
+        }
+    }
+
+    /**
+     * Calculate maximum scroll offset for shop based on content
+     */
+    getShopMaxScrollOffset() {
+        if (!this.shopSystem || !this.canvas) {
+            return 0;
+        }
+
+        // Basic calculation - adjust based on your shop UI layout
+        const upgrades = Object.keys(this.shopSystem.upgradeData);
+        const itemHeight = 80; // Approximate height per shop item
+        const visibleHeight = this.canvas.height - 200; // Account for UI margins
+        const totalContentHeight = upgrades.length * itemHeight;
+        
+        return Math.max(0, totalContentHeight - visibleHeight);
+    }
+
+    /**
+     * Start a new game with the selected difficulty
+     */
+    startGame() {
+        try {
+            console.log(`🎮 Starting new game with difficulty: ${this.selectedDifficulty}`);
+            console.log('🔍 DEBUG: startGame() called');
+            console.log('🔍 DEBUG: PowerUpSystem exists?', !!this.powerUpSystem);
+            console.log('🔍 DEBUG: window.debugMode:', window.debugMode);
+            
+            // Initialize game world
+            this.world = new WorldGenerator(this);
+            
+            // Initialize player at far left starting position (no empty space behind)
+            this.player = new Player(32, 200, this); // Start at x=32 (one tile from left edge)
+            
+            // Reapply all owned shop upgrades to the new player instance
+            if (this.shopSystem) {
+                const ownedUpgrades = this.shopSystem.getOwnedUpgrades();
+                for (const upgradeId of ownedUpgrades) {
+                    const upgrade = this.shopSystem.upgradeData[upgradeId];
+                    if (upgrade) {
+                        this.shopSystem.applyUpgradeEffect(upgradeId, upgrade);
+                    }
+                }
+                console.log(`🔄 Reapplied ${ownedUpgrades.length} shop upgrades to new player`);
+            }
+            
+            // Initialize physics engine with world
+            this.physics = new PhysicsEngine(this.world);
+            
+            // Reset game state
+            this.score = 0;
+            this.bonusScore = 0;
+            this.startTime = Date.now();
+            this.gameOverReason = null;
+            this.gameOverMessage = null;
+            this.gameOverStartTime = null;
+            this.isNewHighScore = false;
+            
+            // Reset speed penalty system
+            this.speedPenalty = {
+                enabled: true,
+                segmentDistance: 1000,
+                timeLimit: 15000,
+                penalty: 100,
+                lastCheckpoint: 0,
+                segmentStartTime: 0,
+                totalPenalties: 0,
+                totalPenaltyPoints: 0
+            };
+            
+            // Set game state to playing
+            this.gameState = GAME_STATES.PLAYING;
+            this.isPaused = false;
+            
+            // Reset camera
+            this.camera = { x: 0, y: 0 };
+            
+            // Generate initial world chunks to ensure spawn area is ready
+            this.world.generateChunksForCamera(this.camera);
+            
+            // 🧪 TESTING: Add guaranteed quantum dash powerup at spawn - ALWAYS!
+            console.log('🧪 Adding guaranteed quantum dash powerup for testing');
+            
+            // Get the quantum dash definition
+            const quantumDashDef = this.powerUpSystem.powerUpDefinitions['quantum-dash'];
+            console.log('🔍 DEBUG: quantumDashDef:', quantumDashDef);
+            
+            // Create quantum dash powerup right near spawn
+            const testPowerUp = {
+                id: 'test-quantum-dash-' + Date.now(),
+                x: this.player.x + 150, // Just ahead of player spawn
+                y: this.player.y - 30,   // Slightly above player
+                width: 32,
+                height: 32,
+                collected: false,
+                definition: quantumDashDef,
+                animationTime: 0,
+                pulsePhase: Math.random() * Math.PI * 2,
+                isTestPowerUp: true // Mark as test powerup
+            };
+            
+            console.log('🔍 DEBUG: Created test powerup:', testPowerUp);
+            console.log('🔍 DEBUG: Current spawned powerups count before:', this.powerUpSystem.spawnedPowerUps.length);
+            
+            // Add directly to PowerUpSystem's spawned powerups array
+            this.powerUpSystem.spawnedPowerUps.push(testPowerUp);
+            
+            console.log('✨ Test quantum dash powerup added to spawned powerups at:', testPowerUp.x, testPowerUp.y);
+            console.log('🚀 Spawned powerups count after:', this.powerUpSystem.spawnedPowerUps.length);
+            
+            // Play start game sound
+            if (this.audioSystem) {
+                this.audioSystem.onMenuClick(); // Use existing menu click sound for game start
+            }
+            
+            console.log('✅ Game started successfully');
+            
+        } catch (error) {
+            console.error('❌ Failed to start game:', error);
+            // Fallback to home screen if game start fails
+            this.gameState = GAME_STATES.HOME;
+        }
+    }
+    
+    /**
+     * Restart the current game
+     */
+    restart() {
+        this.startGame();
+    }
+
+    /**
+     * Start a new game (alias for restart)
+     */
+    startNewGame() {
+        this.restart();
+    }
+
+    /**
+     * Toggle game pause state
+     */
+    togglePause() {
+        if (this.gameState !== GAME_STATES.PLAYING && this.gameState !== GAME_STATES.PAUSED) {
+            return; // Can only pause/unpause during gameplay
+        }
+        
+        this.isPaused = !this.isPaused;
+        
+        if (this.isPaused) {
+            this.gameState = GAME_STATES.PAUSED;
+            this.pauseStartTime = Date.now();
+            console.log('⏸️ Game paused');
+        } else {
+            this.gameState = GAME_STATES.PLAYING;
+            console.log('▶️ Game resumed');
+        }
+        
+        // Play pause/resume sound
         if (this.audioSystem) {
-            this.audioSystem.onMenuClick();
+            if (this.isPaused) {
+                this.audioSystem.onPause();
+            } else {
+                this.audioSystem.onResume();
+            }
+        }
+    }
+    
+    /**
+     * Handle game over - set game state and reason
+     */
+    gameOver(reason) {
+        console.log(`🎮 Game Over: ${reason}`);
+        
+        // Check if death animation should be skipped
+        const shouldSkipDeathAnimation = this.getShouldSkipDeathAnimation();
+        console.log('💨 Should skip death animation:', shouldSkipDeathAnimation);
+        
+        if (shouldSkipDeathAnimation) {
+            console.log('💨 BYPASSING DEATH MENU - INSTANT RESTART');
+            console.log('💨 Current game state before:', this.gameState);
+            
+            // Completely bypass death menu - set directly to playing
+            this.gameState = GAME_STATES.PLAYING;
+            console.log('💨 New game state set to:', this.gameState);
+            
+            // Reset everything for new game
+            this.score = 0;
+            this.isPaused = false;
+            this.gameOverReason = null;
+            this.gameOverMessage = null;
+            this.gameOverStartTime = null;
+            this.isNewHighScore = false;
+            
+            // Reset player completely
+            if (this.player) {
+                console.log('💨 Resetting player position and health');
+                this.player.x = 32; // Same as startGame()
+                this.player.y = 200; // Same as startGame()
+                this.player.velocityX = 0;
+                this.player.velocityY = 0;
+                this.player.health = this.player.maxHealth;
+                this.player.isJumping = false;
+                this.player.onGround = false;
+                this.player.isDead = false; // Make sure player isn't marked as dead
+            }
+            
+            // Reset world
+            if (this.world) {
+                console.log('💨 Resetting world');
+                this.world.reset();
+            }
+            
+            console.log('💨 INSTANT RESTART COMPLETE');
+            return; // COMPLETELY EXIT - don't execute any death menu code
+        }
+        
+        // Set game over state
+        this.gameState = GAME_STATES.GAME_OVER;
+        this.gameOverReason = reason;
+        this.gameOverStartTime = Date.now();
+        
+        // Stop the game
+        this.isPaused = false; // Make sure we're not paused
+        
+        // Check for high score
+        if (this.score > this.bestScore) {
+            this.bestScore = this.score;
+            this.isNewHighScore = true;
+            
+            // Save new high score
+            if (this.saveSystem) {
+                this.saveSystem.saveHighScore(this.bestScore);
+            }
+        }
+        
+        // Play game over sound
+        if (this.audioSystem) {
+            this.audioSystem.onGameOver();
+        }
+        
+        // Save game data
+        if (this.saveSystem) {
+            this.saveSystem.saveGameData();
         }
     }
 
@@ -741,2337 +2929,211 @@ export class Game {
      * Handle clicks in leaderboard screen
      */
     handleLeaderboardClick(x, y) {
-        if (!this.tabHitAreas.length) return;
+        if (!this.tabHitAreas) return;
         
-        // Check if any tab was clicked
-        for (const tab of this.tabHitAreas) {
-            if (x >= tab.x && x <= tab.x + tab.width && 
-                y >= tab.y && y <= tab.y + tab.height) {
-                
-                // Play menu click sound
-                if (this.audioSystem) {
-                    this.audioSystem.onMenuClick();
-                }
-                  this.leaderboardSystem.selectTab(tab.difficulty);
-                break;
-            }
-        }
-    }    /**
-     * Handle clicks in game over screen
-     */
-    handleGameOverClick(x, y) {
-        // For now, any click during game over will restart the game
-        // This provides the basic functionality to make UI responsive again
-        
-        // Play menu click sound
-        if (this.audioSystem) {
-            this.audioSystem.onMenuClick();
-        }
-        
-        // Restart the game
-        this.restart();
-        
-        // CRITICAL FIX: Add a small delay to ensure focus is properly restored after click
-        setTimeout(() => {
-            this.ensureCanvasFocus();
-            console.log('🎮 Extra focus applied after click restart');
-        }, 100);
-    }/**
-     * Handle clicks in shop screen
-     */
-    handleShopClick(x, y) {
-        // Check if we have any shop hit areas to process
-        if (!this.shopHitAreas || !this.shopHitAreas.length) {
-            console.log(`⚠️ No shop hit areas available for clicking`);
-            return;
-        }
-        
-        // Get scroll offset for click position adjustment
-        const scrollOffset = this.shopScrollOffset || 0;        // Debugging: Log click attempt
-        console.log(`🖱️ Shop click at (${x}, ${y}), scroll offset: ${scrollOffset}`);
-        console.log(`📋 Available hit areas: ${this.shopHitAreas.length}`);
-        console.log(`🎯 Click position: original Y = ${y} (no adjustment needed - hit areas are screen-positioned)`);
-        
-        // Filter to problematic upgrades for focused debugging
-        const problematicUpgrades = this.shopHitAreas.filter(area => 
-            area.upgradeId === 'score-multiplier' || area.upgradeId === 'datapack-multiplier'
-        );
-        
-        if (problematicUpgrades.length > 0) {
-            console.log(`🎯 Found ${problematicUpgrades.length} problematic upgrades in hit areas:`, 
-                problematicUpgrades.map(area => ({ id: area.upgradeId, x: area.x, y: area.y, w: area.width, h: area.height }))
-            );
-        }// Check if any shop item was clicked
-        for (const hitArea of this.shopHitAreas) {
-            // Hit areas are already positioned in SCREEN coordinates (scroll-adjusted during drawing)
-            // So we should use the raw click position without further adjustment
-            const adjustedClickY = y; // Use raw click Y - no scroll adjustment needed
-            
-            // Collision detection
-            const isInX = x >= hitArea.x && x <= hitArea.x + hitArea.width;
-            const isInY = adjustedClickY >= hitArea.y && adjustedClickY <= hitArea.y + hitArea.height;            // Enhanced debugging for problematic upgrades
-            if (hitArea.upgradeId === 'score-multiplier' || hitArea.upgradeId === 'datapack-multiplier') {
-                console.log(`🔍 DETAILED CLICK CHECK for ${hitArea.upgradeId}:`, {
-                    hitArea: { x: hitArea.x, y: hitArea.y, w: hitArea.width, h: hitArea.height },
-                    rawClick: { x, y },
-                    clickPosition: { x, y: adjustedClickY }, // No scroll adjustment
-                    collision: { 
-                        x: isInX, 
-                        y: isInY,
-                        xRange: `${hitArea.x} <= ${x} <= ${hitArea.x + hitArea.width}`,
-                        yRange: `${hitArea.y} <= ${adjustedClickY} <= ${hitArea.y + hitArea.height}`
-                    },
-                    scrollOffset,
-                    match: isInX && isInY
-                });
-            }
-            
-            if (isInX && isInY) {
-                console.log(`🎯 HIT DETECTED! Processing ${hitArea.upgradeId}`);
-                
-                // Handle purchase action
-                if (hitArea.action === 'buy' && hitArea.upgradeId) {
-                    console.log(`💰 Attempting purchase of ${hitArea.upgradeId}...`);
-                    const success = this.shopSystem.buyUpgrade(hitArea.upgradeId);
-                    
-                    if (success) {
-                        // Play purchase sound
-                        if (this.audioSystem) {
-                            this.audioSystem.onMenuClick();
-                        }
-                        
-                        // Force shop to refresh hit areas by clearing them
-                        // This ensures the next render will show updated ownership status
-                        this.shopHitAreas = [];
-                        
-                        console.log(`✅ Shop purchase successful: ${hitArea.upgradeId}`);
-                        
-                    } else {
-                        // Play error sound for failed purchase
-                        if (this.audioSystem) {
-                            this.audioSystem.onDamage();
-                        }
-                        
-                        console.log(`❌ Shop purchase failed: ${hitArea.upgradeId}`);
-                    }
-                }
-                  break; // Stop checking other hit areas once we find a match
-            }
-        }
-        
-        console.log(`🔚 Shop click processing complete - no hits detected`);
-    }
-
-    /**
-     * Handle clicks in reset confirmation dialog
-     */
-    handleResetConfirmClick(x, y) {
-        // Check if we have reset dialog hit areas to process
-        if (!this.resetDialogHitAreas || !this.resetDialogHitAreas.length) return;
-        
-        // Check if any reset dialog button was clicked
-        for (const hitArea of this.resetDialogHitAreas) {
-            if (x >= hitArea.x && x <= hitArea.x + hitArea.width && 
-                y >= hitArea.y && y <= hitArea.y + hitArea.height) {
+        // Check if any difficulty tab was clicked
+        for (let i = 0; i < this.tabHitAreas.length; i++) {
+            const area = this.tabHitAreas[i];
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
                 
                 // Play menu click sound
                 if (this.audioSystem) {
                     this.audioSystem.onMenuClick();
                 }
                 
-                // Handle button actions
-                if (hitArea.action === 'cancel') {
-                    // Close the reset dialog and return to previous state
-                    this.gameState = this.previousGameState || GAME_STATES.DIFFICULTY_SELECT;                } else if (hitArea.action === 'confirm') {
-                    // Perform the reset operation
-                    this.performResetSaveData();
+                // Switch to the selected difficulty tab
+                if (this.leaderboardSystem) {
+                    this.leaderboardSystem.selectedDifficulty = area.difficulty;
                 }
                 
-                break; // Stop checking other hit areas once we find a match
+                return;
             }
         }
     }
 
     /**
-     * Perform the actual reset of all save data
+     * Handle window gaining focus
      */
-    performResetSaveData() {
-        try {
-            // Clear all localStorage keys related to the game
-            const keysToRemove = [
-                'coderunner_save_data',
-                'coderunner_best_scores',
-                'coderunner_owned_upgrades',
-                'coderunner_audio_settings',
-                'coderunner_leaderboards',
-                'coderunner_player_name',
-                'coderunner_uploads',
-                'coderunner_player_entries',
-                'coderunner_moderation',
-                'coderunner_general_settings',
-                'coderunner_no_fake_data'
-            ];
-            
-            keysToRemove.forEach(key => {
-                try {
-                    localStorage.removeItem(key);
-                } catch (error) {
-                    console.warn(`Failed to remove ${key}:`, error);
-                }
-            });
-            
-            // Reset all game systems to their initial state
-            this.resetGameSystems();
-            
-            // Show success message
-            if (this.popupSystem) {
-                this.popupSystem.showConfirmationPopup(
-                    "Reset Complete",
-                    "All game data has been successfully reset. The page will reload to apply changes.",
-                    () => {
-                        // Reload the page to ensure clean state
-                        window.location.reload();
-                    }
-                );
-            } else {
-                // Fallback if popup system isn't available
-                alert("All game data has been reset successfully. The page will reload.");
-                window.location.reload();
-            }
-            
-        } catch (error) {
-            console.error('Error during reset:', error);
-            
-            // Show error message
-            if (this.popupSystem) {
-                this.popupSystem.showErrorPopup(
-                    "Reset Error",
-                    "An error occurred while resetting data. Please try again or refresh the page manually.",
-                    () => {
-                        this.popupSystem.closePopup();
-                        // Return to difficulty selection
-                        this.gameState = GAME_STATES.DIFFICULTY_SELECT;
-                    }
-                );
-            } else {
-                alert("An error occurred during reset. Please refresh the page manually.");
-                this.gameState = GAME_STATES.DIFFICULTY_SELECT;
-            }
+    handleWindowFocus() {
+        console.log('🎮 Window gained focus');
+        
+        // Resume audio if mute when unfocused is enabled
+        if (this.audioSystem && this.audioSystem.muteWhenUnfocused && this.audioSystem.wasMutedByFocus) {
+            this.audioSystem.setMuted(false);
+            this.audioSystem.wasMutedByFocus = false;
+            console.log('🎮 Audio resumed due to window focus');
+        }
+        
+        // Resume game if pause on focus loss is enabled and game was auto-paused
+        if (this.pauseOnFocusLoss && this.wasAutoPaused && this.gameState === GAME_STATES.PAUSED) {
+            this.togglePause();
+            this.wasAutoPaused = false;
+            console.log('🎮 Game resumed due to window focus');
         }
     }
 
     /**
-     * Reset all game systems to their initial state
+     * Handle window losing focus
      */
-    resetGameSystems() {
-        // Reset upgrade system
-        if (this.upgradeSystem) {
-            this.upgradeSystem.dataPackets = 0;
+    handleWindowBlur() {
+        console.log('🎮 Window lost focus');
+        
+        // Mute audio if mute when unfocused is enabled
+        if (this.audioSystem && this.audioSystem.muteWhenUnfocused && !this.audioSystem.isMuted) {
+            this.audioSystem.setMuted(true);
+            this.audioSystem.wasMutedByFocus = true;
+            console.log('🎮 Audio muted due to window blur');
         }
         
-        // Reset shop system
-        if (this.shopSystem && this.shopSystem.reset) {
-            this.shopSystem.reset();
+        // Pause game if pause on focus loss is enabled and game is playing
+        if (this.pauseOnFocusLoss && this.gameState === GAME_STATES.PLAYING) {
+            this.togglePause();
+            this.wasAutoPaused = true;
+            console.log('🎮 Game auto-paused due to window blur');
         }
-        
-        // Reset leaderboard system
-        if (this.leaderboardSystem) {
-            // Clear local data
-            this.leaderboardSystem.savedPlayerName = '';
-            this.leaderboardSystem.playerName = '';
-            this.leaderboardSystem.uploadedDifficulties = new Set();
-            this.leaderboardSystem.playerEntries = new Map();
-            
-            // Reset leaderboards
-            Object.keys(this.leaderboardSystem.leaderboards || {}).forEach(difficulty => {
-                this.leaderboardSystem.leaderboards[difficulty] = [];
-            });
-        }
-        
-        // Reset audio system to defaults
-        if (this.audioSystem) {
-            this.audioSystem.masterVolume = 0.7;
-            this.audioSystem.sfxVolume = 0.8;
-            this.audioSystem.musicVolume = 0.5;
-            this.audioSystem.isMuted = false;
-            this.audioSystem.musicMode = 'chill';
-        }
-          // Reset best scores
-        this.bestScores = {
-            easy: 0,
-            normal: 0,
-            hard: 0,
-            nightmare: 0,
-            impossible: 0
-        };
-        
-        // Reset autosave tracking
-        this.lastSaveData = null;
-        this.dataFingerprint = null;
-        this.savesPrevented = 0;
-        
-        // Reset to difficulty selection screen
-        this.gameState = GAME_STATES.DIFFICULTY_SELECT;
     }
 
     /**
-     * Handle shop scrolling
+     * Trigger screen shake effect
      */
-    handleShopScroll(direction) {
-        if (this.gameState !== GAME_STATES.SHOP) {
+    triggerScreenShake(intensity = 1.0, duration = 300) {
+        if (!this.screenShake) return;
+        
+        this.currentShake.intensity = Math.max(this.currentShake.intensity, intensity * this.shakeIntensity);
+        this.currentShake.duration = Math.max(this.currentShake.duration, duration);
+        
+        console.log(`🎮 Screen shake triggered: intensity=${this.currentShake.intensity}, duration=${this.currentShake.duration}ms`);
+    }
+
+    /**
+     * Update screen shake effect
+     */
+    updateScreenShake(deltaTime) {
+        if (this.currentShake.duration <= 0) {
+            this.currentShake.x = 0;
+            this.currentShake.y = 0;
+            this.currentShake.intensity = 0;
             return;
         }
-
-        // Initialize scroll offset if not set
-        if (this.shopScrollOffset === undefined) {
-            this.shopScrollOffset = 0;
-        }        // Calculate scroll amount (direction: -1 for up, 1 for down)
-        const scrollAmount = 120; // Increased for faster scrolling, especially downward
-        this.shopScrollOffset += direction * scrollAmount;        // Clamp scroll offset to valid range
-        const maxScroll = this.shopMaxScroll || 0;
-        this.shopScrollOffset = Math.max(0, Math.min(this.shopScrollOffset, maxScroll));
         
-        // Temporary debug loggingconsole
-        ;
-    }
-
-    /**
-     * Handle shop toggle
-     */
-    handleShopToggle() {
+        // Reduce shake duration
+        this.currentShake.duration -= deltaTime;
         
+        // Calculate shake offset
+        const progress = Math.max(0, this.currentShake.duration / 300); // Normalize to 0-1
+        const currentIntensity = this.currentShake.intensity * progress;
         
-        if (this.gameState === GAME_STATES.SHOP) {
-            // Return to previous state
-            
-            this.gameState = this.previousGameState || GAME_STATES.DIFFICULTY_SELECT;
-        } else {
-            // Open shop and remember previous state
-            
-            this.previousGameState = this.gameState;
-            this.gameState = GAME_STATES.SHOP;
-            
-            // Initialize shop scroll offset
-            this.shopScrollOffset = 0;
+        // Generate random shake offset
+        this.currentShake.x = (Math.random() - 0.5) * currentIntensity * 20;
+        this.currentShake.y = (Math.random() - 0.5) * currentIntensity * 20;
+        
+        // Fade out shake intensity
+        if (this.currentShake.duration <= 0) {
+            this.currentShake.intensity = 0;
         }
     }
 
     /**
-     * Toggle shop - alias for handleShopToggle for HTML interface compatibility
+     * Get camera position with screen shake applied
      */
-    toggleShop() {
-        return this.handleShopToggle();
-    }
-
-    /**
-     * Toggle pause state between playing and paused
-     */
-    togglePause() {
-        // Only allow pause/unpause during PLAYING or PAUSED states
-        if (this.gameState === GAME_STATES.PLAYING) {
-            // Pause the game
-            this.gameState = GAME_STATES.PAUSED;
-            this.isPaused = true;
-            
-            // Play menu sound if available
-            if (this.audioSystem) {
-                this.audioSystem.onMenuOpen();
-            }
-        } else if (this.gameState === GAME_STATES.PAUSED) {
-            // Resume the game
-            this.gameState = GAME_STATES.PLAYING;
-            this.isPaused = false;
-            
-            // Play menu sound if available
-            if (this.audioSystem) {
-                this.audioSystem.onMenuClose();
-            }
-        }
-        // If called from other states, do nothing
-    }    /**
-     * Main game loop - handles updates and rendering
-     */    gameLoop(timestamp) {
-        // Request the next frame
-        requestAnimationFrame((ts) => this.gameLoop(ts));
-        
-        // Initialize performance tracking if needed
-        if (!this.performanceMetrics) {
-            this.performanceMetrics = {
-                frameTime: 0,
-                updateTime: 0,
-                renderTime: 0,
-                fpsHistory: []
-            };
-        }
-        
-        // Calculate delta time
-        if (!this.lastFrameTime) {
-            this.lastFrameTime = timestamp;
-        }
-        const deltaTime = timestamp - this.lastFrameTime;
-        this.lastFrameTime = timestamp;
-        
-        // Update FPS counter and performance metrics
-        this.updateFPS(deltaTime);
-        
-        // Measure update time
-        const updateStart = performance.now();
-        this.update(deltaTime);
-        this.lastUpdateTime = performance.now() - updateStart;
-        
-        // Measure render time
-        const renderStart = performance.now();
-        this.render();
-        this.lastRenderTime = performance.now() - renderStart;
-    }/**
-     * Update FPS counter
-     */
-    updateFPS(deltaTime) {
-        if (deltaTime > 0) {
-            this.fps = Math.round(1000 / deltaTime);
-        }
-        
-        // Update performance metrics with throttling
-        this.updatePerformanceMetrics(deltaTime);
-    }    /**
-     * Update performance metrics with throttling to reduce overhead
-     */    updatePerformanceMetrics(deltaTime) {
-        const now = performance.now();
-        
-        // Initialize metrics object if it doesn't exist
-        if (!this.performanceMetrics) {
-            this.performanceMetrics = {
-                frameTime: 0,
-                updateTime: 0,
-                renderTime: 0,
-                fpsHistory: []
-            };
-        }
-        
-        // Throttle metrics updates to every 100ms (10 times per second) to reduce overhead
-        if (!this.lastMetricsUpdate || now - this.lastMetricsUpdate >= 100) {
-            this.performanceMetrics.frameTime = deltaTime;
-            this.performanceMetrics.updateTime = this.lastUpdateTime || 0;
-            this.performanceMetrics.renderTime = this.lastRenderTime || 0;
-            
-            // Maintain FPS history with sampling (only keep last 60 values)
-            this.performanceMetrics.fpsHistory.push(this.fps);
-            if (this.performanceMetrics.fpsHistory.length > 60) {
-                this.performanceMetrics.fpsHistory.shift();
-            }
-            
-            this.lastMetricsUpdate = now;
-            
-            // Apply adaptive optimizations every 2 seconds
-            if (now - (this.lastAdaptiveOptimization || 0) > 2000) {
-                this.applyAdaptivePerformanceOptimizations();
-                this.lastAdaptiveOptimization = now;
-            }
-        }
-    }/**
-     * Get performance metrics with caching and throttling
-     */
-    getPerformanceMetrics() {
-        const now = performance.now();
-        
-        // Cache metrics for 100ms to avoid expensive calculations on every call (increased from 50ms)
-        if (this.cachedMetrics && this.lastMetricsCacheTime && 
-            now - this.lastMetricsCacheTime < 100) {
-            return this.cachedMetrics;
-        }
-        
-        // Calculate average FPS from history (sampled data)
-        const fpsHistory = this.performanceMetrics.fpsHistory;
-        const avgFps = fpsHistory.length > 0 ? 
-            Math.round(fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length) : this.fps;
-        
-        // Create cached metrics object
-        this.cachedMetrics = {
-            fps: this.fps,
-            avgFps: avgFps,
-            frameTime: this.performanceMetrics.frameTime,
-            updateTime: this.performanceMetrics.updateTime,
-            renderTime: this.performanceMetrics.renderTime,
-            resolution: `${this.canvas.width}x${this.canvas.height}`,
-            entities: this.world?.entities?.length || 0,
-            chunks: this.world?.chunks?.size || 0,
-            memory: this.getMemoryUsageEstimate(),
-            poolStats: this.getPoolStats(),
-            renderStats: this.renderer?.getRenderStats?.() || {}
-        };
-        
-        this.lastMetricsCacheTime = now;
-        return this.cachedMetrics;
-    }/**
-     * Update game logic
-     */
-    update(deltaTime) {
-        // Handle audio/video prompt
-        if (this.gameState === GAME_STATES.AUDIO_VIDEO_PROMPT) {
-            if (this.audioVideoPrompt) {
-                this.audioVideoPrompt.update(deltaTime);
-            }
-            return;
-        }
-
-        // Handle video intro
-        if (this.gameState === GAME_STATES.VIDEO_INTRO) {
-            // Video intro system removed - transition directly to appropriate state
-            if (this.openingAnimation && this.openingAnimation.shouldPlay()) {
-                this.gameState = GAME_STATES.OPENING_ANIMATION;
-                this.openingAnimation.start();
-            } else {
-                this.gameState = GAME_STATES.HOME;
-            }
-            return;
-        }
-
-        // Handle opening animation
-        if (this.gameState === GAME_STATES.OPENING_ANIMATION) {
-            if (this.openingAnimation) {
-                this.openingAnimation.update(deltaTime);
-                
-                // Check if animation is complete
-                if (!this.openingAnimation.isActive) {
-                    // Don't override the state if it was already changed by onComplete()
-                    if (this.gameState === GAME_STATES.OPENING_ANIMATION) {
-                        this.gameState = GAME_STATES.HOME;
-                    }
-                }
-            }
-            return;
-        }
-
-        // Handle login prompt
-        if (this.gameState === GAME_STATES.LOGIN_PROMPT) {
-            if (this.loginSystem) {
-                this.loginSystem.update(deltaTime);
-            }
-            return;
-        }
-
-        // Handle user profile system
-        if (this.gameState === GAME_STATES.PROFILE) {
-            // TODO: Re-enable when UserProfileSystem is implemented
-            // if (this.userProfileSystem) {
-            //     this.userProfileSystem.update(deltaTime);
-            // }
-            return;
-        }        // Only update core systems if game is playing
-        if (this.gameState === GAME_STATES.PLAYING) {
-            // Batch system updates for better performance
-            this.updateCoreGameSystems(deltaTime);
-        }        // Update visual effects (milestone and speed penalty effects)
-        // These run regardless of game state for smooth transitions
-        this.updateVisualEffects(deltaTime);
-        
-        // Update popup system (should work in any game state)
-        if (this.popupSystem) {
-            this.popupSystem.update();
-        }
-        
-        // Note: TileRenderer is updated by WorldGenerator.update(), not here
-    }    /**
-     * Batch update core game systems for better performance
-     */    updateCoreGameSystems(deltaTime) {        // Update systems in order of dependency
-        if (this.player) {
-            try {
-                // DEBUG: Log that player update is being called
-                if (Date.now() % 1000 < 50) { // Log once per second
-                    console.log('🎮 Player update called, gameState:', this.gameState, 'inputKeys:', this.inputManager.getKeys());
-                }
-                this.player.update(deltaTime, this.inputManager.getKeys(), this.world, this.physics);
-            } catch (error) {
-                console.error('🚨 Error in player.update():', error);
-                console.error('🚨 Error stack:', error.stack);
-            }// Update score based on distance traveled plus collected bonuses
-            if (this.player.startX !== undefined) {
-                const distanceTraveled = Math.max(0, this.player.x - this.player.startX);
-                
-                // Calculate base distance score - if user has score multiplier upgrade, give 2 points per meter instead of 1
-                let baseDistanceScore = Math.floor(distanceTraveled / 10); // Default: 1 point per 10 pixels (1 point per meter)
-                
-                // Check if player has score multiplier upgrade - if so, double the distance score
-                if (this.player && this.player.shopUpgrades.scoreMultiplier > 1.0) {
-                    baseDistanceScore = Math.floor(distanceTraveled / 5); // 2 points per 10 pixels (2 points per meter)
-                }
-                
-                // Add bonus score from data packets and other sources
-                if (this.bonusScore === undefined) {
-                    this.bonusScore = 0;
-                }
-                
-                // Calculate total score (no additional multiplier needed since distance scoring is already enhanced)
-                const totalScore = Math.max(0, baseDistanceScore + this.bonusScore - this.speedPenalty.totalPenaltyPoints);
-                
-                this.score = totalScore;
-                
-                // Speed penalty system - check if player is taking too long
-                this.checkSpeedPenalty(distanceTraveled);
-            }
-        }
-
-        if (this.world) {
-            this.world.update(deltaTime, this.player);
-        }
-
-        // Update camera to follow player
-        if (this.camera && this.player) {
-            // Position player on the left side of screen (not centered) to avoid void behind player
-            this.camera.x = this.player.x - 50;
-            this.camera.y = this.player.y - this.canvas.height / 2;
-        }
-        
-        // Check for distance milestones and award bonus data packets
-        this.checkDistanceMilestones();
-        
-        // Check for game over conditions
-        if (this.player && this.player.health <= 0 && this.gameState !== GAME_STATES.GAME_OVER) {
-            this.gameOver();
-        }
-    }
-
-    /**
-     * Update visual effects with performance optimizations
-     */
-    updateVisualEffects(deltaTime) {
-        // Update milestone visual effects
-        this.updateMilestoneEffects(deltaTime);
-        
-        // Update speed penalty visual effects
-        this.updateSpeedPenaltyEffects(deltaTime);
-    }
-    /**
-     * Autosave System Methods
-     */    /**
-     * Save current game data to localStorage
-     */    saveGameData() {        try {            // Prepare comprehensive save data
-            const saveData = {
-                // Core game data
-                dataPackets: this.upgradeSystem.getDataPackets(),
-                bestScores: this.bestScores,
-                
-                // Shop upgrades
-                ownedUpgrades: this.shopSystem ? this.shopSystem.getOwnedUpgrades() : [],
-                
-                // Profile data
-                profileData: this.getProfileData(),
-                
-                // Audio settings
-                audioSettings: this.getAudioSettings(),
-                
-                // Leaderboard preferences
-                leaderboardData: this.getLeaderboardData(),
-                
-                // Metadata
-                timestamp: Date.now(),
-                version: "1.4.0" // For future compatibility
-            };
-
-            // Create fingerprint for change detection (excluding timestamp)
-            const dataForFingerprint = { ...saveData };
-            delete dataForFingerprint.timestamp;
-            const newFingerprint = this.createDataFingerprint(dataForFingerprint);
-              // Check if data actually changed since last save
-            if (this.dataFingerprint === newFingerprint && this.lastSaveData) {
-                this.savesPrevented++;
-                // Debug logging for datapackets
-                if (window.debugMode) {
-                    console.log(`Autosave skipped - no changes detected. Current datapackets: ${saveData.dataPackets}, Last saved: ${this.lastSaveData.dataPackets}`);
-                }
-                return true; // Return success without saving
-            }
-
-            this.autosaveStatus = 'saving';
-            this.showAutosaveIndicator = true;
-
-            // Debug logging for successful saves
-            if (window.debugMode) {
-                console.log(`💾 Saving game data - datapackets: ${saveData.dataPackets}, fingerprint changed: ${this.dataFingerprint} -> ${newFingerprint}`);
-            }
-
-            // Use CloudSaveSystem instead of direct localStorage
-            this.cloudSaveSystem.saveGameData(saveData).then((success) => {
-                if (success) {
-                    // Update optimization tracking
-                    this.lastSaveData = saveData;
-                    this.dataFingerprint = newFingerprint;
-                    this.autosaveStatus = 'saved';
-                    this.lastSaveTime = Date.now();
-                    
-                    // Reset prevented saves counter occasionally
-                    if (this.savesPrevented > 100) {
-                        this.savesPrevented = 0;
-                    }
-                } else {
-                    this.autosaveStatus = 'error';
-                }
-                
-                // Hide indicator after 2-3 seconds
-                setTimeout(() => {
-                    this.showAutosaveIndicator = false;
-                }, success ? 2000 : 3000);
-            }).catch((error) => {
-                console.error('❌ Error in cloud save:', error);
-                this.autosaveStatus = 'error';
-                setTimeout(() => {
-                    this.showAutosaveIndicator = false;
-                }, 3000);
-            });
-
-            return true;
-
-        } catch (error) {
-            console.error('❌ Error preparing save data:', error);
-            this.autosaveStatus = 'error';
-            
-            // Hide error indicator after 3 seconds
-            setTimeout(() => {
-                this.showAutosaveIndicator = false;
-            }, 3000);
-            
-            return false;
-        }
-    }/**
-     * Create a quick fingerprint/hash of save data for change detection
-     */
-    createDataFingerprint(data) {
-        // More robust hash function for change detection
-        try {
-            const str = JSON.stringify(data, Object.keys(data).sort());
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                const char = str.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash = hash & hash; // Convert to 32-bit integer
-            }
-            return hash + str.length;
-        } catch (e) {
-            // Fallback to simple method
-            return JSON.stringify(data).length + Object.keys(data).length;
-        }
-    }    /**
-     * Get profile data for save system
-     */    getProfileData() {
-        // Get ProfileManager data for character and profile settings
-        let profileManagerData = {};
-        if (window.profileManager && window.profileManager.profileData) {
-            profileManagerData = {
-                name: window.profileManager.profileData.name || '',
-                selectedSprite: window.profileManager.profileData.selectedSprite || 'original',
-                bestScore: window.profileManager.profileData.bestScore || 0,
-                gamesPlayed: window.profileManager.profileData.gamesPlayed || 0,
-                totalPackets: window.profileManager.profileData.totalPackets || 0,
-                playTime: window.profileManager.profileData.playTime || 0
-            };
-        }
-        
-        // Get general settings for UI preferences
-        let generalSettingsData = {};
-        if (window.generalSettings) {
-            generalSettingsData = {
-                enableOpeningAnimation: window.generalSettings.isOpeningAnimationEnabled() || false,
-                graphicsQuality: window.generalSettings.getGraphicsQuality() || 'medium',
-                showFpsCounter: window.generalSettings.isShowFpsCounterEnabled() || false
-            };
-        }
-        
+    getCameraPosition() {
         return {
-            // Game settings (ensure no undefined values)
-            selectedDifficulty: this.selectedDifficulty || 'Easy',
-            difficultyIndex: typeof this.difficultyIndex === 'number' ? this.difficultyIndex : 0,
-            lastPlayTime: Date.now(),
-            totalPlaySessions: (this.profileData?.totalPlaySessions || 0) + 1,
-            
-            // User profile data (character, name, stats)
-            name: profileManagerData.name || '',
-            selectedSprite: profileManagerData.selectedSprite || 'original',
-            bestScore: profileManagerData.bestScore || 0,
-            gamesPlayed: profileManagerData.gamesPlayed || 0,
-            totalPackets: profileManagerData.totalPackets || 0,
-            playTime: profileManagerData.playTime || 0,
-            
-            // UI and gameplay settings
-            showPerformanceDisplay: this.showPerformanceDisplay || false,
-            showFpsCounter: this.showFpsCounter || false,
-            graphicsQuality: this.graphicsQuality || 'medium',
-            
-            // General settings from GeneralSettings
-            ...generalSettingsData
+            x: this.camera.x + this.currentShake.x,
+            y: this.camera.y + this.currentShake.y
         };
     }
 
     /**
-     * Get audio settings for save system
+     * Handle pause menu button clicks
      */
-    getAudioSettings() {
-        if (this.audioSystem) {
-            return this.audioSystem.getSettings ? this.audioSystem.getSettings() : {
-                masterVolume: 1.0,
-                musicVolume: 0.7,
-                sfxVolume: 0.8,
-                musicEnabled: true,
-                sfxEnabled: true
-            };
-        }
-        return {
-            masterVolume: 1.0,
-            musicVolume: 0.7,
-            sfxVolume: 0.8,
-            musicEnabled: true,
-            sfxEnabled: true
-        };
-    }
-
-    /**
-     * Get leaderboard data for save system
-     */
-    getLeaderboardData() {
-        if (this.leaderboardSystem) {
-            return this.leaderboardSystem.getLocalData ? this.leaderboardSystem.getLocalData() : {
-                playerName: this.leaderboardSystem.playerName || '',
-                localScores: []
-            };
-        }
-        return {
-            playerName: '',
-            localScores: []
-        };    }    /**
-     * Load profile data from save system
-     */    loadProfileData(profileData) {
-        try {
-            if (profileData && typeof profileData === 'object') {
-                console.log('🔄 Loading profile data from cloud/local save:', profileData);
-                
-                // Restore difficulty settings
-                if (profileData.selectedDifficulty && DIFFICULTY_LEVELS[profileData.selectedDifficulty]) {
-                    this.selectedDifficulty = profileData.selectedDifficulty;
-                }
-                
-                if (typeof profileData.difficultyIndex === 'number' && profileData.difficultyIndex >= 0) {
-                    this.difficultyIndex = Math.min(profileData.difficultyIndex, this.difficultyKeys.length - 1);
-                }
-                
-                // Restore session data
-                if (typeof profileData.totalPlaySessions === 'number') {
-                    this.profileData = this.profileData || {};
-                    this.profileData.totalPlaySessions = profileData.totalPlaySessions;
-                }
-                
-                // Restore ProfileManager data (character selection, name, stats)
-                if (window.profileManager && window.profileManager.profileData) {
-                    // Character selection
-                    if (profileData.selectedSprite && typeof profileData.selectedSprite === 'string') {
-                        window.profileManager.profileData.selectedSprite = profileData.selectedSprite;
-                        console.log(`🎨 Restored character selection: ${profileData.selectedSprite}`);
-                        
-                        // Update player sprite immediately if player exists
-                        if (this.player && this.player.changeSprite) {
-                            this.player.changeSprite(`./assets/${profileData.selectedSprite}`);
-                        }
-                        
-                        // Refresh the sprite selector in the UI
-                        if (window.profileManager.refreshSpriteSelector) {
-                            window.profileManager.refreshSpriteSelector();
-                        }
-                    }
-                    
-                    // Player name
-                    if (profileData.name && typeof profileData.name === 'string') {
-                        window.profileManager.profileData.name = profileData.name;
-                        console.log(`👤 Restored player name: ${profileData.name}`);
-                        
-                        // Update name input field if it exists
-                        const nameInput = document.getElementById('playerName');
-                        if (nameInput) {
-                            nameInput.value = profileData.name;
-                        }
-                    }
-                    
-                    // Player statistics
-                    if (typeof profileData.bestScore === 'number') {
-                        window.profileManager.profileData.bestScore = Math.max(
-                            window.profileManager.profileData.bestScore || 0,
-                            profileData.bestScore
-                        );
-                    }
-                    
-                    if (typeof profileData.gamesPlayed === 'number') {
-                        window.profileManager.profileData.gamesPlayed = profileData.gamesPlayed;
-                    }
-                    
-                    if (typeof profileData.totalPackets === 'number') {
-                        window.profileManager.profileData.totalPackets = profileData.totalPackets;
-                    }
-                    
-                    if (typeof profileData.playTime === 'number') {
-                        window.profileManager.profileData.playTime = profileData.playTime;
-                    }
-                    
-                    // Save updated profile to localStorage
-                    window.profileManager.saveProfile();
-                    
-                    // Update profile display in UI
-                    if (window.profileManager.updateProfileDisplay) {
-                        window.profileManager.updateProfileDisplay();
-                    }
-                }
-                  // Restore UI and gameplay settings
-                if (typeof profileData.showPerformanceDisplay === 'boolean') {
-                    this.showPerformanceDisplay = profileData.showPerformanceDisplay;
-                }
-                
-                if (typeof profileData.showFpsCounter === 'boolean') {
-                    this.showFpsCounter = profileData.showFpsCounter;
-                }
-                
-                if (typeof profileData.graphicsQuality === 'string') {
-                    this.graphicsQuality = profileData.graphicsQuality;
-                    // Apply graphics quality settings immediately
-                    this.applyGraphicsQuality();
-                }
-                
-                // Restore general settings if available
-                if (window.generalSettings) {
-                    if (typeof profileData.enableOpeningAnimation === 'boolean') {
-                        window.generalSettings.setOpeningAnimationEnabled(profileData.enableOpeningAnimation);
-                        console.log(`⚙️ Restored opening animation setting: ${profileData.enableOpeningAnimation}`);
-                    }
-                    
-                    if (typeof profileData.graphicsQuality === 'string') {
-                        window.generalSettings.setGraphicsQuality(profileData.graphicsQuality);
-                        console.log(`🎮 Restored graphics quality: ${profileData.graphicsQuality}`);
-                    }
-                    
-                    if (typeof profileData.showFpsCounter === 'boolean') {
-                        window.generalSettings.setShowFpsCounter(profileData.showFpsCounter);
-                        console.log(`📊 Restored FPS counter setting: ${profileData.showFpsCounter}`);
-                    }
-                }
-                
-                console.log('✅ Profile data loaded successfully');
-            }
-        } catch (error) {
-            console.error('❌ Error loading profile data:', error);
-        }
-    }/**
-     * Load saved game data from cloud or localStorage
-     */
-    async loadGameData() {        try {
-            // Use CloudSaveSystem to load data
-            const data = await this.cloudSaveSystem.loadGameData();
-            
-            if (data) {
-                // Show loading popup if popup system is available
-                if (this.popupSystem) {
-                    this.popupSystem.showLoadingPopup("Loading game data...");
-                }
-                
-                // Debug logging for load
-                if (window.debugMode) {
-                    console.log(`📂 Loading game data - datapackets from save: ${data.dataPackets}, current: ${this.upgradeSystem.getDataPackets()}`);
-                }
-                
-                // Restore data packets
-                if (typeof data.dataPackets === 'number') {
-                    const previousDataPackets = this.upgradeSystem.getDataPackets();
-                    this.upgradeSystem.dataPackets = data.dataPackets;
-                    
-                    if (window.debugMode) {
-                        console.log(`💾 Datapackets restored: ${previousDataPackets} -> ${data.dataPackets}`);
-                    }
-                }
-                  // Restore best scores (merge with existing)
-                if (data.bestScores) {
-                    Object.keys(data.bestScores).forEach(difficulty => {
-                        if (typeof data.bestScores[difficulty] === 'number') {
-                            this.bestScores[difficulty] = Math.max(
-                                this.bestScores[difficulty] || 0,
-                                data.bestScores[difficulty]
-                            );
-                        }
-                    });
-                }
-                
-                // Restore shop upgrades
-                if (data.ownedUpgrades && this.shopSystem) {
-                    this.shopSystem.loadOwnedUpgrades(data.ownedUpgrades);
-                }
-                
-                // Restore profile data
-                if (data.profileData) {
-                    this.loadProfileData(data.profileData);
-                }                // Restore audio settings
-                if (data.audioSettings && this.audioSystem) {
-                   
-                    // Only load audio settings if this isn't the initial load (to avoid overriding fresh AudioSystem settings)
-                    // Check if AudioSystem has already been properly initialized by looking for a recent direct save
-                    const directSettings = localStorage.getItem('coderunner_audio_settings');
-                    let shouldLoadUnifiedSettings = true;
-                    
-                    if (directSettings) {
-                        try {
-                            const parsed = JSON.parse(directSettings);
-                            // If direct localStorage settings are very recent (within last 5 seconds), 
-                            // it means AudioSystem just loaded them and we shouldn't override
-                            const timeSinceDirectSave = Date.now() - (parsed.timestamp || 0);
-                            if (timeSinceDirectSave < 5000) {
-                                
-                                shouldLoadUnifiedSettings = false;
-                            }
-                        } catch (e) {
-                            // If parsing fails, proceed with unified settings
-                        }
-                    }
-                    
-                    if (shouldLoadUnifiedSettings) {
-                        this.audioSystem.loadSettings(data.audioSettings);
-                    }
-                }
-                
-                // Restore leaderboard data
-                if (data.leaderboardData && this.leaderboardSystem) {
-                    this.leaderboardSystem.loadSavedData(data.leaderboardData);
-                }
-                
-                this.autosaveStatus = 'loaded';
-                this.showAutosaveIndicator = true;
-                
-                // Close loading popup and show loaded confirmation
-                if (this.popupSystem) {
-                    this.popupSystem.closePopup();
-                      setTimeout(() => {
-                        const saveLocation = this.cloudSaveSystem.isUserLoggedIn() ? 'cloud' : 'local storage';
-                        this.popupSystem.showConfirmationPopup(
-                            "Game Loaded",
-                            `Successfully loaded your saved game from ${saveLocation}!\n\nData Packets: ${data.dataPackets || 0}\nUpgrades: ${data.ownedUpgrades ? data.ownedUpgrades.length : 0} owned`,
-                            () => {
-                                this.popupSystem.closePopup();
-                            }
-                        );
-                    }, 300);
-                }
-                
-                // Hide autosave indicator after 3 seconds
-                setTimeout(() => {
-                    this.showAutosaveIndicator = false;
-                }, 3000);
-                
-                
-                return true;
-            }
-        } catch (error) {
-            
-            this.autosaveStatus = 'error';
-            
-            // Close loading popup if it was shown
-            if (this.popupSystem) {
-                this.popupSystem.closePopup();
-                
-                setTimeout(() => {
-                    this.popupSystem.showErrorPopup(
-                        "Load Error",
-                        "Failed to load saved game data. Starting with fresh data.",
-                        () => {
-                            this.popupSystem.closePopup();
-                        }
-                    );
-                }, 300);
-            }
-            
-            setTimeout(() => {
-                this.showAutosaveIndicator = false;
-            }, 3000);
-        }
+    handlePauseClick(x, y) {
+        if (!this.pauseHitAreas) return;
         
-        return false;
-    }    /**
-     * Start periodic autosave (runs continuously regardless of game state)
-     */
-    startAutosave() {
-        if (this.autosaveInterval) {
-            this.stopAutosave();
-        }
-        
-        // Counter for reconnection attempts (try every 30 seconds)
-        this.reconnectionCounter = 0;
-        
-        this.autosaveInterval = setInterval(() => {
-            // Save every second regardless of game state
-            // The saveGameData method has built-in change detection to prevent unnecessary saves
-            this.saveGameDataOptimized();
-            
-            // Attempt Firestore reconnection every 30 seconds if needed
-            this.reconnectionCounter++;
-            if (this.reconnectionCounter >= 30) {
-                this.reconnectionCounter = 0;
-                if (this.cloudSaveSystem && this.cloudSaveSystem.shouldAttemptReconnection()) {
-                    this.cloudSaveSystem.attemptFirestoreReconnection().then(success => {
-                        if (success) {
-                            console.log('🔄 Firestore reconnected, attempting data migration...');
-                            // Try to migrate any pending local data
-                            this.cloudSaveSystem.migrateLocalDataToCloud();
-                        }
-                    }).catch(error => {
-                        // Silent catch - reconnection will be attempted again later
-                    });
+        // Check if any pause menu button was clicked
+        for (let i = 0; i < this.pauseHitAreas.length; i++) {
+            const area = this.pauseHitAreas[i];
+            if (x >= area.x && x <= area.x + area.width && 
+                y >= area.y && y <= area.y + area.height) {
+                
+                // Play menu click sound
+                if (this.audioSystem) {
+                    this.audioSystem.onMenuClick();
                 }
-            }
-        }, this.autosaveDelay);
-    }/**
-     * Optimized autosave that only saves when data changes
-     */
-    saveGameDataOptimized() {
-        // Use the optimized saveGameData method which includes change detection
-        
-        this.saveGameData();
-    }
-
-    /**
-     * Stop periodic autosave
-     */
-    stopAutosave() {
-        if (this.autosaveInterval) {
-            clearInterval(this.autosaveInterval);
-            this.autosaveInterval = null;
-        }
-    }    /**
-     * Manual save trigger for key events
-     */
-    triggerManualSave() {
-        // For manual saves (important events), always save regardless of change detection
-        // but still respect the minimum time interval to prevent spam
-        const now = Date.now();
-        if (now - this.lastSaveTime > 500) { // Reduced to 500ms for manual saves
-            this.forceSave();
-        }
-    }
-
-    /**
-     * Force save without change detection (for important events)
-     */
-    forceSave() {
-        try {
-            this.autosaveStatus = 'saving';
-            this.showAutosaveIndicator = true;
-
-            // Prepare comprehensive save data
-            const saveData = {
-                // Core game data                dataPackets: this.upgradeSystem.getDataPackets(),
-                bestScores: this.bestScores,
                 
-                // Shop upgrades
-                ownedUpgrades: this.shopSystem ? this.shopSystem.getOwnedUpgrades() : [],
+                // Handle different button actions
+                switch (area.action) {
+                    case 'resume':
+                        this.togglePause(); // Resume the game
+                        break;
+                    case 'restart':
+                        this.startNewGame();
+                        break;
+                    case 'difficulty':
+                        this.navigateToState(GAME_STATES.DIFFICULTY_SELECT);
+                        break;
+                    case 'home':
+                        this.navigateToState(GAME_STATES.HOME);
+                        break;
+                    case 'leaderboard':
+                        this.navigateToState(GAME_STATES.LEADERBOARD);
+                        break;
+                    case 'shop':
+                        this.navigateToState(GAME_STATES.SHOP);
+                        break;
+                    case 'settings':
+                        this.navigateToState(GAME_STATES.SETTINGS);
+                        break;
+                    default:
+                        console.warn(`Unknown pause menu action: ${area.action}`);
+                        break;
+                }
                 
-                // Profile data
-                profileData: this.getProfileData(),
-                
-                // Audio settings
-                audioSettings: this.getAudioSettings(),
-                      // Leaderboard preferences
-                leaderboardData: this.getLeaderboardData(),
-                
-                // Metadata
-                timestamp: Date.now(),
-                version: "1.4.0" // For future compatibility
-            };
-
-            // Save to localStorage (bypass change detection)
-            localStorage.setItem('coderunner_save_data', JSON.stringify(saveData));
-            
-            // Update optimization tracking
-            const dataForFingerprint = { ...saveData };
-            delete dataForFingerprint.timestamp;
-            this.lastSaveData = saveData;
-            this.dataFingerprint = this.createDataFingerprint(dataForFingerprint);
-            this.autosaveStatus = 'saved';
-            this.lastSaveTime = Date.now();
-            
-            // Hide indicator after 2 seconds
-            setTimeout(() => {
-                this.showAutosaveIndicator = false;
-            }, 2000);
-
-            return true;
-
-        } catch (error) {
-            
-            this.autosaveStatus = 'error';
-            
-            // Hide error indicator after 3 seconds
-            setTimeout(() => {
-                this.showAutosaveIndicator = false;
-            }, 3000);
-            
-            return false;
-        }
-    }    /**
-     * Check for score milestones and award bonus data packets
-     */
-    checkDistanceMilestones() {
-        if (!this.player || !this.upgradeSystem) return;
-        
-        const currentScore = Math.floor(this.score);
-        const nextMilestone = Math.floor((this.lastMilestone + this.milestoneInterval) / this.milestoneInterval) * this.milestoneInterval;
-        
-        // Check if we've reached a new milestone
-        if (currentScore >= nextMilestone && nextMilestone > this.lastMilestone) {
-            this.lastMilestone = nextMilestone;
-            
-            // Award 100 data packets for every 1000 score milestone
-            const rewardAmount = 100;
-            
-            // Award the data packets
-            this.upgradeSystem.addDataPackets(rewardAmount);
-            
-            // Trigger autosave when data packets are collected
-            this.triggerManualSave();
-            
-            // Play audio feedback for milestone achievement
-            if (window.audioSystem) {
-                window.audioSystem.onPowerup();
-            }
-            
-            // Create visual effect
-            this.createMilestoneEffect(nextMilestone, rewardAmount);
-        }
-    }    /**
-     * Create visual effect for milestone achievement
-     */
-    createMilestoneEffect(distance, reward) {
-        // Use object pooling to reduce garbage collection
-        // Initialize the pool if it doesn't exist
-        if (!this.effectPool.milestone) {
-            this.effectPool.milestone = [];
-        }
-        
-        let effect = this.effectPool.milestone.pop();
-        if (!effect) {
-            effect = {};
-        }
-        
-        // Reset/initialize effect properties
-        effect.distance = distance;
-        effect.reward = reward;
-        effect.timer = 0;
-        effect.maxTimer = 3000; // Show for 3 seconds
-        effect.y = 100; // Start position
-        effect.alpha = 1.0;
-          this.milestoneEffects.push(effect);
-          // Remove old effects to prevent too many on screen
-        if (this.milestoneEffects.length > 3) {
-            const oldEffect = this.milestoneEffects.shift();
-            this.returnEffectToPool('milestone', oldEffect);
-        }
-    }
-
-    /**
-     * Update milestone visual effects
-     */    updateMilestoneEffects(deltaTime) {
-        if (!this.milestoneEffects) {
-            this.milestoneEffects = [];
-            return;
-        }
-        
-        for (let i = this.milestoneEffects.length - 1; i >= 0; i--) {
-            const effect = this.milestoneEffects[i];
-            effect.timer += deltaTime;
-            
-            // Animate the effect
-            const progress = effect.timer / effect.maxTimer;
-            effect.y = 100 - (progress * 30); // Float upward
-            effect.alpha = Math.max(0, 1 - progress); // Fade out
-            
-            // Remove expired effects and return to pool
-            if (effect.timer >= effect.maxTimer) {
-                const expiredEffect = this.milestoneEffects.splice(i, 1)[0];
-                this.returnEffectToPool('milestone', expiredEffect);
-            }
-        }
-    }    /**
-     * Create visual effect for speed penalty
-     */
-    createSpeedPenaltyEffect(timeTaken, penalty) {
-        // Use object pooling to reduce garbage collection
-        // Initialize the pool if it doesn't exist
-        if (!this.effectPool.speedPenalty) {
-            this.effectPool.speedPenalty = [];
-        }
-        
-        let effect = this.effectPool.speedPenalty.pop();
-        if (!effect) {
-            effect = {};
-        }
-        
-        // Reset/initialize effect properties
-        effect.timeTaken = timeTaken;
-        effect.penalty = penalty;
-        effect.timer = 0;
-        effect.maxTimer = 4000; // Show for 4 seconds
-        effect.y = 200; // Start position (below milestones)
-        effect.alpha = 1.0;
-        
-        this.speedPenaltyEffects.push(effect);
-        
-        // Remove old effects to prevent too many on screen
-        if (this.speedPenaltyEffects.length > 3) {
-            const oldEffect = this.speedPenaltyEffects.shift();
-            this.returnEffectToPool('speedPenalty', oldEffect);
-        }
-    }
-
-    /**
-     * Update speed penalty visual effects
-     */    updateSpeedPenaltyEffects(deltaTime) {
-        if (!this.speedPenaltyEffects) {
-            this.speedPenaltyEffects = [];
-            return;
-        }
-        
-        for (let i = this.speedPenaltyEffects.length - 1; i >= 0; i--) {
-            const effect = this.speedPenaltyEffects[i];
-            effect.timer += deltaTime;
-            
-            // Animate the effect
-            const progress = effect.timer / effect.maxTimer;
-            effect.y = 200 - (progress * 20); // Float upward slowly
-            effect.alpha = Math.max(0, 1 - progress); // Fade out
-            
-            // Remove expired effects and return to pool
-            if (effect.timer >= effect.maxTimer) {
-                const expiredEffect = this.speedPenaltyEffects.splice(i, 1)[0];
-                this.returnEffectToPool('speedPenalty', expiredEffect);
+                break; // Stop checking other areas once we find a match
             }
         }
     }
 
     /**
-     * Render milestone effects
+     * Debugging: Test function to trigger game over
      */
-    renderMilestoneEffects(ctx) {
-        if (!this.milestoneEffects.length) return;
-        
-        ctx.save();
-        ctx.textAlign = 'center';
-        
-        for (const effect of this.milestoneEffects) {
-            const centerX = this.canvas.width / 2;
-            const y = effect.y;
-            
-            // Background glow
-            ctx.shadowColor = '#ffd700';
-            ctx.shadowBlur = 20 * effect.alpha;
-              // Main text
-            ctx.fillStyle = `rgba(255, 215, 0, ${effect.alpha})`;
-            ctx.font = 'bold 24px Courier New';
-            ctx.fillText(`${effect.distance} SCORE MILESTONE!`, centerX, y);
-            
-            // Reward text
-            ctx.fillStyle = `rgba(86, 211, 100, ${effect.alpha})`;
-            ctx.font = 'bold 18px Courier New';
-            ctx.fillText(`+${effect.reward} Data Packets! 💾`, centerX, y + 30);
-            
-            // Reset shadow
-            ctx.shadowBlur = 0;
-        }        ctx.restore();
+    testGameOver() {
+        this.gameOver('Debug test - forced game over');
     }
-
+    
     /**
-     * Render speed penalty effects
+     * Set game state and handle any necessary state transitions
      */
-    renderSpeedPenaltyEffects(ctx) {
-        if (!this.speedPenaltyEffects.length) return;
+    setGameState(newState) {
+        const oldState = this.gameState;
+        this.gameState = newState;
         
-        ctx.save();
-        ctx.textAlign = 'center';
-        
-        for (const effect of this.speedPenaltyEffects) {
-            const centerX = this.canvas.width / 2;
-            const y = effect.y;
-            
-            // Background glow (red for penalty)
-            ctx.shadowColor = '#ff4444';
-            ctx.shadowBlur = 15 * effect.alpha;
-            
-            // Main text
-            ctx.fillStyle = `rgba(255, 68, 68, ${effect.alpha})`;
-            ctx.font = 'bold 20px Courier New';
-            ctx.fillText('SPEED PENALTY!', centerX, y);
-            
-            // Details text
-            ctx.fillStyle = `rgba(255, 100, 100, ${effect.alpha})`;
-            ctx.font = 'bold 16px Courier New';
-            ctx.fillText(`Took ${(effect.timeTaken/1000).toFixed(1)}s (limit: 15s)`, centerX, y + 25);
-            
-            // Penalty amount
-            ctx.fillStyle = `rgba(255, 68, 68, ${effect.alpha})`;
-            ctx.font = 'bold 18px Courier New';
-            ctx.fillText(`-${effect.penalty} points!`, centerX, y + 45);
-            
-            // Reset shadow
-            ctx.shadowBlur = 0;
-        }
-        
-        ctx.restore();
-    }
-
-    /**
-     * Check speed penalty system - deduct points if player is too slow
-     */
-    checkSpeedPenalty(distanceTraveled) {
-        if (!this.speedPenalty.enabled) return;
-        
-        const currentTime = Date.now();
-        const distanceFromLastCheckpoint = distanceTraveled - (this.speedPenalty.lastCheckpoint - this.player.startX);
-        
-               
-        // Check if player has traveled the required segment distance (100 meters = 1000 pixels)
-        if (distanceFromLastCheckpoint >= this.speedPenalty.segmentDistance) {
-            const timeTaken = currentTime - this.speedPenalty.segmentStartTime;
-              // If time taken exceeds 15 seconds, apply penalty
-            if (timeTaken > this.speedPenalty.timeLimit) {
-                // Add penalty to total penalty points
-                this.speedPenalty.totalPenaltyPoints += this.speedPenalty.penalty;
-                this.speedPenalty.totalPenalties++;
-                
-                // Create visual effect for penalty
-                this.createSpeedPenaltyEffect(timeTaken, this.speedPenalty.penalty);
-                
-                // Play audio feedback for penalty
-                if (window.audioSystem) {
-                    window.audioSystem.playSound('penalty'); // You might need to add this sound
-                }
-                
-                console.log(`Speed penalty applied! Time: ${(timeTaken/1000).toFixed(1)}s, Penalty: ${this.speedPenalty.penalty} points, Total penalties: ${this.speedPenalty.totalPenalties}`);
-            }
-            
-            // Reset for next segment
-            this.speedPenalty.lastCheckpoint = this.player.x;
-            this.speedPenalty.segmentStartTime = currentTime;        }
-    }    /**
-     * Render the current game state
-     */
-    render() {
-        // Handle video intro
-        if (this.gameState === GAME_STATES.VIDEO_INTRO) {
-            // Video intro system removed - skip rendering
-            return;
-        }
-
-        // Handle opening animation
-        if (this.gameState === GAME_STATES.OPENING_ANIMATION) {
-            if (this.openingAnimation) {
-                this.openingAnimation.render();
-            }
-            return;
-        }
-          // Handle login prompt
-        if (this.gameState === GAME_STATES.LOGIN_PROMPT) {
-            if (this.loginSystem) {
-                this.loginSystem.render();
-            }
-            return;
-        }
-          // Handle user profile system
-        if (this.gameState === GAME_STATES.PROFILE) {
-            // TODO: Re-enable when UserProfileSystem is implemented
-            // if (this.userProfileSystem) {
-            //     this.userProfileSystem.render();
-            // }
-            return;
-        }
-        
-        // Use the renderer if available, otherwise fallback
-        if (this.renderer) {
-            this.renderer.render();
-        } else {
-            
-            // Fallback rendering
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        }
-          // Handle popups and overlays
-        if (this.popupSystem) {
-            this.popupSystem.render(this.ctx);
-        }
-        
-        // Render milestone effects
-        this.renderMilestoneEffects(this.ctx);
-        
-        // Render speed penalty effects
-        this.renderSpeedPenaltyEffects(this.ctx);
-    }    /**
-     * Start the game with the selected difficulty
-     */
-    startGame() {
-        // Initialize world generator
-        this.world = new WorldGenerator(this);
-        
-        // Initialize physics engine with world reference
-        this.physics = new PhysicsEngine(this.world);
-        
-        // Find a safe spawn position using the world generator
-        const spawnPosition = this.world.findSafeSpawnPosition();
-        
-        // Create player at spawn position without upgrades (shop system handles upgrades)
-        this.player = new Player(spawnPosition.x, spawnPosition.y, this, null);
-        
-        // Apply shop upgrades to player if available
-        if (this.shopSystem) {
-            this.shopSystem.applyAllOwnedUpgrades(this.player);
-        }
-        
-        // Set camera position so player appears on far left of screen (no void behind)
-        this.camera.x = this.player.x - 50; // Position player 50px from left edge
-        this.camera.y = this.player.y - this.canvas.height / 2;
-        
-        // Generate initial chunks for the camera position to ensure world is visible on spawn
-        this.world.generateChunksForCamera(this.camera);
-        
-        // Force update visible chunks for immediate rendering on first frame
-        const startChunk = Math.floor(this.camera.x / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE)) - 1;
-        const endChunk = Math.ceil((this.camera.x + this.canvas.width) / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE)) + 1;
-        this.world.updateVisibleChunks(startChunk, endChunk);
-        this.world.lastCameraX = this.camera.x; // Update camera tracking to prevent immediate re-update
-        
-        // Reset game state variables
-        this.score = 0;
-        this.bonusScore = 0;
-        this.gameOverReason = null;
-        this.gameOverStartTime = null;
-        this.isNewHighScore = false;
-          // Record start time for survival tracking
-        this.startTime = Date.now();
-        
-        // Set last health regen time to current time
-        this.lastHealthRegenTime = this.startTime;
-          // Initialize speed penalty system
-        this.speedPenalty.lastCheckpoint = this.player.x;
-        this.speedPenalty.segmentStartTime = this.startTime;
-        this.speedPenalty.totalPenalties = 0;
-        this.speedPenalty.totalPenaltyPoints = 0;
-        
-        // Change game state to playing
-        this.gameState = GAME_STATES.PLAYING;
-    }    /**
-     * Restart the current game with the same difficulty
-     */
-    restart() {        // Reset milestone tracking
-        this.lastMilestone = 0;
-        this.milestoneEffects = [];
-        
-        // Reset speed penalty effects
-        this.speedPenaltyEffects = [];
-        
-        // Clear any existing game over state
-        this.gameOverReason = null;
-        this.gameOverStartTime = null;
-        this.isNewHighScore = false;
-        
-        // CRITICAL FIX: Reset leaderboard input state so movement keys work immediately
-        if (this.leaderboardSystem) {
-            this.leaderboardSystem.resetInputState();
-        }
-        
-        // Restart the game using the same initialization logic as startGame
-        this.startGame();
-        
-        // CRITICAL FIX: Ensure canvas has focus after restart so arrow keys work
-        this.ensureCanvasFocus();
-          // Play restart sound if available
-        if (this.audioSystem) {
-            this.audioSystem.onMenuClick();
-        }
-    }
-
-    /**
-     * Show the leaderboard screen
-     */
-    showLeaderboard() {
-        this.gameState = GAME_STATES.LEADERBOARD;
-    }    /**
-     * Show the difficulty selection screen
-     */
-    showDifficultySelection() {
-        this.gameState = GAME_STATES.DIFFICULTY_SELECT;
-    }
-
-    /**
-     * Show the user profile screen
-     */
-    showProfile() {
-        // TODO: Re-enable when UserProfileSystem is implemented
-        console.log('Profile feature not yet implemented');
-        // if (this.userProfileSystem) {
-        //     // Get current user info from login system
-        //     const currentUser = this.loginSystem ? this.loginSystem.getCurrentUser() : null;
-        //     const isGuest = this.loginSystem ? this.loginSystem.isGuest : false;
-        //     
-        //     this.userProfileSystem.start(currentUser, isGuest);
-        //     this.gameState = GAME_STATES.PROFILE;
-        // }
-    }
-
-    /**
-     * Show the reset confirmation dialog
-     */
-    showResetConfirmationDialog() {
-        this.gameState = GAME_STATES.RESET_CONFIRM;
-    }
-
-    /**
-     * Handle game over logic
-     */
-    gameOver(reason) {
-        if (this.gameState === GAME_STATES.GAME_OVER) {
-            return; // Already in game over state
-        }        // Set game over state
-        this.gameState = GAME_STATES.GAME_OVER;
-        this.gameOverStartTime = Date.now();
-        this.gameOverReason = reason || 'Unknown';
-        
-        // Set a random death message to replace "GAME OVER"
-        this.gameOverMessage = DEATH_MESSAGES[Math.floor(Math.random() * DEATH_MESSAGES.length)];
-        
-        // Check for new high score
-        const currentBestScore = this.bestScores[this.selectedDifficulty] || 0;
-        if (this.score > currentBestScore) {
-            this.isNewHighScore = true;
-            this.previousBestScore = currentBestScore;
-            this.bestScores[this.selectedDifficulty] = this.score;
-            
-            // Save the new best score
-            this.saveBestScores();
-        }// Prompt for leaderboard upload if score is high enough
-        if (this.score >= 100 && this.leaderboardSystem && 
-            this.leaderboardSystem.canUploadForDifficulty(this.selectedDifficulty)) {
-            
-            // Set up for potential score upload
-            this.leaderboardSystem.prepareScoreUpload(this.score, this.selectedDifficulty, this.startTime);
-        }
-          // Stop autosave and trigger final save on game over
-        this.stopAutosave();
-        this.triggerManualSave();
-    }
-
-    /**
-     * Save best scores to localStorage
-     */
-    saveBestScores() {
-        try {
-            localStorage.setItem('coderunner_best_scores', JSON.stringify(this.bestScores));        } catch (error) {
-           
-        }
-    }    /**
-     * Load best scores from localStorage
-     */
-    loadBestScores() {
-        try {
-            const saved = localStorage.getItem('coderunner_best_scores');
-            if (saved) {
-                this.bestScores = { ...this.bestScores, ...JSON.parse(saved) };
-            }
-        } catch (error) {
-           
-        }
-    }
-
-    /**
-     * Toggle changelog display
-     */
-    toggleChangelog() {
-        if (this.gameState === GAME_STATES.CHANGELOG) {
-            // Return to previous state
-            this.gameState = this.previousGameState || GAME_STATES.DIFFICULTY_SELECT;
-        } else {
-            // Open changelog and remember previous state
-            this.previousGameState = this.gameState;
-            this.gameState = GAME_STATES.CHANGELOG;
-        }
-    }
-
-    /**
-     * Toggle performance display (F3 key functionality)
-     */
-    togglePerformanceDisplay() {
-        this.showPerformanceDisplay = !this.showPerformanceDisplay;
-        
-        // Play menu sound if available
-        if (this.audioSystem) {
-            this.audioSystem.onMenuClick();
-        }
-    }
-
-    /**
-     * Toggle fullscreen mode
-     */
-    toggleFullscreen() {
-        try {
-            const canvasContainer = document.querySelector('.canvas-container');
-            
-            if (!document.fullscreenElement) {
-                // Enter fullscreen
-                const fullscreenPromise = canvasContainer?.requestFullscreen?.() || 
-                                        canvasContainer?.webkitRequestFullscreen?.() || 
-                                        canvasContainer?.msRequestFullscreen?.();
-                
-                if (fullscreenPromise) {
-                    fullscreenPromise.catch(() => {
-                        // Fullscreen request failed - fail silently
-                    });
-                }
-            } else {
-                // Exit fullscreen
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
-            }        } catch (error) {
-            // Fullscreen operation failed - fail silently
-        }
-    }
-
-    /**
-     * Handle escape key functionality
-     */
-    handleEscape() {
-        // Check for upload prompt first (highest priority)
-        if (this.leaderboardSystem && this.leaderboardSystem.showUploadPrompt) {            this.leaderboardSystem.cancelUpload();
-            return;
-        }
-
-        // Handle different game states
-        switch (this.gameState) {
-
-            case GAME_STATES.VIDEO_INTRO:
-                // Video intro system removed - transition to appropriate state
-                if (this.openingAnimation && this.openingAnimation.shouldPlay()) {
-                    this.gameState = GAME_STATES.OPENING_ANIMATION;
-                    this.openingAnimation.start();
-                } else {
-                    this.gameState = GAME_STATES.HOME;
-                }
-                break;
-                
-            case GAME_STATES.POST_ANIMATION_POPUP:
-                // Close popup and go to home screen
-                this.gameState = GAME_STATES.HOME;
-                break;
-                  case GAME_STATES.LOGIN_PROMPT:
-                // On escape, choose guest mode
-                if (this.loginSystem) {
-                    this.loginSystem.handleGuestChoice();
-                }
-                break;
-                
-            case GAME_STATES.PROFILE:
-                // On escape, go back from profile
-                if (this.userProfileSystem) {
-                    this.userProfileSystem.goBack();
-                }
-                break;
-                
-            case GAME_STATES.HOME:
-                // Do nothing when escape is pressed from home screen
-                break;
-                
-            case GAME_STATES.LEADERBOARD:
-                // Return to previous state or default to difficulty selection
-                this.gameState = this.previousGameState || GAME_STATES.DIFFICULTY_SELECT;
-                break;
-                
-            case GAME_STATES.CHANGELOG:
-                // Return to previous state or default to difficulty selection
-                this.gameState = this.previousGameState || GAME_STATES.DIFFICULTY_SELECT;
-                break;
-                
-            case GAME_STATES.SHOP:
-                // Use existing shop toggle pattern
-                this.handleShopToggle();
-                break;
-                  case GAME_STATES.DIFFICULTY_SELECT:
-                // Go back to home screen
-                this.gameState = GAME_STATES.HOME;
-                break;
-                
-            case GAME_STATES.PLAYING:
-            case GAME_STATES.PAUSED:
-                // Return to difficulty selection
-                this.gameState = GAME_STATES.DIFFICULTY_SELECT;
-                break;
-                
-            case GAME_STATES.GAME_OVER:
-                // Return to difficulty selection
-                this.gameState = GAME_STATES.DIFFICULTY_SELECT;
-                break;
-                
-            case GAME_STATES.CREDITS:
-                // Go back to home screen from credits
-                this.gameState = GAME_STATES.HOME;
-                break;            default:
-                // For any other state, go to difficulty selection
-                this.gameState = GAME_STATES.DIFFICULTY_SELECT;
-                break;
-        }
-    }
-
-    /**
-     * Handle confirm action (Enter key)
-     */
-    handleConfirm() {
-        // Check for upload prompt first (highest priority)
-        if (this.leaderboardSystem && this.leaderboardSystem.showUploadPrompt) {
-            // Handle name submission or cancel upload
-            if (this.leaderboardSystem.playerName.trim()) {
-                this.leaderboardSystem.submitScoreFromUpload(this.leaderboardSystem.playerName);            } else {
-                this.leaderboardSystem.cancelUpload();
-            }
-            return;
-        }
-
-        // Handle different game states
-        switch (this.gameState) {
-
-            case GAME_STATES.VIDEO_INTRO:
-                // Video intro system removed - transition to appropriate state
-                if (this.openingAnimation && this.openingAnimation.shouldPlay()) {
-                    this.gameState = GAME_STATES.OPENING_ANIMATION;
-                    this.openingAnimation.start();
-                } else {
-                    this.gameState = GAME_STATES.HOME;
-                }
-                break;
-                  case GAME_STATES.POST_ANIMATION_POPUP:
-                // Close popup and go to home screen
-                this.gameState = GAME_STATES.HOME;
-                break;
-                
-            case GAME_STATES.LOGIN_PROMPT:
-                // On enter, trigger login choice
-                if (this.loginSystem) {
-                    this.loginSystem.handleLoginChoice();
-                }
-                break;
-                
-            case GAME_STATES.HOME:
-                // No specific action for home screen
-                break;
-                
-            case GAME_STATES.DIFFICULTY_SELECT:
-                // No specific action for difficulty selection
-                break;
-                
-            case GAME_STATES.PLAYING:
-                // Pause game when Enter is pressed during gameplay
-                this.togglePause();
-                break;
-                
-            case GAME_STATES.PAUSED:
-                // Resume game when Enter is pressed while paused
-                this.togglePause();
-                break;
-                
-            case GAME_STATES.GAME_OVER:
-                // Restart game when Enter is pressed in game over
-                this.restart();
-                break;
-                
-            case GAME_STATES.LEADERBOARD:
-                // No specific action for leaderboard
-                break;
-                
-            case GAME_STATES.SHOP:
-                // No specific action for shop
-                break;
-                
-            default:
-                // No specific action for other states
-                break;
-        }
-    }
-
-    /**
-     * Add debug commands for testing upgrades
-     */    addDebugCommands() {
-        // Create upgrade test helper for debug commands
-        if (!this.upgradeTestHelper) {
-            this.upgradeTestHelper = new UpgradeTestHelper(this);
-            this.upgradeTestHelper.addDebugCommands();
-        }
-        
-        // Add save/load debug commands
-        if (typeof window !== 'undefined') {
-            // Debug command to toggle debug mode
-            window.toggleDebug = () => {
-                window.debugMode = !window.debugMode;
-                console.log(`Debug mode ${window.debugMode ? 'enabled' : 'disabled'}`);
-            };
-            
-            // Debug command to test save functionality
-            window.testSave = () => {
-                console.log('🧪 Testing manual save...');
-                const success = this.forceSave();
-                console.log(`Save ${success ? 'successful' : 'failed'}`);
-            };
-            
-            // Debug command to check current datapackets
-            window.checkDatapackets = () => {
-                const current = this.upgradeSystem.getDataPackets();
-                console.log(`💎 Current datapackets: ${current}`);
-                
-                // Check localStorage
-                try {
-                    const saved = localStorage.getItem('coderunner_save_data');
-                    if (saved) {
-                        const data = JSON.parse(saved);
-                        console.log(`💾 Saved datapackets: ${data.dataPackets || 'none'}`);
-                    } else {
-                        console.log('💾 No save data found');
-                    }
-                } catch (e) {
-                    console.log('💾 Error reading save data:', e);
-                }
-            };            // Debug command to add test datapackets
-            window.addTestDatapackets = (amount = 100) => {
-                console.log(`🧪 Adding ${amount} test datapackets...`);
-                const before = this.upgradeSystem.getDataPackets();
-                this.upgradeSystem.addDataPackets(amount);
-                const after = this.upgradeSystem.getDataPackets();
-                console.log(`💾 DataPackets: ${before} -> ${after}`);
-                this.triggerManualSave();
-                console.log('💾 Manual save triggered after adding datapackets');
-            };
-            
-            // Debug command to test shop purchase
-            window.testShopPurchase = (upgradeId = 'datapack-multiplier') => {
-                console.log(`🛒 Testing shop purchase: ${upgradeId}`);
-                const before = this.upgradeSystem.getDataPackets();
-                const ownedBefore = this.shopSystem.isOwned(upgradeId);
-                console.log(`📊 Before: DataPackets=${before}, Owned=${ownedBefore}`);
-                
-                const success = this.shopSystem.buyUpgrade(upgradeId);
-                
-                const after = this.upgradeSystem.getDataPackets();
-                const ownedAfter = this.shopSystem.isOwned(upgradeId);                console.log(`📊 After: DataPackets=${after}, Owned=${ownedAfter}, Success=${success}`);
-                
-                if (success) {
-                    console.log('✅ Purchase successful! Force refreshing shop display...');
-                    this.shopHitAreas = []; // Force shop refresh
-                }
-            };
-              // Debug command to open canvas shop
-            window.openCanvasShop = () => {
-                console.log('🛒 Opening canvas-based shop...');
-                if (this.gameState !== GAME_STATES.SHOP) {
-                    this.handleShopToggle();
-                    console.log('✅ Canvas shop opened! Use Q key to toggle in the future.');
-                } else {
-                    console.log('ℹ️ Canvas shop is already open!');
-                }
-            };
-            
-            // Test both problematic upgrades
-            window.testBothUpgrades = () => {
-                console.log('🧪 Testing both score collection upgrades...');
-                
-                // Add enough datapackets
-                console.log('💰 Adding datapackets for testing...');
-                this.upgradeSystem.addDataPackets(500);
-                
-                console.log('\n📊 Testing Score Multiplier:');
-                const scoreSuccess = this.shopSystem.buyUpgrade('score-multiplier');
-                console.log(`   Result: ${scoreSuccess ? '✅ SUCCESS' : '❌ FAILED'}`);
-                
-                console.log('\n💾 Testing Datapack Multiplier:');
-                const datapackSuccess = this.shopSystem.buyUpgrade('datapack-multiplier');
-                console.log(`   Result: ${datapackSuccess ? '✅ SUCCESS' : '❌ FAILED'}`);
-                
-                console.log('\n📋 Current owned upgrades:');
-                console.log(`   Score Multiplier: ${this.shopSystem.isOwned('score-multiplier') ? '✅ OWNED' : '❌ NOT OWNED'}`);
-                console.log(`   Datapack Multiplier: ${this.shopSystem.isOwned('datapack-multiplier') ? '✅ OWNED' : '❌ NOT OWNED'}`);
-                
-                console.log('\n💡 To see upgrades in shop, run: openCanvasShop()');
-            };
-            
-            // Debug command to test save/load cycle
-            window.testSaveLoadCycle = () => {
-                console.log('🔄 Testing complete save/load cycle...');
-                const originalDataPackets = this.upgradeSystem.getDataPackets();
-                console.log(`📊 Original datapackets: ${originalDataPackets}`);
-                
-                // Force save current state
-                console.log('💾 Force saving current state...');
-                const saveResult = this.forceSave();
-                console.log(`💾 Save result: ${saveResult}`);
-                
-                // Read back the saved data to verify
-                try {
-                    const savedData = localStorage.getItem('coderunner_save_data');
-                    if (savedData) {
-                        const data = JSON.parse(savedData);
-                        console.log(`📂 Saved datapackets in localStorage: ${data.dataPackets}`);
-                        console.log('📂 Full save data:', data);
-                    } else {
-                        console.error('❌ No save data found in localStorage!');
-                    }
-                } catch (e) {
-                    console.error('❌ Error reading save data:', e);
-                }
-            };
-            
-            console.log('🔧 Debug commands added: toggleDebug(), testSave(), checkDatapackets(), addTestDatapackets(amount), testSaveLoadCycle()');
-        }
-    }
-
-    /**
-     * Handle text input - delegate to leaderboard system
-     */
-    handleTextInput(character) {
-        if (this.leaderboardSystem && this.leaderboardSystem.handleTextInput) {
-           
-            this.leaderboardSystem.handleTextInput(character);
-        }
-    }
-
-    /**
-     * Handle backspace - delegate to leaderboard system
-     */
-    handleBackspace() {
-        if (this.leaderboardSystem && this.leaderboardSystem.handleBackspace) {
-            this.leaderboardSystem.handleBackspace();
-        }
-    }
-
-    /**
-     * Handle delete entry - delegate to leaderboard system
-     */
-    handleDeleteEntry() {
-        if (this.leaderboardSystem && this.leaderboardSystem.deletePlayerEntry) {
-            this.leaderboardSystem.deletePlayerEntry();
-        }
-    }
-
-
-
-    /**
-     * Handle change name - delegate to leaderboard system
-     */
-    handleChangeName() {
-        if (this.leaderboardSystem && this.leaderboardSystem.initiateNameChange) {
-            this.leaderboardSystem.initiateNameChange();
-        }
-    }
-
-    /**
-     * Handle upload score - delegate to leaderboard system
-     */
-    handleUploadScore() {
-        if (this.leaderboardSystem && this.leaderboardSystem.initiateUpload) {
-            this.leaderboardSystem.initiateUpload(this.selectedDifficulty, this.score, 
-                Math.floor((this.gameOverStartTime - this.startTime) / 1000));
-        }
-    }
-
-    /**
-     * Handle continue action
-     */
-    handleContinue() {
-        // This can be used for continue prompts or tutorial advancement
-        // Currently no specific implementation needed
-    }    /**
-     * Determine initial navigation based on authentication state and user settings
-     */
-    async determineInitialNavigation() {
-        console.log('🔑 Determining initial navigation...');
-        
-        // Wait for Firebase auth state to be determined (if Firebase is available)
-        if (this.loginSystem && this.loginSystem.auth) {
-            console.log('🔑 Waiting for Firebase auth state...');
-            try {
-                const hasPersistedAuth = await this.loginSystem.waitForAuthState(2000);
-                console.log('🔑 Firebase auth state determined:', hasPersistedAuth);
-            } catch (error) {
-                console.warn('🔑 Firebase auth state check failed:', error);
-            }
-        }
-        
-        // Check current authentication state
-        const isUserAuthenticated = this.loginSystem && this.loginSystem.isUserAuthenticated();
-        const currentUser = this.loginSystem?.getCurrentUser();
-        
-        console.log('🔑 Authentication state check:');
-        console.log('🔑 - User authenticated:', isUserAuthenticated);
-        console.log('🔑 - Current user:', currentUser?.email || 'None');
-        console.log('🔑 - Is guest:', this.loginSystem?.isGuest || false);
-        console.log('🔑 - Login system exists:', !!this.loginSystem);
-          // First, always check if the opening animation should be shown (regardless of auth state)
-        const shouldShowAnimation = window.generalSettings ? window.generalSettings.isOpeningAnimationEnabled() : false;
-        
-        console.log('🔑 - Animation enabled in settings:', shouldShowAnimation);
-        console.log('🔑 - Animation system exists:', !!this.openingAnimation);
-        console.log('🔑 - Animation shouldPlay():', this.openingAnimation ? this.openingAnimation.shouldPlay() : false);
-        
-        if (shouldShowAnimation && this.openingAnimation && this.openingAnimation.shouldPlay()) {
-            // Show opening animation first, it will handle login/home transition internally
-            console.log('🔑 → Going to opening animation (will handle auth flow)');
-            this.gameState = GAME_STATES.OPENING_ANIMATION;
+        // Handle state change logic
+        if (newState === GAME_STATES.OPENING_ANIMATION && this.openingAnimation) {
+            console.log('🎬 Starting opening animation system');
             this.openingAnimation.start();
-        } else {
-            // Skip animation, determine navigation based on authentication state
-            if (isUserAuthenticated) {
-                // User is already authenticated, go directly to home
-                console.log('🔑 → Going directly to home screen (user authenticated, no animation)');
-                this.gameState = GAME_STATES.HOME;
-            } else {
-                // User is not authenticated, check if login should be shown
-                if (this.loginSystem && this.loginSystem.shouldShow()) {
-                    console.log('🔑 → Showing login prompt (no animation)');
-                    this.gameState = GAME_STATES.LOGIN_PROMPT;
-                    this.loginSystem.start();
-                } else {
-                    // Login already shown this session, go to home
-                    console.log('🔑 → Going to home screen (no animation, login already shown)');
-                    this.gameState = GAME_STATES.HOME;
-                }
-            }
-        }
-    }
-
-    /**
-     * Return an effect object to the appropriate pool for reuse
-     */
-    returnEffectToPool(type, effect) {
-        if (!effect) return;
-        
-        const pool = this.effectPool[type];
-        if (pool && pool.length < this.maxPoolSize) {
-            // Reset properties to avoid memory leaks
-            effect.timer = 0;
-            effect.alpha = 1;
-            pool.push(effect);
-        }
-    }
-
-    /**
-     * Clear all effect pools to prevent memory leaks
-     */
-    clearEffectPools() {
-        Object.keys(this.effectPool).forEach(key => {
-            this.effectPool[key].length = 0;
-        });
-    }
-
-    /**
-     * Clean up resources to free memory
-     */
-    cleanupResources() {
-        // Clear effect pools
-        this.clearEffectPools();
-        
-        // Clear renderer caches
-        if (this.renderer) {
-            this.renderer.clearCaches();
         }
         
-        // Clear tile renderer caches
-        if (this.world?.tileRenderer) {
-            this.world.tileRenderer.animationCache.clear();
-        }
-        
-        // Clear world chunk cache
-        if (this.world?.chunkRenderCache) {
-            this.world.chunkRenderCache.clear();
-        }
-        
-        // Clear performance metrics cache
-        this.cachedMetrics = null;
-        
-        console.log('🧹 Resources cleaned up for memory optimization');
+        console.log(`🎮 Game state changed: ${oldState} → ${newState}`);
     }
-
+    
     /**
-     * Get comprehensive performance report
+     * Check if death animation should be skipped
      */
-    getPerformanceReport() {
-        const metrics = this.getPerformanceMetrics();
-        const tileStats = this.world?.tileRenderer?.getPerformanceStats?.() || {};
-        const renderStats = this.renderer?.getRenderStats?.() || {};
-        
-        return {
-            fps: {
-                current: metrics.fps,
-                average: metrics.avgFps,
-                status: metrics.fps >= 50 ? 'excellent' : metrics.fps >= 30 ? 'good' : 'poor'
-            },
-            timing: {
-                frame: metrics.frameTime,
-                update: metrics.updateTime,
-                render: metrics.renderTime
-            },
-            memory: {
-                estimate: metrics.memory,
-                pools: metrics.poolStats
-            },
-            world: {
-                chunks: metrics.chunks,
-                entities: metrics.entities
-            },
-            rendering: {
-                tileCache: tileStats.cacheSize || 0,
-                gradientCache: renderStats.gradientCacheSize || 0,
-                highPerformanceMode: tileStats.highPerformanceMode || false
-            },
-            optimizations: {
-                adaptive: this.lastAdaptiveOptimization ? 'active' : 'inactive',
-                graphicsQuality: this.graphicsQuality
-            }
-        };
-    }
-
-    /**
-     * Get memory usage estimate for performance monitoring
-     */
-    getMemoryUsageEstimate() {
-        if (performance.memory) {
-            const used = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
-            const total = Math.round(performance.memory.totalJSHeapSize / 1024 / 1024);
-            return `${used}/${total}MB`;
-        }
-        return 'N/A';
-    }    /**
-     * Get object pool statistics for performance monitoring
-     */
-    getPoolStats() {
-        const stats = {};
-        if (this.effectPool) {
-            Object.keys(this.effectPool).forEach(key => {
-                stats[key] = this.effectPool[key].length;
-            });
-        }
-        return stats;
-    }
-
-    /**
-     * Apply adaptive performance optimizations based on current FPS
-     */
-    applyAdaptivePerformanceOptimizations() {
-        if (!this.adaptiveOptimization) {
-            this.adaptiveOptimization = {
-                enabled: true,
-                lastFpsCheck: 0,
-                lowFpsFrameCount: 0,
-                optimizationLevel: 0
-            };
-        }
-
-        const now = performance.now();
-        
-        // Only check every 2 seconds to avoid frequent changes
-        if (now - this.adaptiveOptimization.lastFpsCheck < 2000) {
-            return;
-        }
-
-        this.adaptiveOptimization.lastFpsCheck = now;
-
-        // Count low FPS frames
-        if (this.fps < 30) {
-            this.adaptiveOptimization.lowFpsFrameCount++;
-        } else {
-            this.adaptiveOptimization.lowFpsFrameCount = Math.max(0, this.adaptiveOptimization.lowFpsFrameCount - 1);
-        }
-
-        // Apply optimizations if performance is poor
-        if (this.adaptiveOptimization.lowFpsFrameCount > 5 && this.adaptiveOptimization.optimizationLevel < 3) {
-            this.adaptiveOptimization.optimizationLevel++;
-            this.applyOptimizationLevel(this.adaptiveOptimization.optimizationLevel);
-        }
-        // Remove optimizations if performance improves
-        else if (this.fps > 50 && this.adaptiveOptimization.optimizationLevel > 0) {
-            this.adaptiveOptimization.optimizationLevel = Math.max(0, this.adaptiveOptimization.optimizationLevel - 1);
-            this.applyOptimizationLevel(this.adaptiveOptimization.optimizationLevel);
-        }
-    }
-
-    /**
-     * Apply specific optimization level
-     */
-    applyOptimizationLevel(level) {
-        switch (level) {
-            case 0:
-                // No optimizations - full quality
-                this.highPerformanceMode = false;
-                if (this.tileRenderer) {
-                    this.tileRenderer.highPerformanceMode = false;
-                }
-                break;
-            case 1:
-                // Light optimizations
-                if (this.tileRenderer) {
-                    this.tileRenderer.renderSkipFrames = 1;
-                }
-                break;
-            case 2:
-                // Medium optimizations
-                if (this.tileRenderer) {
-                    this.tileRenderer.renderSkipFrames = 2;
-                    this.tileRenderer.highPerformanceMode = true;
-                }
-                break;
-            case 3:
-                // Heavy optimizations
-                this.highPerformanceMode = true;
-                if (this.tileRenderer) {
-                    this.tileRenderer.renderSkipFrames = 3;
-                    this.tileRenderer.highPerformanceMode = true;
-                }
-                if (this.world) {
-                    this.world.particleQuality = 0.3;
-                }
-                break;
-        }
-    }
-
-    /**
-     * Check if there's saved game data available
-     */    hasSavedGame() {
+    getShouldSkipDeathAnimation() {
         try {
-            // Check both cloud and local storage synchronously for immediate rendering
-            // This is a simplified check - the actual loading will be async
-            if (this.cloudSaveSystem.isUserLoggedIn()) {
-                // For logged-in users, we assume there might be cloud data
-                // The actual check happens during load
-                return true; // Will be validated during actual loading
+            const settings = JSON.parse(localStorage.getItem('coderunner_settings') || '{}');
+            console.log('💨 All settings:', settings);
+            console.log('💨 skipDeathAnimation setting:', settings.skipDeathAnimation);
+            
+            if (settings.skipDeathAnimation !== undefined) {
+                return settings.skipDeathAnimation === true;
             } else {
-                // For guest users, check localStorage
-                const savedData = localStorage.getItem('coderunner_save_data');
-                if (savedData) {
-                    const data = JSON.parse(savedData);
-                    return data.dataPackets > 0 || data.score > 0 || data.bestScore > 0;
-                }
+                return false; // Default to showing death animation
             }
         } catch (error) {
-            console.warn('❌ Error checking saved game data:', error);
+            console.warn('Could not load skipDeathAnimation setting:', error);
+            return false;
         }
-        return false;
-    }
-
-    /**
-     * Check if the game is in a state where the back button should be handled
-     */
-    shouldHandleBackButton() {
-        // Handle back button in login prompt (to choose guest mode)
-        if (this.gameState === GAME_STATES.LOGIN_PROMPT) {
-            return true;
-        }
-        
-        // Handle back button in profile system (to go back)
-        if (this.gameState === GAME_STATES.PROFILE) {
-            return true;
-        }
-        
-        // In other states, ignore back button by default
-        return false;
     }
 }

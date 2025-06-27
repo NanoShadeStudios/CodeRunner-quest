@@ -151,18 +151,16 @@ export class Player {
         this.updateDash(deltaTime);
         
         // Update dash visual effects
-        this.updateDashEffects(deltaTime);
-          this.isPressingDown = inputKeys.down;
+        this.updateDashEffects(deltaTime);          this.isPressingDown = inputKeys.down;
 
-        if (this.isPressingDown && this.onGround && world) {
+        // Disable drop-through platforms during quantum dash
+        if (this.isPressingDown && this.onGround && world && !this.quantumDashActive) {
             const collision = physicsEngine.checkCollision(this.x, this.y + 1, this.width, this.height, 1, false);
             if (collision.collision && collision.tileType === TILE_TYPES.PLATFORM) {
                 this.vy = 50;
                 this.onGround = false;
             }
-        }
-        
-        // Check for collectibles
+        }// Check for collectibles
         if (physicsEngine && this.game) {
             const collected = physicsEngine.checkCollectibles(this.x, this.y, this.width, this.height, this.game);
             if (collected.length > 0) {
@@ -186,51 +184,55 @@ export class Player {
             }
         }
     }    updateMovement(deltaSeconds, inputKeys) {
-        let moveInput = 0;
-        
-        // DEBUG: Add logging to see what's happening with input
-        if (inputKeys.left || inputKeys.right) {
-            console.log('🎮 Movement input detected:', { left: inputKeys.left, right: inputKeys.right });
+        // Disable movement during quantum dash
+        if (this.quantumDashActive) {
+            // Stop the player completely during quantum dash
+            this.vx = 0;
+            return;
         }
+        
+        let moveInput = 0;
         
         if (inputKeys.left) moveInput -= 1;
         if (inputKeys.right) moveInput += 1;
+        
+        // Apply movement speed with speed boost multiplier
+        const speedMultiplier = this.shopUpgrades.speedBoost ? 1.3 : 1.0; // Increased speed boost effect
+        const maxSpeed = GAME_CONFIG.MOVE_SPEED * speedMultiplier;
           if (moveInput !== 0) {
             // Update facing direction based on movement
             if (moveInput > 0) {
                 this.facingDirection = 1;  // Facing right
             } else if (moveInput < 0) {
                 this.facingDirection = -1; // Facing left
+            }            // Frame-rate independent smooth movement for 60fps feel
+            const targetVelocity = moveInput * maxSpeed;
+            const velocityDiff = targetVelocity - this.vx;
+            
+            // Use exponential smoothing for buttery smooth movement
+            const smoothingFactor = 1.0 - Math.pow(0.01, deltaSeconds); // Very smooth transition
+            this.vx += velocityDiff * smoothingFactor;
+            
+            // Snap to target if very close to prevent micro-oscillations
+            if (Math.abs(velocityDiff) < 1.0) {
+                this.vx = targetVelocity;
             }
-              // Apply movement speed with speed boost multiplier
-            const speedMultiplier = this.shopUpgrades.speedBoost ? 1.2 : 1.0; // 20% speed increase
-            const velocityChange = moveInput * GAME_CONFIG.MOVE_SPEED * speedMultiplier * deltaSeconds * 4;
-            this.vx += velocityChange;
-            const maxSpeed = GAME_CONFIG.MOVE_SPEED * speedMultiplier;
-            this.vx = Math.max(-maxSpeed, Math.min(maxSpeed, this.vx));
-        }else {
-            // No input - apply more aggressive deceleration
-            if (this.onGround) {
-                // On ground: apply strong friction to stop quickly
-                this.vx *= GAME_CONFIG.FRICTION;
-                // Additional deceleration when no input
-                const decel = 300 * deltaSeconds;
-                if (this.vx > 0) {
-                    this.vx = Math.max(0, this.vx - decel);
-                } else if (this.vx < 0) {
-                    this.vx = Math.min(0, this.vx + decel);
-                }
-            } else {
-                // In air: lighter resistance but still decelerate
-                this.vx *= GAME_CONFIG.AIR_RESISTANCE;
+        } else {
+            // Smooth deceleration using exponential decay
+            const decayFactor = 1.0 - Math.pow(0.001, deltaSeconds); // Even smoother stop
+            this.vx *= (1.0 - decayFactor);
+            
+            // Full stop when velocity is very small
+            if (Math.abs(this.vx) < 0.5) {
+                this.vx = 0;
             }
-        }
-        
-        // Prevent micro-movements that cause jitter
-        if (Math.abs(this.vx) < 2.0) {
-            this.vx = 0;
         }
     }    updateJumping(inputKeys, deltaTime) {
+        // Disable jumping and dash during quantum dash
+        if (this.quantumDashActive) {
+            return;
+        }
+        
         const jumpPressed = inputKeys.space || inputKeys.up;
         
         // Handle simple dash - triggered by Shift key when basic dash upgrade is available
@@ -268,6 +270,7 @@ export class Player {
         } else if (hasBufferedJump && !this.onGround) {
             // Check for double jump availability (either basic double jump or air boost)
             const hasDoubleJump = this.shopUpgrades.doubleJump || this.shopUpgrades.airBoostLevel > 0;
+            
             if (hasDoubleJump && this.jumpState.doubleJumpAvailable) {
                 // Double jump - only if available this air session
                 const success = this.performDoubleJump();
@@ -360,15 +363,49 @@ export class Player {
             case 'outOfBounds':
                 this.takeDamage(this.health, "lost in the data stream");
                 break;
-        }
-    }
-
-    takeDamage(amount, source) {
-        if (this.invulnerabilityTime > 0) return;
+        }    }    takeDamage(amount, source) {
+        console.log(`💥 takeDamage called: amount=${amount}, source=${source}`);
+        console.log(`🔍 Current health: ${this.health}`);
+        console.log(`🔍 Invulnerability time: ${this.invulnerabilityTime}`);
         
+        if (this.invulnerabilityTime > 0) {
+            console.log(`🛡️ Damage blocked by invulnerability frames`);
+            return;
+        }
+        
+        // Check if player is in quantum dash (invulnerable)
+        if (this.quantumDashActive) {
+            console.log('⚡ Damage blocked by Quantum Dash invulnerability!');
+            return;
+        }
+        
+        // Check if player has shield powerup active
+        if (this.game && this.game.powerUpSystem) {
+            const shieldResult = this.game.powerUpSystem.onPlayerDamage();
+            if (shieldResult.absorbed) {
+                console.log('🛡️ Shield absorbed damage in takeDamage - returning early');
+                
+                // Grant invulnerability frames if the shield requests it
+                if (shieldResult.grantInvulnerability) {
+                    console.log('🛡️ Granting invulnerability frames after shield absorption');
+                    this.invulnerabilityTime = GAME_CONFIG.INVULNERABILITY_DURATION;
+                    this.lastDamageTime = Date.now();
+                }
+                
+                return;
+            }
+        }
+        
+        console.log(`💔 No protection active - applying ${amount} damage`);
         this.health -= amount;
+        console.log(`💔 Health after damage: ${this.health}`);
         this.invulnerabilityTime = GAME_CONFIG.INVULNERABILITY_DURATION;
         this.lastDamageTime = Date.now();
+        
+        // Trigger screen shake on damage
+        if (this.game && this.game.triggerScreenShake) {
+            this.game.triggerScreenShake(0.5, 200); // Medium shake for damage
+        }
         
         this.damageTexts.push({
             text: `-${amount}`,
@@ -379,10 +416,21 @@ export class Player {
             opacity: 1,
             color: '#ff4444'
         });
-        
-        if (this.health <= 0) {
+          if (this.health <= 0) {
+            console.log(`💀 Health <= 0, calling die(${source})`);
             this.die(source);
-        }    }    die(reason) {
+        } else if (this.health === 1 && this.game && this.game.tutorialSystem) {
+            // Show low health hint when player has only 1 health left
+            this.game.tutorialSystem.showLowHealthHint();
+        }
+    }
+
+    die(reason) {
+        // Trigger strong screen shake on death
+        if (this.game && this.game.triggerScreenShake) {
+            this.game.triggerScreenShake(1.5, 500); // Strong shake for death
+        }
+        
         if (this.game) {
             this.game.gameOver(reason);
         }
@@ -404,14 +452,21 @@ export class Player {
     }
       /**
      * Handle collected items (data packets, etc.)
-     */
-    handleCollectibles(collected) {
+     */    handleCollectibles(collected) {
         for (const item of collected) {
             if (item.type === 'dataPacket') {
                 // Play collection sound
                 if (this.game && this.game.audioSystem) {
                     this.game.audioSystem.onCollect();
-                }                // Create collection effect
+                }
+                
+                // Add score when collecting data packet
+                if (this.game) {
+                    this.game.score += 10;
+                    console.log(`📦 Data packet collected! +10 score (Total: ${this.game.score})`);
+                }
+                
+                // Create collection effect
                 this.createCollectionEffect(item.worldX, item.worldY, item.points);
                 
                 // Create floating text showing data packets gained
@@ -470,33 +525,81 @@ export class Player {
         const screenX = this.x - camera.x;
         const screenY = this.y - camera.y;
         
-        // Draw dash effects behind the player
+        // Get graphics quality from game
+        const graphicsQuality = this.game?.graphicsQuality || 'medium';
+        
+        // Draw dash effects behind the player with quality-based enhancements
         ctx.save();
         ctx.translate(-camera.x, -camera.y);
-        this.drawDashEffects(ctx);
+        this.drawDashEffects(ctx, graphicsQuality);
         ctx.restore();
         
-        // Draw main player body
-        this.drawPlayerBody(ctx, screenX, screenY);
-          // Draw damage text
+        // Draw main player body with quality-based effects
+        this.drawPlayerBody(ctx, screenX, screenY, graphicsQuality);
+        
+        // Draw additional visual effects based on quality
+        if (graphicsQuality === 'high') {
+            this.drawHighQualityEffects(ctx, screenX, screenY, camera);
+        }
+        
+        // Draw damage text
         this.drawDamageTexts(ctx, camera);
-    }    drawPlayerBody(ctx, screenX, screenY) {
+    }    drawPlayerBody(ctx, screenX, screenY, graphicsQuality = 'medium') {
         // Check if player is invulnerable and should flash
         const isFlashing = this.invulnerabilityTime > 0 && Math.floor(Date.now() / 100) % 2 === 0;
         
-        // Add subtle animation bob when moving
+        // Check for quantum dash special effects
+        const isQuantumDashing = this.quantumDashActive || false;
+        
+        // Add subtle animation bob when moving (enhanced for high quality)
         const isRunning = this.onGround && Math.abs(this.vx) > 10;
-        const bob = isRunning ? Math.sin(Date.now() * 0.01) * 1 : 0;
+        const bobIntensity = graphicsQuality === 'high' ? 2 : graphicsQuality === 'medium' ? 1 : 0.5;
+        const bob = isRunning ? Math.sin(Date.now() * 0.01) * bobIntensity : 0;
         const finalY = screenY + bob;
+        
+        // Apply quantum dash visual effects with quality scaling
+        if (isQuantumDashing) {
+            ctx.save();
+            
+            switch (graphicsQuality) {
+                case 'low':
+                    ctx.globalAlpha = 0.9;
+                    break;
+                case 'medium':
+                    ctx.globalAlpha = 0.8;
+                    ctx.shadowColor = '#64c8ff';
+                    ctx.shadowBlur = 8;
+                    break;
+                case 'high':
+                    ctx.globalAlpha = 0.8;
+                    ctx.shadowColor = '#64c8ff';
+                    ctx.shadowBlur = 15;
+                    ctx.filter = 'drop-shadow(0 0 10px #64c8ff) hue-rotate(200deg)';
+                    break;
+            }
+        }
+        
+        // Add ambient glow for medium and high quality
+        if ((graphicsQuality === 'medium' || graphicsQuality === 'high') && !isQuantumDashing) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(100, 200, 255, 0.3)';
+            ctx.shadowBlur = graphicsQuality === 'high' ? 6 : 3;
+        }
         
         // Use sprite if loaded, otherwise fallback to pixel art
         if (this.spriteLoaded && this.sprite && this.sprite.src) {
             // Use the single sprite image
-            this.drawSpriteImage(ctx, screenX, finalY, isFlashing);        } else {
+            this.drawSpriteImage(ctx, screenX, finalY, isFlashing);        
+        } else {
             // Fallback to original pixel art
             this.drawPixelArtFallback(ctx, screenX, finalY, isFlashing);
         }
-    }    /**
+        
+        // Restore context if effects were applied
+        if (isQuantumDashing || (graphicsQuality !== 'low' && !isQuantumDashing)) {
+            ctx.restore();
+        }
+    }/**
      * Draw the player using main character animated sprites
          /**
      * Draw the player using main character animated sprites
@@ -1151,4 +1254,4 @@ export class Player {
             `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` :
             '255, 255, 255';
     }
-}
+  }

@@ -7,6 +7,13 @@ import { GAME_CONFIG, TILE_TYPES } from '../utils/constants.js';
 export class PhysicsEngine {
     constructor(world) {
         this.world = world;
+        
+        // Performance optimizations
+        this.collisionCache = new Map();
+        this.lastCacheClean = 0;
+        this.maxCacheSize = 100;
+        this.cacheHitCount = 0;
+        this.cacheMissCount = 0;
     }
     
     /**
@@ -20,6 +27,17 @@ export class PhysicsEngine {
         if (height === undefined || height === null || isNaN(height)) {
             height = 44; // GAME_CONFIG.PLAYER_HEIGHT fallback
         }
+        
+        // Create cache key for collision check
+        const cacheKey = `${Math.floor(x)}_${Math.floor(y)}_${width}_${height}_${direction}_${playerDropping}`;
+        
+        // Check cache first
+        if (this.collisionCache.has(cacheKey)) {
+            this.cacheHitCount++;
+            return this.collisionCache.get(cacheKey);
+        }
+        
+        this.cacheMissCount++;
         
         const left = Math.floor(x / GAME_CONFIG.TILE_SIZE);
         const right = Math.floor((x + width - 1) / GAME_CONFIG.TILE_SIZE);
@@ -43,12 +61,23 @@ export class PhysicsEngine {
             }
         }
         
+        let result;
         if (collisions.length === 0) {
-            return { collision: false };
+            result = { collision: false };
+        } else {
+            // Return the most appropriate collision based on movement direction
+            result = this.getMostRelevantCollision(collisions, x, y, width, height, direction);
         }
         
-        // Return the most appropriate collision based on movement direction
-        return this.getMostRelevantCollision(collisions, x, y, width, height, direction);
+        // Cache the result
+        if (this.collisionCache.size >= this.maxCacheSize) {
+            // Remove oldest entry to prevent memory issues
+            const firstKey = this.collisionCache.keys().next().value;
+            this.collisionCache.delete(firstKey);
+        }
+        this.collisionCache.set(cacheKey, result);
+        
+        return result;
     }
     
     /**
@@ -429,6 +458,11 @@ export class PhysicsEngine {
                     if (game && game.upgradeSystem) {
                         game.upgradeSystem.addDataPackets(finalPoints);
                         
+                        // Show first-time data packet hint
+                        if (game.tutorialSystem) {
+                            game.tutorialSystem.showDataPacketHint();
+                        }
+                        
                         // Trigger manual save after collecting datapackets to ensure they're saved
                         if (game.triggerManualSave) {
                             game.triggerManualSave();
@@ -450,6 +484,13 @@ export class PhysicsEngine {
                         }
                         
                         game.bonusScore += scoreBonus;
+                        
+                        // Track achievement: Data packet collection
+                        if (game.achievementSystem) {
+                            game.achievementSystem.trackEvent('dataPacketCollected', {
+                                points: scoreBonus
+                            });
+                        }
                     }
                 }
             }
@@ -589,5 +630,16 @@ export class PhysicsEngine {
         }
         
         return false;
+    }
+
+    /**
+     * Update method for PhysicsEngine - no-op implementation
+     * This method is called by the game loop but the PhysicsEngine
+     * doesn't need to perform any frame-based updates since it's
+     * a stateless collision detection system.
+     */
+    update(deltaTime) {
+        // No-op: PhysicsEngine is stateless and doesn't need frame updates
+        // All physics calculations are done on-demand in movement methods
     }
 }

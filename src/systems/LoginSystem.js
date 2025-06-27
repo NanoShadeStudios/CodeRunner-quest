@@ -92,20 +92,28 @@ export class LoginSystem {
         // Initialize Firebase Auth if available - use the separate auth app
         if (window.firebase && window.firebaseAuth) {
             this.auth = window.firebaseAuth;
+            console.log('🔑 Firebase Auth available, setting up auth state listener');
             
             // Set up auth state listener
             this.auth.onAuthStateChanged((user) => {
                 const wasLoggedIn = this.isLoggedIn;
-                  if (user) {
-                    this.currentUser = user;
-                    this.isLoggedIn = true;
+                console.log('🔑 Firebase Auth state changed:', { user: !!user, email: user?.email, wasLoggedIn });
+                  if (user) {this.currentUser = user;                    this.isLoggedIn = true;
                     this.isGuest = false;
                     console.log('🔑 Firebase Auth: User signed in:', user.email);
                     
-                    // If this is a state change after initialization, update navigation
+                    // Update HTML UI
+                    if (window.updateLoginStatus) {
+                        console.log('🔑 Calling updateLoginStatus after sign in');
+                        window.updateLoginStatus();
+                    } else {
+                        console.warn('🔑 updateLoginStatus not available on window');
+                    }
+                      // If this is a state change after initialization, update navigation
                     if (!wasLoggedIn && this.game && this.game.gameState === GAME_STATES.LOGIN_PROMPT) {
-                        console.log('🔑 Firebase Auth: Auth state changed, updating navigation');
-                        this.game.determineInitialNavigation();
+                        console.log('🔑 Firebase Auth: Auth state changed, proceeding to next state');
+                        this.loading = false; // Stop loading indicator
+                        this.proceedToNextState(); // Properly transition away from login
                     }
                     
                     // Migrate local data to cloud when user logs in
@@ -115,28 +123,29 @@ export class LoginSystem {
                             if (migrated) {
                                 console.log('☁️ Successfully migrated local data to cloud');
                                 // Optionally show a popup about migration
-                                if (this.game.popupSystem) {
-                                    this.game.popupSystem.showConfirmationPopup(
-                                        "Data Synced",
-                                        "Your local save data has been synced to the cloud!\n\nYour game progress is now backed up and will be available on any device.",
-                                        () => {
-                                            this.game.popupSystem.closePopup();
-                                        }
-                                    );
-                                }
+                                // Data synced successfully - log to console instead of showing popup
+                                console.log('✅ Data synced to cloud successfully');
                             }
                         }).catch((error) => {
                             console.error('❌ Error migrating data to cloud:', error);
                         });
-                    }
-                }else {
+                    }                }else {
                     this.currentUser = null;
                     this.isLoggedIn = false;
                     console.log('🔑 Firebase Auth: User signed out');
+                    console.log('🔑 Current auth state:', { isLoggedIn: this.isLoggedIn, isGuest: this.isGuest });
+                    
+                    // Update HTML UI
+                    if (window.updateLoginStatus) {
+                        window.updateLoginStatus();
+                    }
                 }
             });
         } else {
-            console.warn('Firebase Auth not available');
+            console.warn('🔑 Firebase Auth not available - user will need to use guest mode');
+            // Ensure we're not in a logged-in state if Firebase isn't available
+            this.currentUser = null;
+            this.isLoggedIn = false;
         }
     }    setupEventListeners() {
         // Store bound event handlers so we can remove them later
@@ -177,12 +186,13 @@ export class LoginSystem {
     }    start() {
         this.isActive = true;
         this.hasShown = true;
+        this.loading = false; // Ensure we're not stuck in loading state
         this.fadeAlpha = 0;
         this.targetAlpha = 1;
         this.slideOffset = 50;
         this.positionButtons();
         this.addEventListeners();
-    }    positionButtons() {
+    }positionButtons() {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         
@@ -220,20 +230,21 @@ export class LoginSystem {
         }
     }
 
+    /**
+     * Update login system animations
+     */
     update(deltaTime) {
         if (!this.isActive) return;
-
-        // Smooth fade-in animation
+        
+        // Animate fade-in effect
         if (this.fadeAlpha < this.targetAlpha) {
-            this.fadeAlpha = Math.min(this.targetAlpha, this.fadeAlpha + deltaTime * 3);
+            this.fadeAlpha = Math.min(this.targetAlpha, this.fadeAlpha + (deltaTime / 500)); // 500ms fade in
         }
-
-        // Smooth slide animation
+        
+        // Animate slide effect
         if (this.slideOffset > 0) {
-            this.slideOffset = Math.max(0, this.slideOffset - deltaTime * 150);
+            this.slideOffset = Math.max(0, this.slideOffset - (deltaTime / 300)); // 300ms slide in
         }
-
-        this.updateButtonHover();
     }
 
     updateButtonHover() {
@@ -296,13 +307,17 @@ export class LoginSystem {
     async handleLoginChoice() {
         console.log('Login chosen');
         // This method can be used for additional login logic if needed
-    }
-
-    handleGuestChoice() {
+    }    handleGuestChoice() {
         console.log('Guest mode chosen');
         this.isGuest = true;
         this.isLoggedIn = false;
         this.currentUser = null;
+        
+        // Update HTML UI
+        if (window.updateLoginStatus) {
+            window.updateLoginStatus();
+        }
+        
         this.proceedToNextState();
     }
 
@@ -314,7 +329,15 @@ export class LoginSystem {
     }    proceedToNextState() {
         this.isActive = false;
         this.removeEventListeners();
-        this.game.gameState = GAME_STATES.HOME;
+        
+        // Check if tutorial should be shown for new users or guests
+        if (this.game.tutorialSystem && this.game.tutorialSystem.shouldShowTutorial()) {
+            console.log('🎓 Showing tutorial for new user/guest');
+            this.game.gameState = GAME_STATES.TUTORIAL;
+            this.game.tutorialSystem.startTutorial('welcome');
+        } else {
+            this.game.gameState = GAME_STATES.HOME;
+        }
     }
 
     getCurrentUser() {
@@ -828,17 +851,20 @@ export class LoginSystem {
         };
         
         return errorMessages[code] || 'An error occurred. Please try again.';
-    }
-
-    hasActiveFocusedField() {
+    }    hasActiveFocusedField() {
         return this.isActive && this.currentView !== 'main' && 
                Object.values(this.inputFields).some(field => field.focused);
-    }    /**
+    }
+
+    /**
      * Check if user is currently authenticated (including persisted state)
-     */
-    isUserAuthenticated() {
-        // Check both logged in users and guest mode
-        return (this.isLoggedIn && this.currentUser) || this.isGuest;
+     */    isUserAuthenticated() {
+        const isLoggedIn = this.isLoggedIn && this.currentUser;
+        const isGuest = this.isGuest;
+        const result = isLoggedIn || isGuest;
+        
+        // Ensure we return a boolean
+        return !!result;
     }
 
     /**

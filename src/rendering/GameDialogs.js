@@ -12,7 +12,15 @@ export class GameDialogs {    constructor(game) {
         this.tabHitAreas = [];
         this.resetDialogHitAreas = [];
         this.shopHitAreas = [];
-    }    /**
+        
+        // Initialize settings tab state
+        this.currentSettingsTab = 'general';
+        
+        // Initialize slider dragging state
+        this.draggingSlider = null;
+    }
+
+    /**
      * Draw the difficulty selection screen
      */
     drawDifficultySelection(difficultyHitAreas, hoveredDifficulty, difficultyKeys) {
@@ -243,19 +251,21 @@ export class GameDialogs {    constructor(game) {
             ctx.fillText(difficulty.emoji, iconX, y + 15 + hoverOffset);
             ctx.fillText(difficulty.name, nameX, y + 15 + hoverOffset);
             ctx.shadowBlur = 0;
-            
-            // Enhanced description with better formatting
+              // Enhanced description with better formatting
             ctx.fillStyle = isHovered ? '#c9d1d9' : '#8b949e';
             ctx.font = isHovered ? 'bold 15px Courier New' : '14px Courier New';
             
             if (difficulty.healthRegenInterval > 0) {
-                const minutes = Math.floor(difficulty.healthRegenInterval / 60000);
-                const seconds = Math.floor((difficulty.healthRegenInterval % 60000) / 1000);
-                const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-                ctx.fillText(`❤️ Health regeneration: Every ${timeText}`, nameX, y + 40 + hoverOffset);
+                // Show life box frequency instead of health regeneration
+                const lifeBoxFrequency = {
+                    EASY: "Frequent life boxes",
+                    MEDIUM: "Moderate life boxes", 
+                    HARD: "Rare life boxes"
+                }[Object.keys(DIFFICULTY_LEVELS)[index]] || "Life boxes available";
+                ctx.fillText(`❤️ ${lifeBoxFrequency}`, nameX, y + 40 + hoverOffset);
             } else {
                 ctx.fillStyle = isHovered ? '#f85149' : '#da3633';
-                ctx.fillText(`💀 No health regeneration - Extreme challenge!`, nameX, y + 40 + hoverOffset);
+                ctx.fillText(`💀 No life boxes - Extreme challenge!`, nameX, y + 40 + hoverOffset);
             }
             
             // Add difficulty rating stars
@@ -620,7 +630,7 @@ export class GameDialogs {    constructor(game) {
         const height = this.canvas.height;
         
         // Semi-transparent overlay
-        ctx.fillStyle = 'rgba(13, 17, 23, 0.8)';
+        ctx.fillStyle
         ctx.fillRect(0, 0, width, height);
         
         // Dialog box dimensions
@@ -818,35 +828,199 @@ export class GameDialogs {    constructor(game) {
             }
         );
     }
-    
-    /**
-     * Draw pause overlay with instructions and a semi-transparent background
+      /**
+     * Draw pause screen overlay with fade in animation and navigation buttons
      */
     drawPauseOverlay() {
         const ctx = this.ctx;
         const width = this.canvas.width;
         const height = this.canvas.height;
         
-        // Semi-transparent overlay
-        ctx.fillStyle = 'rgba(13, 17, 23, 0.7)';
+        const time = Date.now();
+        const fadeStart = this.game.pauseStartTime || time;
+        const fadeProgress = Math.min(1, (time - fadeStart) / 1000); // 1 second fade in
+        
+        // Ease-in-cubic for smoother animation
+        const easedProgress = fadeProgress < 0.5 ? 4 * fadeProgress * fadeProgress * fadeProgress : 1 - Math.pow(-2 * fadeProgress + 2, 3) / 2;
+        
+        // Modern glassmorphism overlay with gradient for pause
+        const overlayGradient = ctx.createRadialGradient(
+            width / 2, height / 2, 0,
+            width / 2, height / 2, Math.max(width, height) / 2
+        );
+        overlayGradient.addColorStop(0, `rgba(13, 17, 23, ${0.8 * easedProgress})`);
+        overlayGradient.addColorStop(1, `rgba(0, 0, 0, ${0.7 * easedProgress})`);
+        
+        ctx.fillStyle = overlayGradient;
         ctx.fillRect(0, 0, width, height);
         
-        // Pause icon
-        ctx.fillStyle = 'rgba(240, 246, 252, 0.8)';
-        ctx.fillRect(width / 2 - 30, height / 2 - 50, 20, 60);
-        ctx.fillRect(width / 2 + 10, height / 2 - 50, 20, 60);
-          // Pause text
-        ctx.fillStyle = '#f0f6fc';
-        ctx.font = 'bold 24px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText('PAUSED', width / 2, height / 2 + 50);
+        // Pause title with modern styling
+        const textAlpha = easedProgress;
         
-        // Instructions
-        ctx.fillStyle = '#8b949e';
-        ctx.font = '16px Courier New';        ctx.fillText('Press [Space] to Resume', width / 2, height / 2 + 85);
-        ctx.fillText('Click to Restart', width / 2, height / 2 + 115);
-        ctx.fillText('Press [Escape] to Change Difficulty', width / 2, height / 2 + 145);
-        ctx.fillText('Press [L] to View Leaderboards', width / 2, height / 2 + 175);
+        ctx.save();
+        // Create gradient for title
+        const titleGradient = ctx.createLinearGradient(0, height / 2 - 70, 0, height / 2 - 30);
+        titleGradient.addColorStop(0, `rgba(88, 166, 255, ${textAlpha})`);
+        titleGradient.addColorStop(1, `rgba(59, 130, 246, ${textAlpha})`);
+        
+        ctx.fillStyle = titleGradient;
+        ctx.font = 'bold 38px "Segoe UI", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        
+        // Add shadow for depth
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 3;
+        
+        ctx.fillText('GAME PAUSED', width / 2, height / 2 - 50);
+        ctx.restore();
+        
+        // Current game stats with modern styling
+        if (this.game.player) {
+            ctx.fillStyle = `rgba(88, 166, 255, ${textAlpha})`;
+            ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(`Current Score: ${this.game.score.toLocaleString()}`, width / 2, height / 2 + 10);
+            
+            // Show current survival time
+            const currentTime = this.game.pauseStartTime || Date.now();
+            const survivalTime = Math.floor((currentTime - this.game.startTime) / 1000);
+            ctx.font = '16px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(`Survival Time: ${survivalTime}s`, width / 2, height / 2 + 35);
+            
+            // Show best score for comparison
+            const difficultyBestScore = this.game.bestScores[this.game.selectedDifficulty] || 0;
+            if (difficultyBestScore > 0) {
+                ctx.fillStyle = `rgba(255, 215, 0, ${textAlpha})`;
+                ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+                ctx.fillText(`Best Score: ${difficultyBestScore.toLocaleString()}`, width / 2, height / 2 + 60);
+            }
+        }
+        
+        // Draw navigation buttons (only show when fade is nearly complete)
+        if (easedProgress > 0.7) {
+            this.drawPauseButtons(textAlpha);
+        }
+    }
+
+    /**
+     * Draw modern navigation buttons for pause screen
+     */
+    drawPauseButtons(alpha) {
+        // Clear any existing hit areas for pause menu
+        this.game.pauseHitAreas = this.game.pauseHitAreas || [];
+        this.game.pauseHitAreas.length = 0;
+        
+        const ctx = this.ctx;
+        const buttonWidth = 190;
+        const buttonHeight = 45;
+        const buttonSpacing = 12;
+        const buttonsPerRow = 3;
+        const totalRows = 3; // Updated for 7 buttons
+        
+        // Calculate starting position to center the button grid
+        const totalWidth = (buttonsPerRow * buttonWidth) + ((buttonsPerRow - 1) * buttonSpacing);
+        const totalHeight = (totalRows * buttonHeight) + ((totalRows - 1) * buttonSpacing);
+        const startX = (this.canvas.width - totalWidth) / 2;
+        const startY = this.canvas.height / 2 + 60; // Moved up slightly to fit 3 rows
+        
+        // Modern button definitions with icons
+        const buttons = [
+            { text: 'Resume', action: 'resume', color: '#22c55e', icon: '▶️' },
+            { text: 'Restart', action: 'restart', color: '#3b82f6', icon: '🔄' },
+            { text: 'Difficulty', action: 'difficulty', color: '#8b5cf6', icon: '⚙️' },
+            { text: 'Main Menu', action: 'home', color: '#f59e0b', icon: '🏠' },
+            { text: 'Shop', action: 'shop', color: '#10b981', icon: '🛒' },
+            { text: 'Leaderboard', action: 'leaderboard', color: '#06b6d4', icon: '🏆' },
+            { text: 'Settings', action: 'settings', color: '#ef4444', icon: '⚙️' }
+        ];
+        
+        buttons.forEach((button, index) => {
+            const row = Math.floor(index / buttonsPerRow);
+            const col = index % buttonsPerRow;
+            
+            let x, y;
+            
+            // Special handling for the last button (7th button) to center it in row 3
+            if (index === 6) {
+                // Center the 7th button in the third row
+                x = startX + buttonWidth + buttonSpacing; // Center position
+                y = startY + (row * (buttonHeight + buttonSpacing));
+            } else {
+                x = startX + (col * (buttonWidth + buttonSpacing));
+                y = startY + (row * (buttonHeight + buttonSpacing));
+            }
+            
+            const isHovered = this.game.hoveredPauseButton === index;
+            
+            // Scale effect on hover
+            const scale = isHovered ? 1.02 : 1;
+            const scaledWidth = buttonWidth * scale;
+            const scaledHeight = buttonHeight * scale;
+            const scaledX = x - (scaledWidth - buttonWidth) / 2;
+            const scaledY = y - (scaledHeight - buttonHeight) / 2;
+            
+            // Modern glassmorphism button background
+            ctx.save();
+            
+            // Main button background with gradient
+            const gradient = ctx.createLinearGradient(scaledX, scaledY, scaledX, scaledY + scaledHeight);
+            if (isHovered) {
+                gradient.addColorStop(0, `${button.color}40`);
+                gradient.addColorStop(1, `${button.color}60`);
+            } else {
+                gradient.addColorStop(0, `${button.color}20`);
+                gradient.addColorStop(1, `${button.color}30`);
+            }
+            
+            ctx.fillStyle = gradient;
+            this.roundRect(ctx, scaledX, scaledY, scaledWidth, scaledHeight, 10);
+            ctx.fill();
+            
+            // Border with glow effect on hover
+            if (isHovered) {
+                ctx.shadowColor = button.color;
+                ctx.shadowBlur = 15;
+                ctx.strokeStyle = button.color;
+                ctx.lineWidth = 2;
+            } else {
+                ctx.strokeStyle = `${button.color}80`;
+                ctx.lineWidth = 1;
+            }
+            ctx.stroke();
+            
+            ctx.restore();
+            
+            // Button content
+            ctx.save();
+            
+            // Add subtle glow to text on hover
+            if (isHovered) {
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+                ctx.shadowBlur = 8;
+            }
+            
+            // Button icon
+            ctx.font = '18px Arial';
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.textAlign = 'center';
+            ctx.fillText(button.icon, scaledX + 25, scaledY + scaledHeight / 2 + 6);
+            
+            // Button text
+            ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.fillText(button.text, scaledX + scaledWidth / 2 + 12, scaledY + scaledHeight / 2 + 5);
+            
+            ctx.restore();
+            
+            // Store hit area for click detection
+            this.game.pauseHitAreas.push({
+                x, y, width: buttonWidth, height: buttonHeight,
+                action: button.action
+            });
+        });
+        
+        ctx.textAlign = 'left';
     }
     
     /**
@@ -864,57 +1038,71 @@ export class GameDialogs {    constructor(game) {
         // Ease-in-cubic for smoother animation
         const easedProgress = fadeProgress < 0.5 ? 4 * fadeProgress * fadeProgress * fadeProgress : 1 - Math.pow(-2 * fadeProgress + 2, 3) / 2;
         
-        // Semi-transparent overlay with animation
-        ctx.fillStyle = `rgba(13, 17, 23, ${0.7 * easedProgress})`;
+        // Modern glassmorphism overlay with gradient
+        const overlayGradient = ctx.createRadialGradient(
+            width / 2, height / 2, 0,
+            width / 2, height / 2, Math.max(width, height) / 2
+        );
+        overlayGradient.addColorStop(0, `rgba(13, 17, 23, ${0.85 * easedProgress})`);
+        overlayGradient.addColorStop(1, `rgba(0, 0, 0, ${0.75 * easedProgress})`);
+        
+        ctx.fillStyle = overlayGradient;
         ctx.fillRect(0, 0, width, height);
-          // Game over text with fade in - use random death message
-        const textAlpha = easedProgress;        ctx.fillStyle = `rgba(248, 81, 73, ${textAlpha})`;
-        ctx.font = 'bold 36px Courier New';
+          // Game over text with modern styling and gradient
+        const textAlpha = easedProgress;
+        
+        // Create gradient for title
+        const titleGradient = ctx.createLinearGradient(0, height / 2 - 70, 0, height / 2 - 30);
+        titleGradient.addColorStop(0, `rgba(248, 81, 73, ${textAlpha})`);
+        titleGradient.addColorStop(1, `rgba(220, 38, 38, ${textAlpha})`);
+        
+        ctx.save();
+        ctx.fillStyle = titleGradient;
+        ctx.font = 'bold 42px "Segoe UI", Arial, sans-serif';
         ctx.textAlign = 'center';
+        
+        // Add shadow for depth
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 4;
+        
         const deathMessage = this.game.gameOverMessage || 'GAME OVER';
         ctx.fillText(deathMessage, width / 2, height / 2 - 50);
         
+        ctx.restore();
+        
         // Death reason if available
         if (this.game.gameOverReason) {
-            ctx.fillStyle = `rgba(240, 246, 252, ${textAlpha})`;
-            ctx.font = '18px Courier New';
-            ctx.fillText(`Cause: ${this.game.gameOverReason}`, width / 2, height / 2 - 20);
+            ctx.fillStyle = `rgba(240, 246, 252, ${textAlpha * 0.9})`;
+            ctx.font = '16px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(`Cause: ${this.game.gameOverReason}`, width / 2, height / 2 - 15);
         }
-            // Player stats
+        
+        // Player stats with modern styling
         if (this.game.player) {
-            ctx.fillStyle = `rgba(88, 166, 255, ${textAlpha})`;            ctx.fillText(`Final Score: ${this.game.score}`, width / 2, height / 2 + 10);
+            // Final Score
+            ctx.fillStyle = `rgba(88, 166, 255, ${textAlpha})`;
+            ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(`Final Score: ${this.game.score.toLocaleString()}`, width / 2, height / 2 + 15);
             
             // Show survival time - use gameOverStartTime to stop counting after death
             const survivalTime = Math.floor((this.game.gameOverStartTime - this.game.startTime) / 1000);
-            ctx.fillText(`Survival Time: ${survivalTime}s`, width / 2, height / 2 + 30);            // Show best score
+            ctx.font = '16px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(`Survival Time: ${survivalTime}s`, width / 2, height / 2 + 40);
+            
+            // Show best score with better formatting
             const difficultyBestScore = this.game.bestScores[this.game.selectedDifficulty] || 0;
             if (difficultyBestScore > 0) {
                 ctx.fillStyle = `rgba(255, 215, 0, ${textAlpha})`;
-                ctx.fillText(`Best Score: ${difficultyBestScore}`, width / 2, height / 2 + 50);
+                ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+                ctx.fillText(`Best Score: ${difficultyBestScore.toLocaleString()}`, width / 2, height / 2 + 65);
             }
         }
-            // Restart instructions (only show when fade is nearly complete)
+        
+        // Draw navigation buttons (only show when fade is nearly complete)
         if (easedProgress > 0.7) {
-            const instructionAlpha = Math.max(0, (easedProgress - 0.7) / 0.3);
-            ctx.fillStyle = `rgba(86, 211, 100, ${instructionAlpha})`;
-            ctx.font = '18px Courier New';
-            ctx.fillText('Click to Restart', width / 2, height / 2 + 80);
-              // Additional controls
-            ctx.fillStyle = `rgba(121, 192, 255, ${instructionAlpha})`;
-            ctx.font = '14px Courier New';
-            ctx.fillText('Press [Escape] to Change Difficulty', width / 2, height / 2 + 100);
-              
-            ctx.font = '12px Courier New';
-            ctx.fillStyle = `rgba(125, 133, 144, ${instructionAlpha})`;
-            ctx.fillText('Press [P] to View Game Stats', width / 2, height / 2 + 120);
-            
-            // Upload score button (only if score is high enough and not already uploaded)
-            if (this.game.score >= 100 && this.game.leaderboardSystem && 
-                this.game.leaderboardSystem.canUploadForDifficulty(this.game.selectedDifficulty)) {
-                ctx.fillStyle = `rgba(255, 215, 0, ${instructionAlpha})`;
-                ctx.font = 'bold 14px Courier New';
-                ctx.fillText('Press [U] to Upload Score', width / 2, height / 2 + 145);
-            }
+            this.drawGameOverButtons(textAlpha);
         }
         
         // High score celebration
@@ -924,127 +1112,125 @@ export class GameDialogs {    constructor(game) {
     }
     
     /**
-     * Draw flashy high score celebration animation
+     * Draw modern game over menu buttons
      */
-    drawHighScoreCelebration(currentTime, baseAlpha = 1) {
-        if (!this.game.gameOverStartTime) return;
+    drawGameOverButtons(alpha) {
+        // Clear any existing hit areas for game over menu
+        this.game.gameOverHitAreas = this.game.gameOverHitAreas || [];
+        this.game.gameOverHitAreas.length = 0;
         
         const ctx = this.ctx;
-        const timeElapsed = currentTime - this.game.gameOverStartTime;
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonSpacing = 15;
+        const buttonsPerRow = 3;
+        const totalRows = 2;
         
-        // Only show celebration animations after a short delay
-        if (timeElapsed < 500) return;
+        // Calculate starting position to center the button grid
+        const totalWidth = (buttonsPerRow * buttonWidth) + ((buttonsPerRow - 1) * buttonSpacing);
+        const totalHeight = (totalRows * buttonHeight) + ((totalRows - 1) * buttonSpacing);
+        const startX = (this.canvas.width - totalWidth) / 2;
+        const startY = this.canvas.height / 2 + 90;
         
-        const animTime = timeElapsed - 500; // Adjusted time for animation
+        // Modern button definitions with better styling
+        const buttons = [
+            { text: 'Restart', action: 'restart', color: '#22c55e', icon: '🔄' },
+            { text: 'Difficulty', action: 'difficulty', color: '#3b82f6', icon: '⚙️' },
+            { text: 'Main Menu', action: 'home', color: '#8b5cf6', icon: '🏠' },
+            { text: 'Leaderboard', action: 'leaderboard', color: '#f59e0b', icon: '🏆' },
+            { text: 'Shop', action: 'shop', color: '#06b6d4', icon: '🛒' },
+            { text: 'Settings', action: 'settings', color: '#ef4444', icon: '⚙️' }
+        ];
         
-        // New high score text with pulsing/glowing effect
-        const pulseRate = 0.002; // Speed of the pulse
-        const pulseIntensity = 0.2; // How much the pulse affects the size/color
-        const pulseFactor = 1 + pulseIntensity * Math.sin(animTime * pulseRate);
-        
-        ctx.save();
-        ctx.textAlign = 'center';
-        
-        // Shadow for glow effect
-        ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
-        ctx.shadowBlur = 15 * pulseFactor;
-          // High score text
-        ctx.font = `bold ${32 * pulseFactor}px Courier New`;
-        ctx.fillStyle = `rgba(255, 215, 0, ${baseAlpha})`;
-        ctx.fillText('🎉 NEW HIGH SCORE! 🎉', this.canvas.width / 2, this.canvas.height / 3 - 20);
-        
-        // Show the score increase
-        if (this.game.previousBestDistance > 0) {
-            const increase = this.game.bestDistance - this.game.previousBestDistance;
-            ctx.font = `${18 * pulseFactor}px Courier New`;
-            ctx.fillStyle = `rgba(255, 160, 0, ${baseAlpha})`;
-            ctx.fillText(`Improved by ${increase} meters!`, this.canvas.width / 2, this.canvas.height / 3 + 15);
-        }
-        
-        ctx.restore();
-        
-        // Add celebratory particles
-        this.drawCelebrationParticles(currentTime, baseAlpha);
-        
-        // Add fireworks effect at intervals
-        if (timeElapsed % 1000 < 50) {
-            this.drawFireworkBurst(
-                this.canvas.width * (0.3 + Math.random() * 0.4), 
-                this.canvas.height * (0.2 + Math.random() * 0.3),
-                timeElapsed,
-                baseAlpha
-            );
-        }
-    }
-    
-    /**
-     * Draw animated celebration particles
-     */
-    drawCelebrationParticles(currentTime, alpha) {
-        const ctx = this.ctx;
-        const time = currentTime * 0.001;
-          // Confetti-like particles
-        for (let i = 0; i < 10; i++) {
-            const x = (Math.sin(time * 0.4 + i * 343.3) * 0.5 + 0.5) * this.canvas.width;
-            const y = ((time * 0.05 + i * 0.1) % 1) * this.canvas.height;
+        buttons.forEach((button, index) => {
+            const row = Math.floor(index / buttonsPerRow);
+            const col = index % buttonsPerRow;
             
-            // Alternating confetti colors
-            const colors = ['#ff6b6b', '#4cc9f0', '#ffd166', '#4361ee', '#7209b7', '#f72585'];
-            ctx.fillStyle = `rgba(${this.hexToRgb(colors[i % colors.length])}, ${alpha * 0.7})`;
+            const x = startX + (col * (buttonWidth + buttonSpacing));
+            const y = startY + (row * (buttonHeight + buttonSpacing));
             
-            // Rotation effect
+            const isHovered = this.game.hoveredGameOverButton === index;
+            
+            // Scale effect on hover
+            const scale = isHovered ? 1.02 : 1;
+            const scaledWidth = buttonWidth * scale;
+            const scaledHeight = buttonHeight * scale;
+            const scaledX = x - (scaledWidth - buttonWidth) / 2;
+            const scaledY = y - (scaledHeight - buttonHeight) / 2;
+            
+            // Modern glassmorphism button background
             ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(time * 2 + i);
-            ctx.fillRect(-4, -2, 8, 4); // Rectangle confetti
-            ctx.restore();
-        }
-    }
-    
-    /**
-     * Draw firework burst effect
-     */
-    drawFireworkBurst(centerX, centerY, time, alpha) {
-        const ctx = this.ctx;
-        const particleCount = 30;
-        const maxRadius = 70;
-        const animationDuration = 1000; // milliseconds
-        
-        // Calculate current radius based on time
-        const progress = (time % animationDuration) / animationDuration;
-        const radius = maxRadius * progress;
-        const fadeAlpha = alpha * (1 - progress); // Fade out as it expands
-        
-        // Draw particles radiating outward
-        for (let i = 0; i < particleCount; i++) {
-            const angle = (i / particleCount) * Math.PI * 2;
-            const x = centerX + Math.cos(angle) * radius;
-            const y = centerY + Math.sin(angle) * radius;
             
-            // Color cycling
-            const hue = (time * 0.05 + i * 5) % 360;
-            ctx.fillStyle = `hsla(${hue}, 100%, 60%, ${fadeAlpha})`;
+            // Main button background with gradient
+            const gradient = ctx.createLinearGradient(scaledX, scaledY, scaledX, scaledY + scaledHeight);
+            if (isHovered) {
+                gradient.addColorStop(0, `${button.color}40`); // More transparent at top
+                gradient.addColorStop(1, `${button.color}60`); // Less transparent at bottom
+            } else {
+                gradient.addColorStop(0, `${button.color}20`);
+                gradient.addColorStop(1, `${button.color}30`);
+            }
             
-            // Draw particle
-            ctx.beginPath();
-            ctx.arc(x, y, 2 + Math.random() * 2, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            this.roundRect(ctx, scaledX, scaledY, scaledWidth, scaledHeight, 12);
             ctx.fill();
             
-            // Occasional trailing particles
-            if (i % 3 === 0) {
-                const trailX = centerX + Math.cos(angle) * (radius * 0.8);
-                const trailY = centerY + Math.sin(angle) * (radius * 0.8);
-                ctx.beginPath();
-                ctx.arc(trailX, trailY, 1, 0, Math.PI * 2);
-                ctx.fill();
+            // Border with glow effect on hover
+            if (isHovered) {
+                ctx.shadowColor = button.color;
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = button.color;
+                ctx.lineWidth = 2;
+            } else {
+                ctx.strokeStyle = `${button.color}80`;
+                ctx.lineWidth = 1;
             }
-        }
+            ctx.stroke();
+            
+            ctx.restore();
+            
+            // Button content
+            ctx.save();
+            
+            // Add subtle glow to text on hover
+            if (isHovered) {
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+                ctx.shadowBlur = 10;
+            }
+            
+            // Button icon
+            ctx.font = '20px Arial';
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.textAlign = 'center';
+            ctx.fillText(button.icon, scaledX + 30, scaledY + scaledHeight / 2 + 7);
+            
+            // Button text
+            ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.fillText(button.text, scaledX + scaledWidth / 2 + 15, scaledY + scaledHeight / 2 + 6);
+            
+            ctx.restore();
+            
+            // Store hit area for click detection
+            this.game.gameOverHitAreas.push({
+                x, y, width: buttonWidth, height: buttonHeight,
+                action: button.action
+            });
+        });
+        
+        // Add subtle instruction text below buttons
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+        ctx.font = '14px "Segoe UI", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Choose an option above to continue', this.canvas.width / 2, startY + totalHeight + 40);
+        
+        ctx.textAlign = 'left';
     }
-    
+
     /**
-     * Create a utility method to draw rounded rectangles
+     * Helper function to draw rounded rectangles
      */
-    drawRoundedRect(ctx, x, y, width, height, radius) {
+    roundRect(ctx, x, y, width, height, radius) {
         ctx.beginPath();
         ctx.moveTo(x + radius, y);
         ctx.lineTo(x + width - radius, y);
@@ -1057,21 +1243,8 @@ export class GameDialogs {    constructor(game) {
         ctx.quadraticCurveTo(x, y, x + radius, y);
         ctx.closePath();
     }
-    
+
     /**
-     * Convert hex color to rgb format
-     */
-    hexToRgb(hex) {
-        // Remove # if present
-        hex = hex.replace('#', '');
-        
-        // Parse the RGB components
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        
-        return `${r}, ${g}, ${b}`;
-    }    /**
      * Draw the enhanced shop interface with improved layout and design
      */
     drawShop(shopHitAreas = []) {
@@ -1133,17 +1306,17 @@ export class GameDialogs {    constructor(game) {
             ctx.fillText('Shop system not available', width / 2, height / 2);
             ctx.restore();
             return;
-        }
-          // Enhanced categories with better organization
+        }          // Enhanced categories with better organization
         const categories = {            movement: { name: 'Movement Control', color: '#40d158', emoji: '🏃', bgColor: 'rgba(64, 209, 88, 0.1)' },
             score: { name: 'Score Collection', color: '#58a6ff', emoji: '📊', bgColor: 'rgba(88, 166, 255, 0.1)' },
-            mechanics: { name: 'Game Mechanics', color: '#f85149', emoji: '⚙️', bgColor: 'rgba(248, 81, 73, 0.1)' },
+            powerups: { name: 'Power-Up Unlocks', color: '#ff9500', emoji: '⚡', bgColor: 'rgba(255, 149, 0, 0.1)' },
             revive: { name: 'Survival & Revival', color: '#a5a5a5', emoji: '💚', bgColor: 'rgba(165, 165, 165, 0.1)' },
             cosmetic: { name: 'Cosmetic Effects', color: '#d2a8ff', emoji: '✨', bgColor: 'rgba(210, 168, 255, 0.1)' }
         };
           // Calculate layout
         const contentStartY = headerHeight + 20;
         const availableHeight = height - contentStartY - 60;
+        const footerY = height - 50; // Position for footer text
         const contentWidth = Math.min(1000, width - 40);
         const leftMargin = (width - contentWidth) / 2;
         
@@ -1202,7 +1375,8 @@ export class GameDialogs {    constructor(game) {
                 ctx.font = 'bold 18px Courier New';
                 ctx.textAlign = 'left';
                 ctx.fillText(`${categoryInfo.emoji} ${categoryInfo.name}`, leftMargin + 15, currentY + 25);
-                  // Category upgrade count
+                
+                // Category upgrade count
                 ctx.fillStyle = '#8b949e';
                 ctx.font = '14px Courier New';
                 ctx.textAlign = 'right';
@@ -1214,10 +1388,12 @@ export class GameDialogs {    constructor(game) {
             let currentX = leftMargin;
             let itemsInCurrentRow = 0;
             const categoryStartY = currentY;
-            
-            categoryUpgrades.forEach((upgrade, index) => {
+              categoryUpgrades.forEach((upgrade, index) => {
                 const isOwned = shopSystem.isOwned(upgrade.id);
                 const canAfford = currentCurrency >= upgrade.price;
+                
+                // Calculate hover state (simplified for now)
+                const isHovered = false; // TODO: Implement proper mouse hover detection
                 
                 // Move to next row if needed
                 if (itemsInCurrentRow >= itemsPerRow) {
@@ -1278,10 +1454,9 @@ export class GameDialogs {    constructor(game) {
                         ctx.textAlign = 'center';
                         ctx.fillText('🔒', iconX + iconSize/2, iconY + iconSize/2 + 5);
                     }
-                    
-                    // Upgrade name
-                    ctx.font = 'bold 16px Courier New';
-                    ctx.fillStyle = isOwned ? '#40d158' : canAfford ? '#f0f6fc' : '#8b949e';
+                      // Upgrade name
+                    ctx.font = isHovered ? 'bold 24px Courier New' : 'bold 20px Courier New';
+                    ctx.fillStyle = isHovered ? '#ffffff' : '#f0f6fc';
                     ctx.textAlign = 'left';
                     ctx.fillText(upgrade.name, currentX + 15, currentY + 30);
                       // Price display
@@ -1299,11 +1474,12 @@ export class GameDialogs {    constructor(game) {
                     ctx.fillStyle = isOwned ? '#7d8590' : canAfford ? '#c9d1d9' : '#6e7681';
                     ctx.textAlign = 'left';
                     
-                    // Wrap description text
+                    // Wrap description text (with safety check for undefined description)
                     const maxWidth = itemWidth - 30;
-                    const words = upgrade.description.split(' ');
+                    const description = upgrade.description || 'No description available';
+                    const words = description.split(' ');
                     let line = '';
-                    let lineY = currentY + 55;
+                    let yOffset = currentY + 55;
                     const lineHeight = 14;
                     let linesDrawn = 0;
                     const maxLines = 3;
@@ -1313,9 +1489,9 @@ export class GameDialogs {    constructor(game) {
                         const metrics = ctx.measureText(testLine);
                         
                         if (metrics.width > maxWidth && i > 0) {
-                            ctx.fillText(line.trim(), currentX + 15, lineY);
+                            ctx.fillText(line.trim(), currentX + 15, yOffset);
                             line = words[i] + ' ';
-                            lineY += lineHeight;
+                            yOffset += lineHeight;
                             linesDrawn++;
                         } else {
                             line = testLine;
@@ -1330,9 +1506,9 @@ export class GameDialogs {    constructor(game) {
                             while (ctx.measureText(truncated + '...').width > maxWidth && truncated.length > 0) {
                                 truncated = truncated.slice(0, -1);
                             }
-                            ctx.fillText(truncated + '...', currentX + 15, lineY);
+                            ctx.fillText(truncated + '...', currentX + 15, yOffset);
                         } else {
-                            ctx.fillText(finalLine, currentX + 15, lineY);
+                            ctx.fillText(finalLine, currentX + 15, yOffset);
                         }
                     }
                 }                // Debug logging for specific problematic upgrades (reduced frequency)
@@ -1407,27 +1583,12 @@ export class GameDialogs {    constructor(game) {
             // Scroll indicators text
             ctx.font = '12px Courier New';            ctx.fillStyle = '#7d8590';
             ctx.textAlign = 'right';
-            if (scrollOffset > 0) {
-                ctx.fillText('▲', width - 30, scrollableAreaY + 20);
-            }
-            if (scrollOffset < maxScroll) {
-                ctx.fillText('▼', width - 30, scrollableAreaY + scrollableAreaHeight - 10);
-            }
+            const scrollText = maxScroll > 0 ? ' • Arrow Keys or Mouse Wheel: Scroll' : '';            ctx.fillText('[Enter] to Purchase • [Tab] to Change Category • [S] or [Esc] to Exit', width / 2, footerY + 25);            
+            ctx.restore();
         }
-          // Footer with instructions (always at bottom, not scrollable)
-        const footerY = height - 40;
-        ctx.fillStyle = 'rgba(22, 27, 34, 0.9)';
-        ctx.fillRect(0, footerY, width, 40);
-        ctx.strokeStyle = 'rgba(48, 54, 61, 0.8)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(0, footerY, width, 1);        ctx.font = '14px Courier New';
-        ctx.fillStyle = '#7d8590';
-        ctx.textAlign = 'center';
-        const scrollText = maxScroll > 0 ? ' • Arrow Keys or Mouse Wheel: Scroll' : '';
-        ctx.fillText('[Enter] to Purchase • [Tab] to Change Category • [S] or [Esc] to Exit', width / 2, footerY + 25);
-        
-        ctx.restore();
-    }    /**
+    }
+
+    /**
      * Utility method to draw a rounded rectangle (used for shop items)
      */
     drawRoundedRect(ctx, x, y, width, height, radius) {
@@ -1438,116 +1599,391 @@ export class GameDialogs {    constructor(game) {
         ctx.moveTo(x + radius, y);
         ctx.arcTo(x + width, y, x + width, y + height, radius);
         ctx.arcTo(x + width, y + height, x, y + height, radius);
-        ctx.arcTo(x, y + height, x, y, radius);
-        ctx.arcTo(x, y, x + width, y, radius);
+        ctx.arcTo(x, y + height, x, y, radius);        ctx.arcTo(x, y, x + width, y, radius);
         ctx.closePath();
-    }    /**
-     * Draw the home screen with play and credits buttons
+    }
+
+    /**
+
+     * Convert hex color to RGB values
      */
-    drawHomeScreen(homeHitAreas, hoveredHomeButton) {
+    hexToRgb(hex) {
+        // Remove # if present
+        hex = hex.replace('#', '');
+        
+        // Parse RGB values
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        
+        return `${r}, ${g}, ${b}`;
+    }
+
+    /**
+     * Get general setting value
+     */
+    getGeneralSetting(key, defaultValue) {
+        if (window.generalSettings) {
+            switch (key) {
+                case 'graphicsQuality':
+                    return window.generalSettings.getGraphicsQuality();
+                case 'showFpsCounter':
+                    return window.generalSettings.isShowFpsCounterEnabled();
+                case 'enableOpeningAnimation':
+                    return window.generalSettings.isOpeningAnimationEnabled();
+            }
+        }
+        return defaultValue;
+    }    /**
+     * Get audio setting value
+     */
+    getAudioSetting(key, defaultValue = 0) {
+        if (this.game && this.game.audioSystem) {
+            switch (key) {
+                case 'masterVolume':
+                    return this.game.audioSystem.getMasterVolume?.() ?? defaultValue;
+                case 'musicVolume':
+                    return this.game.audioSystem.getMusicVolume?.() ?? defaultValue;
+                case 'sfxVolume':
+                    return this.game.audioSystem.getSfxVolume?.() ?? defaultValue;
+                case 'isMuted':
+                    return this.game.audioSystem.getIsMuted?.() ?? defaultValue;
+                default:
+                    // Use getSettings method for other audio settings
+                    const settings = this.game.audioSystem.getSettings?.() || {};
+                    return settings[key] ?? defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+
+    /**
+     * Handle mouse down events for slider dragging
+     */
+    handleMouseDown(x, y) {
+        // Only handle slider interactions in audio settings tab
+        if (this.currentSettingsTab !== 'audio') {
+            return;
+        }
+
+        // Check if mouse is over any slider
+        const sliders = [
+            { setting: 'masterVolume', x: this.canvas.width / 2 + 20, y: 210, width: 200, height: 20 },
+            { setting: 'musicVolume', x: this.canvas.width / 2 + 20, y: 270, width: 200, height: 20 },
+            { setting: 'sfxVolume', x: this.canvas.width / 2 + 20, y: 330, width: 200, height: 20 }
+        ];
+
+        for (const slider of sliders) {
+            if (x >= slider.x && x <= slider.x + slider.width &&
+                y >= slider.y && y <= slider.y + slider.height) {
+                
+                this.draggingSlider = {
+                    setting: slider.setting,
+                    ...slider
+                };
+                
+                // Update slider value immediately
+                this.updateSliderValue(x);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Handle mouse up events for slider dragging
+     */
+    handleMouseUp(x, y) {
+        if (this.draggingSlider) {
+            // Final update when releasing
+            this.updateSliderValue(x);
+            this.draggingSlider = null;
+        }
+    }
+
+    /**
+     * Handle mouse move events for slider dragging
+     */
+    handleMouseMove(x, y) {
+        if (this.draggingSlider) {
+            this.updateSliderValue(x);
+        }
+    }
+
+    /**
+     * Update slider value based on mouse position
+     */
+    updateSliderValue(mouseX) {
+        if (!this.draggingSlider) return;
+
+        const slider = this.draggingSlider;
+        const relativeX = mouseX - slider.x;
+        const value = Math.max(0, Math.min(1, relativeX / slider.width));
+
+        // Update the audio system
+        switch (slider.setting) {
+            case 'masterVolume':
+                this.game.audioSystem.setMasterVolume(value);
+                break;
+            case 'musicVolume':
+                this.game.audioSystem.setMusicVolume(value);
+                break;
+            case 'sfxVolume':
+                this.game.audioSystem.setSfxVolume(value);
+                break;
+        }
+    }
+
+    /**
+     * Draw the settings screen
+     */
+    drawSettingsScreen(settingsHitAreas, hoveredSettingsButton) {
         const ctx = this.ctx;
         const width = this.canvas.width;
         const height = this.canvas.height;
-        ctx.save();
         
-        // Animated background with gradient
-        const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height)/2);
-        gradient.addColorStop(0, 'rgba(13, 17, 23, 0.98)');
-        gradient.addColorStop(0.6, 'rgba(21, 32, 43, 0.95)');
-        gradient.addColorStop(1, 'rgba(13, 17, 23, 0.99)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-          // Animated particles in background
-        const time = Date.now() * 0.001;
-        for (let i = 0; i < 10; i++) {
-            const x = (width * ((i * 37 + time * 0.5) % 1));
-            const y = (height * ((i * 73 + time * 0.3) % 1));
-            const alpha = Math.sin(time + i) * 0.5 + 0.5;
-            
-            ctx.fillStyle = `rgba(88, 166, 255, ${alpha * 0.1})`;
-            ctx.beginPath();
-            ctx.arc(x, y, 2, 0, Math.PI * 2);
-            ctx.fill();
+        // Clear the hit areas array
+        if (settingsHitAreas) {
+            settingsHitAreas.length = 0;
         }
         
-        // Main title
-        ctx.fillStyle = '#f0f6fc';
-        ctx.font = 'bold 48px Courier New';
+        ctx.save();
+        
+        // Background
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.95)';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Title
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px Arial';
         ctx.textAlign = 'center';
+        ctx.fillText('Settings', width / 2, 60);
         
-        // Add subtle glow effect to title
-        ctx.shadowColor = '#58a6ff';
-        ctx.shadowBlur = 20;
-        ctx.fillText('CODE RUNNER', width / 2, 150);
+        // Audio Settings Section
+        ctx.fillStyle = '#cccccc';
+        ctx.font = 'bold 24px Arial';
+        ctx.fillText('Audio Settings', width / 2, 120);
         
-        // Reset shadow
-        ctx.shadowBlur = 0;
+        // Mute All Audio Toggle
+        const toggleX = width / 2 - 100;
+        const toggleY = 150;
+        const toggleWidth = 200;
+        const toggleHeight = 40;
         
-        // Subtitle
-        ctx.font = '20px Courier New';
-        ctx.fillStyle = '#7d8590';
-        ctx.fillText('Escape the Digital Maze', width / 2, 190);
+        const isMuted = this.getAudioSetting('isMuted', false);
         
-        // Clear hit areas and prepare for button drawing
-        homeHitAreas.length = 0;
+        // Toggle background
+        ctx.fillStyle = isMuted ? '#ef4444' : '#22c55e';
+        ctx.fillRect(toggleX, toggleY, toggleWidth, toggleHeight);
         
-        // Button configuration
-        const buttonWidth = 280;
-        const buttonHeight = 60;
-        const buttonSpacing = 20;
-        const startY = height / 2 - 20;
+        // Toggle text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(isMuted ? 'Audio Muted' : 'Audio Enabled', toggleX + toggleWidth / 2, toggleY + 25);
         
+        // Add hit area for toggle
+        if (settingsHitAreas) {
+            settingsHitAreas.push({
+                x: toggleX,
+                y: toggleY,
+                width: toggleWidth,
+                height: toggleHeight,
+                action: 'toggleMute'
+            });
+        }
+        
+        // Audio Sliders
+        this.drawAudioSliders(ctx, width, height, settingsHitAreas);
+        
+        // Back button
+        const backButtonX = 50;
+        const backButtonY = height - 80;
+        const backButtonWidth = 100;
+        const backButtonHeight = 40;
+        
+        ctx.fillStyle = hoveredSettingsButton?.action === 'back' ? '#555555' : '#333333';
+        ctx.fillRect(backButtonX, backButtonY, backButtonWidth, backButtonHeight);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Back', backButtonX + backButtonWidth / 2, backButtonY + 25);
+        
+        // Add hit area for back button
+        if (settingsHitAreas) {
+            settingsHitAreas.push({
+                x: backButtonX,
+                y: backButtonY,
+                width: backButtonWidth,
+                height: backButtonHeight,
+                action: 'back'
+            });
+        }
+        
+        ctx.restore();
+    }
+
+    /**
+     * Draw audio sliders
+     */
+    drawAudioSliders(ctx, width, height, settingsHitAreas) {
+        const sliders = [
+            { label: 'Master Volume', setting: 'masterVolume', y: 210 },
+            { label: 'Music Volume', setting: 'musicVolume', y: 270 },
+            { label: 'SFX Volume', setting: 'sfxVolume', y: 330 }
+        ];
+        
+        sliders.forEach(slider => {
+            const sliderX = width / 2 - 100;
+            const sliderY = slider.y;
+            const sliderWidth = 200;
+            const sliderHeight = 20;
+            
+            // Label
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(slider.label, sliderX - 150, sliderY + 15);
+            
+            // Slider track
+            ctx.fillStyle = '#444444';
+            ctx.fillRect(sliderX, sliderY, sliderWidth, sliderHeight);
+            
+            // Slider fill
+            const value = this.getAudioSetting(slider.setting, 0.5);
+            const fillWidth = value * sliderWidth;
+            ctx.fillStyle = '#22c55e';
+            ctx.fillRect(sliderX, sliderY, fillWidth, sliderHeight);
+            
+            // Slider handle
+            const handleX = sliderX + fillWidth - 5;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(handleX, sliderY - 5, 10, sliderHeight + 10);
+            
+            // Value text
+            ctx.fillStyle = '#cccccc';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(Math.round(value * 100) + '%', sliderX + sliderWidth + 50, sliderY + 15);
+            
+            // Add hit area for slider
+            if (settingsHitAreas) {
+                settingsHitAreas.push({
+                    x: sliderX,
+                    y: sliderY,
+                    width: sliderWidth,
+                    height: sliderHeight,
+                    action: 'slider',
+                    setting: slider.setting
+                });
+            }
+        });
+    }
+
+    /**
+     * Handle clicks in settings screen
+     */
+    handleSettingsClick(x, y) {
+        const settingsHitAreas = this.game.settingsHitAreas || [];
+        
+        for (const area of settingsHitAreas) {
+            if (x >= area.x && x <= area.x + area.width &&
+                y >= area.y && y <= area.y + area.height) {
+                
+                if (area.action === 'toggleMute') {
+                    // Toggle mute state
+                    if (this.game.audioSystem) {
+                        const currentMute = this.game.audioSystem.getIsMuted?.() ?? false;
+                        this.game.audioSystem.setMuted(!currentMute);
+                    }
+                    return true;
+                } else if (area.action === 'back') {
+                    // Go back to previous state
+                    this.game.gameState = this.game.previousGameState || GAME_STATES.HOME;
+                    return true;
+                } else if (area.action === 'slider') {
+                    // Start dragging slider
+                    this.draggingSlider = {
+                        setting: area.setting,
+                        x: area.x,
+                        y: area.y,
+                        width: area.width,
+                        height: area.height
+                    };
+                    
+                    // Update slider value immediately
+                    this.updateSliderValue(x);
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
+
+
+    /**
+     * Draw the options menu
+     */
+    drawOptionsMenu(optionsHitAreas, hoveredOptionsButton) {
+        const ctx = this.ctx;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        
+        // Clear the hit areas array
+        if (optionsHitAreas) {
+            optionsHitAreas.length = 0;
+        }
+        
+        ctx.save();
+        
+        // Background
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.95)';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Title
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Options', width / 2, 60);
+        
+        // Menu buttons
         const buttons = [
-            { text: 'PLAY GAME', action: 'play', color: '#40d158' },
-            { text: 'CREDITS', action: 'credits', color: '#58a6ff' }
+            { text: 'Tutorial', action: 'tutorial', y: 150 },
+            { text: 'Achievements', action: 'achievements', y: 210 },
+            { text: 'Settings', action: 'settings', y: 270 },
+            { text: 'Credits', action: 'credits', y: 330 },
+            { text: 'Back', action: 'back', y: 390 }
         ];
         
         buttons.forEach((button, index) => {
-            const isHovered = index === hoveredHomeButton;
-            const x = width / 2 - buttonWidth / 2;
-            const y = startY + (buttonHeight + buttonSpacing) * index;
+            const buttonWidth = 200;
+            const buttonHeight = 40;
+            const buttonX = width / 2 - buttonWidth / 2;
+            const isHovered = hoveredOptionsButton === index;
             
-            // Store hit area
-            homeHitAreas.push({
-                x,
-                y,
-                width: buttonWidth,
-                height: buttonHeight,
-                action: button.action
-            });
+            // Button background
+            ctx.fillStyle = isHovered ? '#555555' : '#333333';
+            ctx.fillRect(buttonX, button.y, buttonWidth, buttonHeight);
             
-            // Button background with hover effect
-            const alpha = isHovered ? 0.4 : 0.2;
-            ctx.fillStyle = button.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
-            this.drawRoundedRect(ctx, x, y, buttonWidth, buttonHeight, 8);
-            ctx.fill();
-            
-            // Button border with glow on hover
-            if (isHovered) {
-                ctx.shadowColor = button.color;
-                ctx.shadowBlur = 15;
-            }
-            ctx.strokeStyle = button.color;
-            ctx.lineWidth = isHovered ? 3 : 2;
-            this.drawRoundedRect(ctx, x, y, buttonWidth, buttonHeight, 8);
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-              // Button text - always visible with high contrast
-            ctx.fillStyle = isHovered ? '#ffffff' : '#f0f6fc';
-            ctx.font = isHovered ? 'bold 20px Courier New' : 'bold 18px Courier New';
+            // Button text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '20px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(button.text, width / 2, y + buttonHeight / 2 + 8);
+            ctx.fillText(button.text, width / 2, button.y + 25);
+            
+            // Add hit area
+            if (optionsHitAreas) {
+                optionsHitAreas.push({
+                    x: buttonX,
+                    y: button.y,
+                    width: buttonWidth,
+                    height: buttonHeight,
+                    action: button.action
+                });
+            }
         });
-        
-        // Version info
-        ctx.fillStyle = '#7d8590';
-        ctx.font = '12px Courier New';
-        ctx.fillText(`Version ${this.game.changelogData.version} | ${this.game.changelogData.lastUpdated}`, width / 2, height - 50);
-        
-        // Instructions
-        ctx.fillStyle = '#58a6ff';
-        ctx.font = '14px Courier New';
-        ctx.fillText('Use mouse to navigate • ESC: Exit', width / 2, height - 25);
         
         ctx.restore();
     }
@@ -1559,222 +1995,88 @@ export class GameDialogs {    constructor(game) {
         const ctx = this.ctx;
         const width = this.canvas.width;
         const height = this.canvas.height;
+        
+        // Clear the hit areas array
+        if (creditsHitAreas) {
+            creditsHitAreas.length = 0;
+        }
+        
         ctx.save();
         
-        // Same background style as home screen
-        const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height)/2);
-        gradient.addColorStop(0, 'rgba(13, 17, 23, 0.98)');
-        gradient.addColorStop(0.6, 'rgba(21, 32, 43, 0.95)');
-        gradient.addColorStop(1, 'rgba(13, 17, 23, 0.99)');
-        ctx.fillStyle = gradient;
+        // Background
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.95)';
         ctx.fillRect(0, 0, width, height);
         
         // Title
-        ctx.fillStyle = '#f0f6fc';
-        ctx.font = 'bold 36px Courier New';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px Arial';
         ctx.textAlign = 'center';
-        ctx.shadowColor = '#58a6ff';
-        ctx.shadowBlur = 15;
-        ctx.fillText('CREDITS', width / 2, 120);
-        ctx.shadowBlur = 0;
+        ctx.fillText('Credits', width / 2, 60);
         
-        // Clear hit areas
-        creditsHitAreas.length = 0;
-          // Credits content
-        const credits = [
-            'NanoShade',
-            'PixelPunk',
-            'GhostPixel'
-        ];
-        
-        ctx.font = '24px Courier New';
-        ctx.fillStyle = '#40d158';
-        
-        let yOffset = 220;
-        const lineSpacing = 50;
-        
-        credits.forEach((name, index) => {
-            // Add subtle animation
-            const time = Date.now() * 0.001;
-            const animOffset = Math.sin(time + index * 0.5) * 2;
-            
-            ctx.fillText(name, width / 2, yOffset + animOffset);
-            yOffset += lineSpacing;
-        });
+        // Credits content
+        ctx.fillStyle = '#cccccc';
+        ctx.font = '18px Arial';
+        ctx.fillText('CodeRunner Game', width / 2, 150);
+        ctx.fillText('Developed with JavaScript and HTML5 Canvas', width / 2, 180);
+        ctx.fillText('Audio system powered by Web Audio API', width / 2, 210);
         
         // Back button
-        const backButtonWidth = 200;
-        const backButtonHeight = 50;
-        const backButtonX = width / 2 - backButtonWidth / 2;
-        const backButtonY = height - 120;
+        const backButtonX = 50;
+        const backButtonY = height - 80;
+        const backButtonWidth = 100;
+        const backButtonHeight = 40;
         
-        creditsHitAreas.push({
-            x: backButtonX,
-            y: backButtonY,
-            width: backButtonWidth,
-            height: backButtonHeight,
-            action: 'back'
-        });
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(backButtonX, backButtonY, backButtonWidth, backButtonHeight);
         
-        // Draw back button
-        ctx.fillStyle = 'rgba(88, 166, 255, 0.2)';
-        this.drawRoundedRect(ctx, backButtonX, backButtonY, backButtonWidth, backButtonHeight, 8);
-        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Back', backButtonX + backButtonWidth / 2, backButtonY + 25);
         
-        ctx.strokeStyle = '#58a6ff';
-        ctx.lineWidth = 2;
-        this.drawRoundedRect(ctx, backButtonX, backButtonY, backButtonWidth, backButtonHeight, 8);
-        ctx.stroke();
+        // Add hit area for back button
+        if (creditsHitAreas) {
+            creditsHitAreas.push({
+                x: backButtonX,
+                y: backButtonY,
+                width: backButtonWidth,
+                height: backButtonHeight,
+                action: 'back'
+            });
+        }
         
-        ctx.fillStyle = '#58a6ff';
-        ctx.font = '18px Courier New';
-        ctx.fillText('BACK TO HOME', width / 2, backButtonY + backButtonHeight / 2 + 6);
+        ctx.restore();
+    }
+
+    // Achievement screen rendering is now handled by AchievementSystem.js
+    // Legacy drawAchievementsScreen method removed - see AchievementSystem.drawAchievementsScreen()
+
+    /**
+     * Draw post animation popup
+     */
+    drawPostAnimationPopup() {
+        const ctx = this.ctx;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
         
-        // Instructions
-        ctx.fillStyle = '#7d8590';
-        ctx.font = '14px Courier New';
-        ctx.fillText('Click BACK or press ESC to return', width / 2, height - 25);
+        ctx.save();
+        
+        // Semi-transparent overlay
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.8)';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Popup content
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Welcome to CodeRunner!', width / 2, height / 2 - 50);
+        
+        ctx.fillStyle = '#cccccc';
+        ctx.font = '18px Arial';
+        ctx.fillText('Click anywhere to continue', width / 2, height / 2 + 50);
         
         ctx.restore();
     }
     
-    /**
-     * Draw the post-animation popup with changelog and tutorial tips
-     */
-    drawPostAnimationPopup() {
-       
-        const ctx = this.ctx;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
-        ctx.save();
-        
-        // Animated background overlay
-        const time = Date.now() * 0.001;
-        const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height)/2);
-        gradient.addColorStop(0, 'rgba(13, 17, 23, 0.95)');
-        gradient.addColorStop(0.6, 'rgba(21, 32, 43, 0.92)');
-        gradient.addColorStop(1, 'rgba(13, 17, 23, 0.98)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-        
-        // Animated particles
-        for (let i = 0; i < 15; i++) {
-            const x = (Math.sin(time * 0.3 + i * 1.2) * 0.3 + 0.5) * width;
-            const y = (Math.cos(time * 0.2 + i * 0.8) * 0.3 + 0.5) * height;
-            const alpha = 0.1 + Math.sin(time + i) * 0.05;
-            const size = 1 + Math.sin(time * 0.5 + i) * 0.5;
-            
-            ctx.fillStyle = `rgba(88, 166, 255, ${alpha})`;
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        
-        // Main popup container
-        const popupWidth = Math.min(800, width * 0.9);
-        const popupHeight = Math.min(600, height * 0.8);
-        const popupX = (width - popupWidth) / 2;
-        const popupY = (height - popupHeight) / 2;
-        
-        // Popup background with border
-        ctx.fillStyle = 'rgba(22, 27, 34, 0.95)';
-        this.drawRoundedRect(ctx, popupX, popupY, popupWidth, popupHeight, 12);
-        ctx.fill();
-        
-        ctx.strokeStyle = '#58a6ff';
-        ctx.lineWidth = 2;
-        this.drawRoundedRect(ctx, popupX, popupY, popupWidth, popupHeight, 12);
-        ctx.stroke();
-        
-        // Header
-        ctx.fillStyle = '#f0f6fc';
-        ctx.font = 'bold 28px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText('🎮 WELCOME TO CODERUNNER!', width / 2, popupY + 50);
-        
-        // Subtitle
-        ctx.fillStyle = '#79c0ff';
-        ctx.font = '18px Courier New';
-        ctx.fillText('Quick Tips & Latest Updates', width / 2, popupY + 80);
-        
-        // Content area with scrolling
-        const contentY = popupY + 110;
-        const contentHeight = popupHeight - 180;
-        
-        // Setup clipping for content area
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(popupX + 20, contentY, popupWidth - 40, contentHeight);
-        ctx.clip();
-        
-        let currentY = contentY + 20;
-        const lineHeight = 22;
-        
-        // Tutorial Tips Section
-        ctx.fillStyle = '#40d158';
-        ctx.font = 'bold 20px Courier New';
-        ctx.textAlign = 'left';
-        ctx.fillText('🚀 Quick Tutorial Tips:', popupX + 40, currentY);
-        currentY += 35;
-          const tips = [
-            '• Use ARROW KEYS or WASD to move and jump',
-            '• Avoid spikes, saws, and lasers to stay alive',
-            '• Collect data packets (📦) to earn upgrade points',
-            '• Press Q to open the upgrade shop anytime',
-            '• Health regenerates over time (depends on difficulty)',
-            '• Click anywhere to pause and view your progress',
-            '• Try different difficulties for varied experiences!',
-            '• 🎯 Pro Tip: Customize your controls in the settings menu'
-        ];
-        
-        ctx.fillStyle = '#e6edf3';
-        ctx.font = '16px Courier New';
-        
-        tips.forEach(tip => {
-            ctx.fillText(tip, popupX + 60, currentY);
-            currentY += lineHeight;
-        });
-        
-        currentY += 25;
-        
-        // Latest Updates Section
-        ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 20px Courier New';
-        ctx.fillText('✨ Latest Updates:', popupX + 40, currentY);
-        currentY += 35;
-        
-        const updates = [
-            '• Enhanced opening animation with Nanoshade Studios logo',
-            '• Improved visual effects and particle systems',
-            '• Better upgrade shop organization and UI',
-            '• New obstacle types: rotating saws and laser turrets',
-            '• Performance optimizations for smoother gameplay',
-            '• Enhanced audio system with dynamic music',
-            '• Leaderboard system with score uploading'
-        ];
-        
-        ctx.fillStyle = '#e6edf3';
-        ctx.font = '16px Courier New';
-        
-        updates.forEach(update => {
-            ctx.fillText(update, popupX + 60, currentY);
-            currentY += lineHeight;
-        });
-        
-        // Restore clipping
-        ctx.restore();
-        
-        // Close instructions
-        ctx.fillStyle = '#7d8590';
-        ctx.font = '16px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText('Press [SPACE], [ENTER], or [ESC] to continue to main menu', width / 2, popupY + popupHeight - 40);
-        
-        // Additional hint
-        ctx.fillStyle = '#58a6ff';
-        ctx.font = '14px Courier New';
-        ctx.fillText('💡 Tip: You can disable opening animations in settings', width / 2, popupY + popupHeight - 15);
-        
-        ctx.restore();
-    }
+    // Legacy drawAchievementsList method removed - achievement rendering now handled by AchievementSystem.js
 }

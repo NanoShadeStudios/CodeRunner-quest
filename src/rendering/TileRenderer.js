@@ -28,6 +28,12 @@ export class TileRenderer {
         this.renderSkipFrames = 0; // Skip animation updates for non-critical tiles
         this.highPerformanceMode = false; // Enable for low-end devices
         this.tileTypeFrequency = new Map(); // Track frequency of tile types for optimization
+        
+        // Detail level settings
+        this.detailLevel = 'medium'; // Default detail level
+        this.enableShadows = true;
+        this.enableGlow = true;
+        this.enableTextures = true;
     }
 
     update(deltaTime) {
@@ -43,8 +49,13 @@ export class TileRenderer {
         this.animationTime += deltaTime;
     }/**
      * Draw a tile based on its type
-     */
-    drawTile(ctx, tileType, screenX, screenY) {
+     */    drawTile(ctx, tileType, screenX, screenY) {
+        // Safety check for invalid coordinates
+        if (!isFinite(screenX) || !isFinite(screenY)) {
+            console.warn('TileRenderer.drawTile: Invalid screen coordinates', { screenX, screenY, tileType });
+            return;
+        }
+
         // Skip rendering if tile is completely off-screen
         if (screenX < -GAME_CONFIG.TILE_SIZE || screenX > ctx.canvas.width + GAME_CONFIG.TILE_SIZE ||
             screenY < -GAME_CONFIG.TILE_SIZE || screenY > ctx.canvas.height + GAME_CONFIG.TILE_SIZE) {
@@ -127,90 +138,248 @@ export class TileRenderer {
     }    /**
      * Draw spike tile - optimized design
      */    drawSpikeTile(ctx, x, y, time) {
-        // Define fastTime in the main function scope
-        const fastTime = time * 0.1;
+        // Safety check for invalid coordinates
+        if (!isFinite(x) || !isFinite(y) || !isFinite(time)) {
+            console.warn('TileRenderer.drawSpikeTile: Invalid coordinates', { x, y, time });
+            return;
+        }
+
+        // Render differently based on detail level
+        switch (this.detailLevel) {
+            case 'low':
+                this.drawBasicSpike(ctx, x, y);
+                break;
+            case 'medium':
+                this.drawMediumSpike(ctx, x, y, time);
+                break;
+            case 'high':
+                this.drawDetailedSpike(ctx, x, y, time);
+                break;
+        }
+    }
+
+    /**
+     * Draw basic spike for low quality
+     */
+    drawBasicSpike(ctx, x, y) {
+        // Simple red triangles
+        ctx.fillStyle = '#ff0000';
         
-        // Use cached values for expensive calculations
-        const cacheKey = `spike_${Math.floor(time * 10)}`;
-        const animValues = this.getCachedAnimation(cacheKey, () => {
-            return {
-                pulse: 0.7 + (fastTime % 1 - 0.5) * 0.6,
-                fastPulse: 0.9 + (((fastTime * 2) % 1) - 0.5) * 0.2,
-                dangerGlow: 0.6 + (((fastTime * 1.5) % 1) - 0.5) * 0.8
-            };
-        });
-        
-        const { pulse, fastPulse, dangerGlow } = animValues;
-        
-        // Dark ominous base platform
-        ctx.fillStyle = `rgba(33, 38, 45, ${pulse})`;
-        ctx.fillRect(x + 2, y + GAME_CONFIG.TILE_SIZE - 8, GAME_CONFIG.TILE_SIZE - 4, 8);
-        
-        // Warning stripes on base (industrial look)
-        ctx.fillStyle = `rgba(255, 193, 7, ${pulse * 0.8})`;
         for (let i = 0; i < 3; i++) {
-            const stripeX = x + 6 + i * 8;
-            ctx.fillRect(stripeX, y + GAME_CONFIG.TILE_SIZE - 6, 4, 2);
+            const spikeX = x + 4 + i * 8;
+            const spikeHeight = 16;
+            const spikeTop = y + GAME_CONFIG.TILE_SIZE - 8 - spikeHeight;
+            
+            ctx.beginPath();
+            ctx.moveTo(spikeX + 4, spikeTop);
+            ctx.lineTo(spikeX + 8, y + GAME_CONFIG.TILE_SIZE - 8);
+            ctx.lineTo(spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+            ctx.closePath();
+            ctx.fill();
         }
         
-        // Main spike structures - more threatening and varied
+        // Simple base
+        ctx.fillStyle = '#333';
+        ctx.fillRect(x, y + GAME_CONFIG.TILE_SIZE - 8, GAME_CONFIG.TILE_SIZE, 8);
+    }
+
+    /**
+     * Draw medium quality spike
+     */
+    drawMediumSpike(ctx, x, y, time) {
+        const fastTime = time * 0.1;
+        const pulse = 0.7 + Math.sin(fastTime * 6) * 0.3;
+        
+        // Base platform with warning stripes
+        ctx.fillStyle = `rgba(60, 60, 60, ${pulse})`;
+        ctx.fillRect(x, y + GAME_CONFIG.TILE_SIZE - 8, GAME_CONFIG.TILE_SIZE, 8);
+        
+        // Warning stripes
+        ctx.fillStyle = `rgba(255, 193, 7, ${pulse})`;
+        for (let i = 0; i < 2; i++) {
+            const stripeX = x + 8 + i * 12;
+            ctx.fillRect(stripeX, y + GAME_CONFIG.TILE_SIZE - 6, 6, 2);
+        }
+        
+        // Spikes with simple glow
+        if (this.enableGlow) {
+            ctx.shadowBlur = 4;
+            ctx.shadowColor = 'rgba(255, 0, 0, 0.5)';
+        }
+        
+        for (let i = 0; i < 4; i++) {
+            const spikeX = x + 3 + i * 6;
+            const spikeHeight = 18 + Math.sin(fastTime * 4 + i) * 3;
+            const spikeTop = y + GAME_CONFIG.TILE_SIZE - 8 - spikeHeight;
+            
+            const gradient = ctx.createLinearGradient(spikeX, spikeTop, spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+            gradient.addColorStop(0, `rgba(255, 50, 50, ${pulse})`);
+            gradient.addColorStop(1, `rgba(150, 0, 0, ${pulse})`);
+            ctx.fillStyle = gradient;
+            
+            ctx.beginPath();
+            ctx.moveTo(spikeX + 3, spikeTop);
+            ctx.lineTo(spikeX + 6, y + GAME_CONFIG.TILE_SIZE - 8);
+            ctx.lineTo(spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        ctx.shadowBlur = 0;
+    }
+
+    /**
+     * Draw detailed spike for high quality
+     */
+    drawDetailedSpike(ctx, x, y, time) {
+        const fastTime = time * 0.1;
+        const pulse = 0.7 + Math.sin(fastTime * 6) * 0.3;
+        const dangerGlow = 0.6 + Math.sin(fastTime * 8) * 0.4;
+        
+        // Enhanced base platform with depth
+        if (this.enableShadows) {
+            // Drop shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(x + 2, y + GAME_CONFIG.TILE_SIZE - 6, GAME_CONFIG.TILE_SIZE - 2, 8);
+        }
+        
+        // Main base platform
+        const baseGradient = ctx.createLinearGradient(x, y + GAME_CONFIG.TILE_SIZE - 8, x, y + GAME_CONFIG.TILE_SIZE);
+        baseGradient.addColorStop(0, `rgba(80, 80, 90, ${pulse})`);
+        baseGradient.addColorStop(1, `rgba(40, 40, 50, ${pulse})`);
+        ctx.fillStyle = baseGradient;
+        ctx.fillRect(x, y + GAME_CONFIG.TILE_SIZE - 8, GAME_CONFIG.TILE_SIZE, 8);
+        
+        // Detailed warning patterns
+        ctx.fillStyle = `rgba(255, 193, 7, ${pulse})`;
+        for (let i = 0; i < 4; i++) {
+            const stripeX = x + 2 + i * 7;
+            ctx.fillRect(stripeX, y + GAME_CONFIG.TILE_SIZE - 7, 4, 1);
+            ctx.fillRect(stripeX + 2, y + GAME_CONFIG.TILE_SIZE - 5, 2, 1);
+        }
+        
+        // Rivets and details
+        ctx.fillStyle = `rgba(200, 200, 200, ${pulse})`;
+        for (let i = 0; i < 3; i++) {
+            const rivetX = x + 6 + i * 10;
+            ctx.beginPath();
+            ctx.arc(rivetX, y + GAME_CONFIG.TILE_SIZE - 4, 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Complex spike array with individual characteristics
         const spikeConfigs = [
-            { x: 4, height: 20, width: 6 },   // Tall left spike
-            { x: 12, height: 24, width: 8 },  // Tallest center spike
-            { x: 20, height: 18, width: 6 },  // Medium right spike
-            { x: 26, height: 16, width: 4 }   // Smaller far right spike
+            { x: 2, height: 18, width: 5, style: 'sharp' },
+            { x: 8, height: 22, width: 6, style: 'serrated' },
+            { x: 15, height: 20, width: 5, style: 'twisted' },
+            { x: 21, height: 19, width: 5, style: 'sharp' },
+            { x: 27, height: 16, width: 4, style: 'needle' }
         ];
-          spikeConfigs.forEach((spike, index) => {
+        
+        spikeConfigs.forEach((spike, index) => {
             const spikeX = x + spike.x;
-            // Use simpler height variation for better performance
-            const heightVariation = ((fastTime + index * 0.3) % 1 - 0.5) * 4;
+            const heightVariation = Math.sin(fastTime * 4 + index * 2) * 3;
             const spikeHeight = spike.height + heightVariation;
             const spikeTop = y + GAME_CONFIG.TILE_SIZE - 8 - spikeHeight;
             
-            // Main spike body with gradient effect
-            const gradient = ctx.createLinearGradient(spikeX, spikeTop, spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
-            gradient.addColorStop(0, `rgba(255, 0, 0, ${fastPulse})`);
-            gradient.addColorStop(0.3, `rgba(248, 81, 73, ${pulse})`);
-            gradient.addColorStop(1, `rgba(139, 69, 19, ${pulse})`);
+            // Enhanced glow effect
+            if (this.enableGlow) {
+                ctx.shadowBlur = 6 + Math.sin(fastTime * 8 + index) * 3;
+                ctx.shadowColor = `rgba(255, ${50 + index * 20}, 0, ${dangerGlow})`;
+            }
             
-            ctx.fillStyle = gradient;
+            // Detailed spike gradient
+            const spikeGradient = ctx.createLinearGradient(spikeX, spikeTop, spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+            spikeGradient.addColorStop(0, `rgba(255, 255, 255, ${pulse})`);
+            spikeGradient.addColorStop(0.2, `rgba(255, 100, 100, ${pulse})`);
+            spikeGradient.addColorStop(0.7, `rgba(200, 0, 0, ${pulse})`);
+            spikeGradient.addColorStop(1, `rgba(100, 0, 0, ${pulse})`);
+            ctx.fillStyle = spikeGradient;
             
-            // Draw sharp, menacing spike shape
+            // Draw spike based on style
             ctx.beginPath();
-            ctx.moveTo(spikeX + spike.width / 2, spikeTop); // Sharp tip
-            ctx.lineTo(spikeX + spike.width - 1, y + GAME_CONFIG.TILE_SIZE - 8); // Right edge
-            ctx.lineTo(spikeX + 1, y + GAME_CONFIG.TILE_SIZE - 8); // Left edge
-            ctx.closePath();
+            switch (spike.style) {
+                case 'serrated':
+                    // Jagged edges
+                    ctx.moveTo(spikeX + spike.width / 2, spikeTop);
+                    for (let j = 0; j < 4; j++) {
+                        const edgeY = spikeTop + (spikeHeight / 4) * (j + 1);
+                        const offset = (j % 2) * 2 - 1;
+                        ctx.lineTo(spikeX + spike.width / 2 + offset, edgeY);
+                    }
+                    ctx.lineTo(spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+                    ctx.closePath();
+                    break;
+                    
+                case 'twisted':
+                    // Spiral effect
+                    for (let t = 0; t <= 1; t += 0.1) {
+                        const twist = Math.sin(t * Math.PI * 3 + fastTime * 6) * 2;
+                        const currentY = spikeTop + t * spikeHeight;
+                        const currentX = spikeX + spike.width / 2 + twist;
+                        if (t === 0) ctx.moveTo(currentX, currentY);
+                        else ctx.lineTo(currentX, currentY);
+                    }
+                    ctx.lineTo(spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+                    ctx.closePath();
+                    break;
+                    
+                case 'needle':
+                    // Ultra sharp thin spike
+                    ctx.moveTo(spikeX + spike.width / 2, spikeTop);
+                    ctx.lineTo(spikeX + spike.width, y + GAME_CONFIG.TILE_SIZE - 8);
+                    ctx.lineTo(spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+                    ctx.closePath();
+                    break;
+                    
+                default: // sharp
+                    ctx.moveTo(spikeX + spike.width / 2, spikeTop);
+                    ctx.lineTo(spikeX + spike.width, y + GAME_CONFIG.TILE_SIZE - 8);
+                    ctx.lineTo(spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
+                    ctx.closePath();
+                    break;
+            }
             ctx.fill();
             
-            // Add metallic edge highlights
-            ctx.strokeStyle = `rgba(255, 255, 255, ${dangerGlow * 0.7})`;
+            // Metallic highlights
+            ctx.strokeStyle = `rgba(255, 255, 255, ${dangerGlow * 0.8})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(spikeX + 1, y + GAME_CONFIG.TILE_SIZE - 8);
+            ctx.moveTo(spikeX, y + GAME_CONFIG.TILE_SIZE - 8);
             ctx.lineTo(spikeX + spike.width / 2, spikeTop);
             ctx.stroke();
             
             // Deadly tip glow
             ctx.fillStyle = `rgba(255, 255, 255, ${dangerGlow})`;
-            ctx.fillRect(spikeX + spike.width / 2 - 1, spikeTop, 2, 2);
-              // Blood-red drip effect for extra menace
-            if (((fastTime * 2 + index * 1.5) % 1) > 0.3) {
-                ctx.fillStyle = `rgba(139, 0, 0, ${pulse * 0.8})`;
-                const dripOffset = ((fastTime * 4 + index) % 1 - 0.5) * 4;
-                const dripY = spikeTop + spikeHeight * 0.6 + dripOffset;
-                ctx.fillRect(spikeX + spike.width / 2 - 1, dripY, 2, 3);
+            ctx.beginPath();
+            ctx.arc(spikeX + spike.width / 2, spikeTop, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Blood effect for extra detail
+            if (Math.sin(fastTime * 3 + index * 2) > 0.5) {
+                ctx.fillStyle = `rgba(139, 0, 0, ${pulse * 0.6})`;
+                const bloodY = spikeTop + spikeHeight * 0.7 + Math.sin(fastTime * 6 + index) * 2;
+                ctx.beginPath();
+                ctx.arc(spikeX + spike.width / 2, bloodY, 1, 0, Math.PI * 2);
+                ctx.fill();
             }
         });
         
-        // Danger zone indicator - pulsing warning glow around entire spike area
-        ctx.shadowBlur = 8 * dangerGlow;
-        ctx.shadowColor = `rgba(255, 0, 0, ${dangerGlow * 0.5})`;
-        ctx.strokeStyle = `rgba(255, 0, 0, ${dangerGlow * 0.3})`;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x + 1, y + GAME_CONFIG.TILE_SIZE - 28, GAME_CONFIG.TILE_SIZE - 2, 28);
+        // Complex danger zone with animated warning field
+        if (this.enableGlow) {
+            ctx.shadowBlur = 12 * dangerGlow;
+            ctx.shadowColor = `rgba(255, 0, 0, ${dangerGlow})`;
+            
+            // Pulsing danger field
+            ctx.strokeStyle = `rgba(255, 0, 0, ${dangerGlow * 0.4})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.lineDashOffset = fastTime * 20;
+            ctx.strokeRect(x - 2, y + GAME_CONFIG.TILE_SIZE - 30, GAME_CONFIG.TILE_SIZE + 4, 30);
+            ctx.setLineDash([]);
+        }
         
-        // Reset shadow
+        // Reset effects
         ctx.shadowBlur = 0;
     }
       /**
@@ -672,6 +841,38 @@ export class TileRenderer {
             this.precomputedValues.sawTeethCount = 8;
             this.precomputedValues.particleCount = 4;
             this.precomputedValues.maxCacheSize = 50;
+        }
+    }
+
+    /**
+     * Set detail level for tile rendering
+     */
+    setDetailLevel(level) {
+        this.detailLevel = level;
+        
+        // Adjust rendering parameters based on detail level
+        switch (level) {
+            case 'low':
+                this.precomputedValues.sawTeethCount = 4;
+                this.precomputedValues.particleCount = 1;
+                this.enableShadows = false;
+                this.enableGlow = false;
+                this.enableTextures = false;
+                break;
+            case 'medium':
+                this.precomputedValues.sawTeethCount = 8;
+                this.precomputedValues.particleCount = 4;
+                this.enableShadows = false;
+                this.enableGlow = true;
+                this.enableTextures = false;
+                break;
+            case 'high':
+                this.precomputedValues.sawTeethCount = 12;
+                this.precomputedValues.particleCount = 8;
+                this.enableShadows = true;
+                this.enableGlow = true;
+                this.enableTextures = true;
+                break;
         }
     }
 

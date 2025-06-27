@@ -21,33 +21,10 @@ export class GameUI {    constructor(game) {
 
     /**
      * Draw all UI elements for the current game state
-     */
-    drawUI() {
-        // Health display
-        if (this.game.player) {
-            this.drawHealthHearts();              // Show health regeneration timer based on difficulty
-            if (this.game.player.health < this.game.player.maxHealth && this.game.lastHealthRegenTime) {
-                const difficulty = DIFFICULTY_LEVELS[this.game.selectedDifficulty];
-                
-                // Skip display if no regeneration (Extreme mode)
-                if (difficulty.healthRegenInterval > 0) {
-                    const timeSinceLastRegen = Date.now() - this.game.lastHealthRegenTime;
-                    const timeRemaining = Math.max(0, difficulty.healthRegenInterval - timeSinceLastRegen);
-                    const secondsRemaining = Math.ceil(timeRemaining / 1000);
-                      this.ctx.fillStyle = '#8b949e';
-                    this.ctx.font = '12px Courier New';
-                    this.ctx.fillText(`Next Heart: ${secondsRemaining}s`, 15, 90);
-                }
-            }
-        }
-            // Show difficulty level during gameplay (positioned on right side)
+     */    drawUI() {
         if (this.game.gameState === GAME_STATES.PLAYING || this.game.gameState === GAME_STATES.PAUSED) {
-            const difficulty = DIFFICULTY_LEVELS[this.game.selectedDifficulty];
-            this.ctx.fillStyle = difficulty.color;
-            this.ctx.font = '14px Courier New';
-            this.ctx.textAlign = 'left';
-            const x = this.canvas.width - 180; // Right side, aligned with data packets
-            this.ctx.fillText(`${difficulty.emoji} ${difficulty.name}`, x, 110);
+            // Draw main HUD elements in a cohesive layout
+            this.drawMainHUD();
         }
 
         // Autosave status indicator (top right corner during gameplay)
@@ -62,29 +39,17 @@ export class GameUI {    constructor(game) {
         if (this.game.showFpsCounter) {
             this.drawSimpleFpsCounter();
         }
-          // Data packets display (right side, only during gameplay)
-        if (this.game.gameState === GAME_STATES.PLAYING || this.game.gameState === GAME_STATES.PAUSED) {
-            this.drawDataPacketsDisplay();
-        }
-
-        // Basic score display (left side, only during gameplay)
-        if (this.game.gameState === GAME_STATES.PLAYING || this.game.gameState === GAME_STATES.PAUSED) {
-            this.drawScoreDisplay();
-        }
-            // F3 hint in bottom right corner (only during gameplay)
-        if (this.game.gameState === GAME_STATES.PLAYING || this.game.gameState === GAME_STATES.PAUSED) {
-            this.ctx.fillStyle = 'rgba(125, 133, 144, 0.6)';
-            this.ctx.font = '10px "SF Mono", "Monaco", monospace';
-            this.ctx.textAlign = 'right';            this.ctx.fillText(`F3: Performance Monitor`, this.canvas.width - 10, this.canvas.height - 10);
-            this.ctx.fillText(`C: Changelog`, this.canvas.width - 10, this.canvas.height - 25);
-            this.ctx.textAlign = 'left';
-        }
+        
+        // NOTE: Achievement notifications are now handled by Game.js render() at the highest z-level
+        // This ensures they appear above all other UI including death menu
     }
     
     /**
      * Draw pixelated health hearts
      */
     drawHealthHearts() {
+        // This method is now replaced by drawCompactHealthHearts in the main HUD
+        // Keeping for backward compatibility if needed
         const player = this.game.player;
         if (!player) return;
         
@@ -153,43 +118,35 @@ export class GameUI {    constructor(game) {
      */
     drawPerformanceDisplay() {
         const metrics = this.game.getPerformanceMetrics();
-        const x = this.canvas.width - 200;
-        const y = 15;
+        const x = this.canvas.width - 180;
+        const y = 200; // Moved down to avoid conflicting with right panel
         
-        // Background panel
-        this.ctx.fillStyle = 'rgba(13, 17, 23, 0.9)';
-        this.ctx.fillRect(x - 10, y - 5, 190, 130);
+        // Compact modern panel
+        this.drawModernPanel(x - 10, y - 5, 170, 110, 'rgba(124, 58, 237, 0.3)');
         
-        // Border
-        this.ctx.strokeStyle = 'rgba(48, 54, 61, 0.8)';
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(x - 10, y - 5, 190, 130);        // Title
+        // Title
         this.ctx.fillStyle = '#f0f6fc';
-        this.ctx.font = 'bold 12px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText('Performance Monitor', x, y + 10);
-          // FPS with color coding (current and average)
+        this.ctx.font = 'bold 10px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText('⚡ PERFORMANCE', x, y + 10);
+          // FPS with color coding
         const fpsColor = metrics.fps >= 50 ? '#40d158' : metrics.fps >= 30 ? '#d1a01f' : '#f85149';
         this.ctx.fillStyle = fpsColor;
-        this.ctx.font = '11px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText(`FPS: ${metrics.fps} (Avg: ${metrics.avgFps})`, x, y + 30);
-        
-        // Frame timing with throttled updates
-        this.ctx.fillStyle = '#79c0ff';        this.ctx.fillText(`Render: ${metrics.renderTime.toFixed(1)}ms`, x, y + 45);
-        this.ctx.fillText(`Update: ${metrics.updateTime.toFixed(1)}ms`, x, y + 60);
-        this.ctx.fillText(`Frame: ${metrics.frameTime.toFixed(1)}ms`, x, y + 75);
-        
-        // World metrics (entities and chunks)
-        this.ctx.fillStyle = '#ffd700';        this.ctx.fillText(`Entities: ${metrics.entities}`, x, y + 90);
-        this.ctx.fillText(`Chunks: ${metrics.chunks}`, x, y + 105);
-        
-        // Resolution and memory
-        this.ctx.fillStyle = '#7d8590';
-        this.ctx.fillText(`Resolution: ${metrics.resolution}`, x, y + 120);
-        
-        // Show throttling indicator
-        this.ctx.fillStyle = '#40d158';
         this.ctx.font = '9px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText(`🔧 Optimized Monitoring`, x, y + 135);
+        this.ctx.fillText(`FPS: ${metrics.fps}`, x, y + 25);
+        
+        // Frame timing
+        this.ctx.fillStyle = '#79c0ff';        
+        this.ctx.fillText(`Render: ${metrics.renderTime.toFixed(1)}ms`, x, y + 40);
+        this.ctx.fillText(`Update: ${metrics.updateTime.toFixed(1)}ms`, x, y + 55);
+        
+        // World metrics
+        this.ctx.fillStyle = '#ffd700';        
+        this.ctx.fillText(`Entities: ${metrics.entities}`, x, y + 70);
+        this.ctx.fillText(`Chunks: ${metrics.chunks}`, x, y + 85);
+        
+        // Resolution
+        this.ctx.fillStyle = '#7d8590';
+        this.ctx.fillText(`${metrics.resolution}`, x, y + 100);
     }    /**
      * Draw simple FPS counter (compact display)
      */
@@ -215,70 +172,8 @@ export class GameUI {    constructor(game) {
         this.ctx.restore();
     }
     
-    /**
-     * Draw data packets display on the right side
-     */drawDataPacketsDisplay() {
-        const dataPackets = this.game.upgradeSystem ? this.game.upgradeSystem.getDataPackets() : 0;
-        const x = this.canvas.width - 180;
-        // Position below performance monitor if it's showing, otherwise at top
-        const y = this.game.showPerformanceDisplay ? 155 : 15;
-          // Background panel
-        this.ctx.fillStyle = 'rgba(13, 17, 23, 0.9)';
-        this.ctx.fillRect(x - 10, y - 5, 170, 50);
-        
-        // Border with data theme color
-        this.ctx.strokeStyle = 'rgba(64, 209, 88, 0.6)';
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(x - 10, y - 5, 170, 50);
-          // Glitch icon (electrical/digital representation)
-        this.ctx.fillStyle = '#ffd700';
-        this.ctx.fillRect(x, y + 5, 12, 12);
-        this.ctx.fillStyle = '#21262d';
-        this.ctx.fillRect(x + 2, y + 7, 8, 8);
-        this.ctx.fillStyle = '#ffd700';
-        this.ctx.fillRect(x + 4, y + 9, 4, 4);        // Data Packets text
-        this.ctx.fillStyle = '#f0f6fc';
-        this.ctx.font = 'bold 14px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText('Data Packets', x + 20, y + 15);
-            // Count with color coding
-        const countColor = dataPackets >= 100 ? '#ffd700' : dataPackets >= 50 ? '#40d158' : '#79c0ff';
-        this.ctx.fillStyle = countColor;
-        this.ctx.font = 'bold 16px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText(`${dataPackets}`, x + 20, y + 35);}
-
-    /**
-     * Draw basic score display on the left side
-     */
-    drawScoreDisplay() {
-        const x = 15;
-        const y = 100; // Position below health hearts
-        
-        // Background panel
-        this.ctx.fillStyle = 'rgba(13, 17, 23, 0.9)';
-        this.ctx.fillRect(x - 5, y - 5, 140, 60);
-        
-        // Border
-        this.ctx.strokeStyle = 'rgba(88, 166, 255, 0.6)';
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(x - 5, y - 5, 140, 60);        // Current score
-        this.ctx.fillStyle = '#f0f6fc';
-        this.ctx.font = 'bold 14px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText('Score', x, y + 15);
-        
-        this.ctx.fillStyle = '#79c0ff';
-        this.ctx.font = 'bold 16px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText(`${this.game.score}`, x, y + 35);
-        
-        // Best score for current difficulty
-        const bestScore = this.game.bestScores[this.game.selectedDifficulty] || 0;
-        this.ctx.fillStyle = '#f0f6fc';
-        this.ctx.font = 'bold 12px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText('Best', x, y + 50);
-        
-        this.ctx.fillStyle = '#ffd700';
-        this.ctx.font = 'bold 14px "SF Mono", "Monaco", monospace';
-        this.ctx.fillText(`${bestScore}`, x + 35, y + 50);
-    }
+    // Legacy methods - now integrated into main HUD
+    // Keeping for potential backward compatibility
     
     /**
      * Update HTML UI elements (if present)
@@ -313,35 +208,30 @@ export class GameUI {    constructor(game) {
         const ctx = this.ctx;
         const canvas = this.canvas;
         
-        // Position in top-right corner
-        const x = canvas.width - 20;
-        const y = 30;
+        // Position in top-right corner of the screen, outside main panels
+        const x = canvas.width - 15;
+        const y = 15;
         
         // Set text alignment
         ctx.textAlign = 'right';
-        ctx.font = '12px Courier New';        // Status-specific styling
+        ctx.font = '10px "SF Mono", "Monaco", monospace';        
+        // Status-specific styling with modern look
         switch (this.game.autosaveStatus) {
             case 'saving':
                 ctx.fillStyle = '#f1c232';
-                ctx.fillText(`💾 Saving...`, x, y);
+                ctx.fillText(`💾 SAVING`, x, y);
                 break;
             case 'saved':
                 ctx.fillStyle = '#56d364';
-                ctx.fillText(`✓ Game Saved`, x, y);
-                
-                // Show optimization stats if available (debug info)
-                if (this.game.savesPrevented > 0 && window.debugMode) {
-                    ctx.font = '10px Courier New';
-                    ctx.fillStyle = '#7c3aed';
-                    ctx.fillText(`⚡ ${this.game.savesPrevented} saves skipped`, x, y + 15);
-                    ctx.font = '12px Courier New';
-                }
-                break;            case 'error':
+                ctx.fillText(`✓ SAVED`, x, y);
+                break;            
+            case 'error':
                 ctx.fillStyle = '#f85149';
-                ctx.fillText(`⚠ Save Error`, x, y);
-                break;            case 'loaded':
+                ctx.fillText(`⚠ ERROR`, x, y);
+                break;            
+            case 'loaded':
                 ctx.fillStyle = '#58a6ff';
-                ctx.fillText(`📂 Game Loaded`, x, y);
+                ctx.fillText(`📂 LOADED`, x, y);
                 break;
         }
         
@@ -471,120 +361,199 @@ export class GameUI {    constructor(game) {
             this.drawRoundedRect(ctx, leftCol, barY, barWidth * progress, barHeight, 3);
             ctx.fill();
         }    }
-    
+      /**
+     * Draw the main HUD with a modern cyberpunk design
+     */
+    drawMainHUD() {
+        // Draw health hearts in their original position
+        if (this.game.player) {
+            this.drawHealthHearts();
+        }
+        
+        // Draw difficulty indicator in top right
+        const difficulty = DIFFICULTY_LEVELS[this.game.selectedDifficulty];
+        this.ctx.fillStyle = difficulty.color;
+        this.ctx.font = 'bold 16px "SF Mono", "Monaco", monospace';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(`${difficulty.emoji} ${difficulty.name}`, this.canvas.width - 15, 30);
+        this.ctx.textAlign = 'left';
+        
+        // Draw side panels
+        this.drawLeftPanel();
+        this.drawRightPanel();
+    }
+
     /**
-     * Draw dash cooldown indicator
-     */    drawDashCooldown() {
+     * Draw left panel with score and distance
+     */
+    drawLeftPanel() {
+        const panelWidth = 180;
+        const panelHeight = 120;
+        const x = 15;
+        const y = 65;
+        
+        // Modern glass-morphism panel
+        this.drawModernPanel(x, y, panelWidth, panelHeight, 'rgba(88, 166, 255, 0.1)');
+        
+        // Score section
+        const meters = this.game.player ? Math.floor(this.game.player.x / 10) : 0;
+        const bestScore = this.game.bestScores[this.game.selectedDifficulty] || 0;
+        
+        // Score label and value
+        this.ctx.fillStyle = 'rgba(240, 246, 252, 0.8)';
+        this.ctx.font = '12px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText('SCORE', x + 15, y + 25);
+        
+        this.ctx.fillStyle = '#58a6ff';
+        this.ctx.font = 'bold 20px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText(`${this.game.score}`, x + 15, y + 45);
+        
+        // Distance
+        this.ctx.fillStyle = 'rgba(240, 246, 252, 0.8)';
+        this.ctx.font = '12px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText('DISTANCE', x + 15, y + 70);
+        
+        this.ctx.fillStyle = '#40d158';
+        this.ctx.font = 'bold 16px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText(`${meters}m`, x + 15, y + 90);
+        
+        // Best score (compact)
+        if (bestScore > 0) {
+            this.ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
+            this.ctx.font = '10px "SF Mono", "Monaco", monospace';
+            this.ctx.fillText(`BEST: ${bestScore}`, x + 15, y + 110);
+        }
+    }
+
+    /**
+     * Draw right panel with data packets and status
+     */
+    drawRightPanel() {
+        const panelWidth = 200;
+        const panelHeight = 120;
+        const x = this.canvas.width - panelWidth - 15;
+        const y = 65;
+        
+        // Modern glass-morphism panel
+        this.drawModernPanel(x, y, panelWidth, panelHeight, 'rgba(64, 209, 88, 0.1)');
+        
+        // Data packets
+        const dataPackets = this.game.upgradeSystem ? this.game.upgradeSystem.getDataPackets() : 0;
+        
+        // Data packets icon and label
+        this.ctx.fillStyle = '#ffd700';
+        this.ctx.font = '16px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText('💾', x + 15, y + 25);
+        
+        this.ctx.fillStyle = 'rgba(240, 246, 252, 0.8)';
+        this.ctx.font = '12px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText('DATA PACKETS', x + 40, y + 25);
+        
+        // Count with color coding
+        const countColor = dataPackets >= 100 ? '#ffd700' : dataPackets >= 50 ? '#40d158' : '#79c0ff';
+        this.ctx.fillStyle = countColor;
+        this.ctx.font = 'bold 20px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText(`${dataPackets}`, x + 15, y + 50);
+        
+        // Progress to next milestone
+        const nextMilestone = Math.ceil(this.game.score / 1000) * 1000;
+        const progress = nextMilestone > 0 ? (this.game.score % 1000) / 1000 : 0;
+        
+        if (nextMilestone > this.game.score) {
+            this.ctx.fillStyle = 'rgba(240, 246, 252, 0.6)';
+            this.ctx.font = '10px "SF Mono", "Monaco", monospace';
+            this.ctx.fillText(`NEXT: ${nextMilestone} (+100)`, x + 15, y + 75);
+            
+            // Progress bar
+            const barWidth = panelWidth - 30;
+            const barHeight = 4;
+            const barY = y + 85;
+            
+            // Background
+            this.ctx.fillStyle = 'rgba(139, 148, 158, 0.2)';
+            this.drawRoundedRect(this.ctx, x + 15, barY, barWidth, barHeight, 2);
+            this.ctx.fill();
+            
+            // Progress
+            if (progress > 0) {
+                this.ctx.fillStyle = '#40d158';
+                this.drawRoundedRect(this.ctx, x + 15, barY, barWidth * progress, barHeight, 2);
+                this.ctx.fill();
+            }
+        }
+        
+        // Dash cooldown indicator (if player has dash)
+        if (this.game.player && this.game.player.shopUpgrades.dash) {
+            this.drawCompactDashIndicator(x + 15, y + 100);
+        }
+    }
+
+    /**
+     * Draw modern glass-morphism panel
+     */
+    drawModernPanel(x, y, width, height, accentColor) {
+        // Main background with glass effect
+        const gradient = this.ctx.createLinearGradient(x, y, x, y + height);
+        gradient.addColorStop(0, 'rgba(13, 17, 23, 0.8)');
+        gradient.addColorStop(1, 'rgba(21, 32, 43, 0.6)');
+        
+        this.ctx.fillStyle = gradient;
+        this.drawRoundedRect(this.ctx, x, y, width, height, 10);
+        this.ctx.fill();
+        
+        // Subtle border with accent color
+        this.ctx.strokeStyle = accentColor;
+        this.ctx.lineWidth = 1.5;
+        this.drawRoundedRect(this.ctx, x, y, width, height, 10);
+        this.ctx.stroke();
+        
+        // Inner glow effect
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        this.ctx.lineWidth = 0.5;
+        this.drawRoundedRect(this.ctx, x + 1, y + 1, width - 2, height - 2, 9);
+        this.ctx.stroke();
+    }
+
+    /**
+     * Draw compact dash indicator
+     */
+    drawCompactDashIndicator(x, y) {
         const player = this.game.player;
         if (!player) return;
         
-        // SUPER VISIBLE DEBUG - Draw a big red rectangle to see if this function is called
-        this.ctx.fillStyle = 'red';
-        this.ctx.fillRect(this.canvas.width - 200, 50, 100, 50);
-        this.ctx.fillStyle = 'white';
-        this.ctx.font = '16px Arial';
-        this.ctx.fillText('DASH DEBUG', this.canvas.width - 190, 80);
-        
-        console.log('=== DASH COOLDOWN FUNCTION CALLED ===');
-          // Debug: Log dash upgrade status
-        console.log('Dash upgrades:', {
-            dash: player.shopUpgrades.dash,
-            dashModuleLevel: player.shopUpgrades.dashModuleLevel,
-            hasDash: player.shopUpgrades.dash || player.shopUpgrades.dashModuleLevel > 0        });
-        
-        // Always show dash UI (basic dash should be available by default)
-        // Note: Commenting out the upgrade check to always show dash UI
-        // const hasDash = player.shopUpgrades.dash || player.shopUpgrades.dashModuleLevel > 0;
-        // if (!hasDash) {
-        //     return; // Don't show dash UI if no upgrades
-        // }
-        
-        // Determine max cooldown based on dash type
-        let maxCooldown = 2000; // Default for basic dash
-        if (player.shopUpgrades.dashModuleLevel > 0) {
-            const dashProperties = {
-                1: 1500,  // Level 1: 1.5s
-                2: 1200,  // Level 2: 1.2s  
-                3: 900    // Level 3: 0.9s
-            };
-            maxCooldown = dashProperties[player.shopUpgrades.dashModuleLevel] || 2000;
-        }
-        
+        const maxCooldown = 2000;
         const currentCooldown = Math.max(0, player.dashState.dashCooldown);
-        const cooldownProgress = currentCooldown / maxCooldown;
-        const isReady = currentCooldown <= 0;        // Position on the right side under difficulty indicator
-        const x = this.canvas.width - 180; // Right side, aligned with data packets
-        const y = 130; // Below difficulty area
-          // DEBUG: Always show a test indicator to verify positioning
-        this.ctx.fillStyle = '#ff6b6b';
-        this.ctx.font = '12px Courier New';
-        this.ctx.fillText('🔧 DASH UI TEST', x, y + 20);
+        const isReady = currentCooldown <= 0;
         
-        // ADD TEMPORARY TESTING CONTROLS
-        this.ctx.fillStyle = '#ffd700';
-        this.ctx.font = '10px Courier New';
-        this.ctx.fillText('Press T to give data packets, Y to buy basic dash', x, y + 35);
+        // Dash icon
+        this.ctx.fillStyle = isReady ? '#40d158' : '#8b949e';
+        this.ctx.font = '12px "SF Mono", "Monaco", monospace';
+        this.ctx.fillText('⚡ DASH', x, y);
         
-        // Only continue with full UI if player has dash ability
-        if (!hasDash) return;        // Draw dash icon and label with enhanced styling
+        // Status indicator
         if (isReady) {
-            // Add pulsing glow effect when ready
-            const pulseIntensity = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
-            this.ctx.shadowColor = '#40d158';
-            this.ctx.shadowBlur = 5 * pulseIntensity;
             this.ctx.fillStyle = '#40d158';
-            this.ctx.font = 'bold 14px Courier New';
-            this.ctx.fillText(`💨 ${this.t('ui.dash')}`, x, y);
-            this.ctx.shadowBlur = 0; // Reset shadow
+            this.ctx.fillText('READY', x + 70, y);
         } else {
-            this.ctx.fillStyle = '#8b949e';
-            this.ctx.font = '14px Courier New';
-            this.ctx.fillText(`💨 ${this.t('ui.dash')}`, x, y);
+            const remainingSeconds = Math.ceil(currentCooldown / 1000);
+            this.ctx.fillStyle = '#f85149';
+            this.ctx.fillText(`${remainingSeconds}s`, x + 70, y);
         }
-        
-        // Draw cooldown bar
-        const barWidth = 80;
-        const barHeight = 8;
-        const barX = x + 75;
-        const barY = y - 10;
-        
-        // Background bar
-        this.ctx.fillStyle = 'rgba(139, 148, 158, 0.3)';
-        this.ctx.fillRect(barX, barY, barWidth, barHeight);
-          if (!isReady) {
-            // Cooldown progress bar (red/orange when on cooldown)
-            const progressWidth = barWidth * (1 - cooldownProgress);
-            this.ctx.fillStyle = cooldownProgress > 0.5 ? '#f85149' : '#d1a01f';
-            this.ctx.fillRect(barX, barY, progressWidth, barHeight);
-            
-            // Show remaining time with more precision for short cooldowns
-            const remainingSeconds = currentCooldown < 1000 ? 
-                (currentCooldown / 1000).toFixed(1) : 
-                Math.ceil(currentCooldown / 1000);
-            this.ctx.fillStyle = '#8b949e';
-            this.ctx.font = '11px Courier New';
-            this.ctx.fillText(`${remainingSeconds}s`, barX + barWidth + 5, y - 2);
-        } else {
-            // Ready indicator (full green bar with pulsing effect)
-            const pulseAlpha = 0.7 + 0.3 * Math.sin(Date.now() * 0.01); // Pulsing effect
-            this.ctx.fillStyle = `rgba(64, 209, 88, ${pulseAlpha})`;
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-              // Prominent "DASH READY!" text with enhanced styling
-            this.ctx.fillStyle = '#40d158';
-            this.ctx.font = 'bold 12px Courier New';
-            this.ctx.fillText(this.t('ui.dashReady'), barX + barWidth + 5, y - 2);
-            
-            // Add subtle glow effect when ready
-            this.ctx.shadowColor = '#40d158';
-            this.ctx.shadowBlur = 3;
-            this.ctx.fillText(this.t('ui.dashReady'), barX + barWidth + 5, y - 2);
-            this.ctx.shadowBlur = 0; // Reset shadow
-        }
-          // Show dash level if using dash modules
-        if (player.shopUpgrades.dashModuleLevel > 0) {
-            this.ctx.fillStyle = '#58a6ff';
-            this.ctx.font = '10px Courier New';
-            this.ctx.fillText(`LV${player.shopUpgrades.dashModuleLevel}`, x + 55, y - 15);
-        }
+    }
+    
+    /**
+     * Simple translation helper (can be expanded later)
+     */
+    t(key) {
+        const translations = {
+            'pace': 'PACE',
+            'min': 'MIN',
+            'multiplier': 'MULT',
+            'packets': 'PACKETS',
+            'nextDataPacketBonus': 'NEXT BONUS',
+            'ui.dash': 'DASH',
+            'ui.dashReady': 'READY'
+        };
+        return translations[key] || key;
     }
 }

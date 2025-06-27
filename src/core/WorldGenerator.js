@@ -2,17 +2,22 @@
  * World Generator - Procedural terrain generation system
  */
 
-import { GAME_CONFIG, TILE_TYPES } from '../utils/constants.js';
+import { GAME_CONFIG, TILE_TYPES, DIFFICULTY_LEVELS } from '../utils/constants.js';
 import { TileRenderer } from '../rendering/TileRenderer.js';
 
 export class WorldGenerator {
     constructor(game) {
         this.game = game;
         this.chunks = new Map();
-        this.lastGeneratedChunk = -1;
-        this.groundLevel = 10;
+        this.lastGeneratedChunk = -2; // Start at -2 so chunk 0 gets generated properly        this.groundLevel = 10;
         this.currentGroundLevel = 10; // Dynamic ground level that changes
         this.difficulty = 1;
+        
+        // Progressive difficulty variables
+        this.obstacleFrequency = 1;
+        this.gapSizeMultiplier = 1;
+        this.patternFrequency = 1;
+        this.currentDistance = 0;
         this.lastSpikeWorldX = -10;
         this.lastPlatformSpikePos = { x: -10, y: -10 }; // Track last platform spike position
         this.tileRenderer = new TileRenderer();
@@ -30,21 +35,81 @@ export class WorldGenerator {
         this.visibleChunks = new Set(); // Track currently visible chunks
         this.chunkRenderCache = new Map(); // Cache rendered chunk data
         this.lastCameraX = -1; // Track camera movement for render optimization
+        this.chunkPooling = new Map(); // Pool chunks to avoid constant allocation
+        this.maxPoolSize = 10; // Limit pool size
+        this.lastCleanupTime = 0; // Track when we last cleaned up
+        this.chunkGenerationQueue = []; // Queue for async chunk generation
+        this.maxChunkCacheSize = 20; // Limit cache size to prevent memory issues
+        this.lastChunkCleanup = 0; // Track when we last cleaned up chunks
+
+        // Force generation of spawn chunk immediately
+        this.generateChunk(0);
     }    update(deltaTime, camera) {
+        // Safety check for camera
+        if (!camera || typeof camera.x !== 'number' || typeof camera.y !== 'number') {
+            console.warn('WorldGenerator.update: Invalid camera object', camera);
+            return;
+        }
+
         // Update the tile renderer animation time
         this.tileRenderer.update(deltaTime);
         
-        this.difficulty = 1 + Math.floor(camera.x / 1000) * 0.2;
+        // Calculate progressive difficulty based on distance and selected difficulty level
+        this.updateProgressiveDifficulty(camera.x);
+        
         this.generateChunksForCamera(camera);
         this.cleanupOldChunks(camera);
+        
+        // Periodic cleanup to prevent memory issues
+        const currentTime = Date.now();
+        if (currentTime - this.lastChunkCleanup > 5000) { // Every 5 seconds
+            this.performPeriodicCleanup(camera);
+            this.lastChunkCleanup = currentTime;
+        }
+    }/**
+     * Calculate progressive difficulty scaling based on distance and selected difficulty level
+     */
+    updateProgressiveDifficulty(cameraX) {
+        const selectedDifficulty = this.game.selectedDifficulty || 'EASY';
+        const difficultyConfig = DIFFICULTY_LEVELS[selectedDifficulty];
+        
+        // Add a grace period for the first 500m where difficulty doesn't increase
+        const adjustedDistance = Math.max(0, cameraX - 500);
+        
+        // Calculate how many difficulty intervals have passed
+        const intervalsCompleted = Math.floor(adjustedDistance / difficultyConfig.difficultyInterval);
+        
+        // Base difficulty starts at 1, increases based on intervals and scaling factor
+        const baseDifficulty = 1 + (intervalsCompleted * difficultyConfig.obstacleScaling);
+        
+        // Apply adaptive difficulty multiplier if enabled
+        let adaptiveMultiplier = 1.0;
+        if (this.game.adaptiveDifficulty && this.game.adaptiveDifficultyMultiplier) {
+            adaptiveMultiplier = this.game.adaptiveDifficultyMultiplier;
+        }
+        
+        // Apply maximum difficulty cap
+        this.difficulty = Math.min(baseDifficulty * adaptiveMultiplier, difficultyConfig.maxDifficultyMultiplier * adaptiveMultiplier);
+        
+        // Calculate separate scaling factors for different aspects
+        this.obstacleFrequency = this.difficulty;
+        this.gapSizeMultiplier = 1 + (intervalsCompleted * difficultyConfig.gapScaling);
+        this.patternFrequency = Math.min(1 + (intervalsCompleted * 0.1), 2.0); // Pattern frequency caps at 2x
+        
+        // Store current distance for other methods to use
+        this.currentDistance = cameraX;
     }
     
     generateChunksForCamera(camera) {
         const currentChunk = Math.floor(camera.x / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE));
+        const minChunk = Math.max(0, currentChunk - 1); // Never generate negative chunks, start from 0
         const maxChunk = currentChunk + GAME_CONFIG.GENERATION_DISTANCE;
         
-        for (let chunkX = this.lastGeneratedChunk + 1; chunkX <= maxChunk; chunkX++) {
-            this.generateChunk(chunkX);
+        // Generate chunks from minChunk to maxChunk
+        for (let chunkX = minChunk; chunkX <= maxChunk; chunkX++) {
+            if (!this.chunks.has(chunkX)) {
+                this.generateChunk(chunkX);
+            }
         }
         
         this.lastGeneratedChunk = Math.max(this.lastGeneratedChunk, maxChunk);
@@ -76,9 +141,10 @@ export class WorldGenerator {
         this.generateSpecialTiles(chunk, chunkX);
           // Don't reset obstacle positions - maintain spacing across chunks
         
-        this.generateDynamicObstacles(chunk, chunkX);
-          // Add pattern-based obstacle combinations (except in spawn chunk)
-        if (chunkX > 2 && Math.random() < 0.4 && chunk.terrainType !== 'spawn') { // Increased from 0.3 to 0.4
+        this.generateDynamicObstacles(chunk, chunkX);        // Add pattern-based obstacle combinations (except in spawn chunk)
+        // Pattern frequency increases with progressive difficulty
+        const patternChance = Math.min(0.2 * this.patternFrequency, 0.6); // Base 20% chance, scales up to 60%
+        if (chunkX > 2 && Math.random() < patternChance && chunk.terrainType !== 'spawn') {
             this.generateObstaclePattern(chunk, chunkX);
         }
         
@@ -134,10 +200,10 @@ export class WorldGenerator {
         if (patternStartX < 0) {
             return;
         }        // Apply the selected pattern
-        if (patternType < 0.45) { // Changed from 0.65 to 0.45 to favor crusher patterns more
+        if (patternType < 0.45) // Changed from 0.65 to 0.45 to favor crusher patterns more
             // Pattern 1: "Saw Gauntlet" - series of saws with platforms above
             this.createSawGauntletPattern(chunk, chunkX, patternStartX, clampedGroundLevel);
-        } else {
+         else {
             // Pattern 2: "Crusher Corridor" - series of crushers with timing challenges
             this.createCrusherCorridorPattern(chunk, chunkX, patternStartX, clampedGroundLevel);
         }
@@ -222,7 +288,7 @@ export class WorldGenerator {
      * Determine what type of terrain this chunk should have
      */
     determineTerrainType(chunkX) {
-        // First chunk is always safe
+        // First chunk is always safe spawn
         if (chunkX === 0) return 'spawn';
         
         // Use a mix of randomness and patterns
@@ -270,16 +336,27 @@ export class WorldGenerator {
      * Get terrain-specific generation parameters
      */    getTerrainParameters(terrainType) {
        
-          const baseParams = {
-            gapChance: GAME_CONFIG.GAP_CHANCE,
-            maxGapSize: GAME_CONFIG.MAX_GAP_SIZE,
-            minFloorStreak: GAME_CONFIG.MIN_FLOOR_STREAK,
-            spikeChance: GAME_CONFIG.SPIKE_CHANCE,
-            spikeMinDistance: GAME_CONFIG.SPIKE_MIN_DISTANCE,
-            sawChance: GAME_CONFIG.SAW_CHANCE || 30, // Fallback to 30 if undefined
-            laserChance: GAME_CONFIG.LASER_CHANCE || 6, // Fallback to 6 if undefined
-            crusherChance: GAME_CONFIG.CRUSHER_CHANCE || 4 // Fallback to 4 if undefined
+        // Base parameters with progressive difficulty scaling applied
+        const baseParams = {
+            gapChance: GAME_CONFIG.GAP_CHANCE * this.obstacleFrequency,
+            maxGapSize: Math.floor(GAME_CONFIG.MAX_GAP_SIZE * this.gapSizeMultiplier),
+            minFloorStreak: Math.max(GAME_CONFIG.MIN_FLOOR_STREAK - Math.floor(this.obstacleFrequency - 1), 2),
+            spikeChance: GAME_CONFIG.SPIKE_CHANCE * this.obstacleFrequency,
+            spikeMinDistance: Math.max(GAME_CONFIG.SPIKE_MIN_DISTANCE - Math.floor(this.obstacleFrequency - 1), 3),
+            sawChance: (GAME_CONFIG.SAW_CHANCE || 30) * this.obstacleFrequency,
+            laserChance: (GAME_CONFIG.LASER_CHANCE || 6) * this.obstacleFrequency,
+            crusherChance: (GAME_CONFIG.CRUSHER_CHANCE || 4) * this.obstacleFrequency
         };
+        
+        // Ensure gap size doesn't exceed reasonable limits
+        baseParams.maxGapSize = Math.min(baseParams.maxGapSize, 6);
+        
+        // Ensure obstacle chances don't exceed 100%
+        baseParams.gapChance = Math.min(baseParams.gapChance, 85);
+        baseParams.spikeChance = Math.min(baseParams.spikeChance, 75);
+        baseParams.sawChance = Math.min(baseParams.sawChance, 60);
+        baseParams.laserChance = Math.min(baseParams.laserChance, 25);
+        baseParams.crusherChance = Math.min(baseParams.crusherChance, 20);
         
        
 
@@ -403,13 +480,21 @@ export class WorldGenerator {
     }    generateGroundLevel(chunk, chunkX) {
         let consecutiveFloors = 0;
         let consecutiveGaps = 0;
+        
+        // Ensure groundLevel values are valid numbers
+        if (isNaN(this.groundLevel)) this.groundLevel = 10;
+        if (isNaN(this.currentGroundLevel)) this.currentGroundLevel = 10;
+        
         const groundLevel = chunkX === 0 ? this.groundLevel : this.currentGroundLevel;
+        
+        // Final safety check - if still NaN, use default
+        const safeGroundLevel = isNaN(groundLevel) ? 10 : groundLevel;
         
         // Get terrain-specific generation parameters
         const terrainParams = this.getTerrainParameters(chunk.terrainType);
         
         // Clamp groundLevel to valid range
-        const clampedGroundLevel = Math.max(0, Math.min(GAME_CONFIG.CHUNK_HEIGHT - 1, groundLevel));
+        const clampedGroundLevel = Math.max(0, Math.min(GAME_CONFIG.CHUNK_HEIGHT - 1, safeGroundLevel));
         
         for (let x = 0; x < GAME_CONFIG.CHUNK_WIDTH; x++) {
             const worldX = chunkX * GAME_CONFIG.CHUNK_WIDTH + x;
@@ -757,12 +842,15 @@ export class WorldGenerator {
         const tileY = Math.floor(pixelY / GAME_CONFIG.TILE_SIZE);
         return this.getTileAt(tileX, tileY);
     }    draw(ctx, camera) {
-        const startChunk = Math.floor(camera.x / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE)) - 1;
+        const startChunk = Math.max(0, Math.floor(camera.x / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE)) - 1);
         const endChunk = Math.ceil((camera.x + ctx.canvas.width) / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE)) + 1;
         
-        // Only update visible chunks if camera moved significantly
-        if (Math.abs(camera.x - this.lastCameraX) > GAME_CONFIG.TILE_SIZE) {
-            this.updateVisibleChunks(startChunk, endChunk);
+        // Always ensure chunk 0 is included when camera is near the start
+        const actualStartChunk = camera.x < GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE ? 0 : startChunk;
+        
+        // Always update visible chunks on first frame or when camera moved significantly
+        if (this.lastCameraX === -1 || Math.abs(camera.x - this.lastCameraX) > GAME_CONFIG.TILE_SIZE) {
+            this.updateVisibleChunks(actualStartChunk, endChunk);
             this.lastCameraX = camera.x;
         }
         
@@ -770,8 +858,13 @@ export class WorldGenerator {
         for (const chunkX of this.visibleChunks) {
             this.drawChunk(ctx, camera, chunkX);
         }
-    }
-      drawChunk(ctx, camera, chunkX) {
+    }    drawChunk(ctx, camera, chunkX) {
+        // Safety check for camera
+        if (!camera || !isFinite(camera.x) || !isFinite(camera.y)) {
+            console.warn('WorldGenerator.drawChunk: Invalid camera', camera);
+            return;
+        }
+
         const chunk = this.chunks.get(chunkX);
         if (!chunk) return;
         
@@ -1145,5 +1238,124 @@ export class WorldGenerator {
     clearChunkCache(chunkX) {
         this.chunkRenderCache.delete(chunkX);
         this.visibleChunks.delete(chunkX);
+    }    /**
+     * Get current difficulty information for UI display
+     */
+    getDifficultyInfo() {
+        const selectedDifficulty = this.game.selectedDifficulty || 'EASY';
+        const difficultyConfig = DIFFICULTY_LEVELS[selectedDifficulty];
+        const adjustedDistance = Math.max(0, this.currentDistance - 500);
+        const intervalsCompleted = Math.floor(adjustedDistance / difficultyConfig.difficultyInterval);
+        
+        return {
+            level: Math.floor(this.difficulty * 10) / 10, // Round to 1 decimal place
+            distance: this.currentDistance,
+            isInGracePeriod: this.currentDistance < 500,
+            nextIncrease: this.currentDistance < 500 ? 
+                500 - this.currentDistance : 
+                difficultyConfig.difficultyInterval - (adjustedDistance % difficultyConfig.difficultyInterval),
+            obstacleMultiplier: Math.floor(this.obstacleFrequency * 10) / 10,
+            gapMultiplier: Math.floor(this.gapSizeMultiplier * 10) / 10,
+            intervalsCompleted: intervalsCompleted
+        };
+    }
+    
+    /**
+     * Perform periodic cleanup to prevent memory leaks
+     */
+    performPeriodicCleanup(camera) {
+        const currentChunk = Math.floor(camera.x / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE));
+        
+        // Clean up render cache that's too far from camera
+        const renderCacheEntries = Array.from(this.chunkRenderCache.entries());
+        for (const [chunkX, cacheData] of renderCacheEntries) {
+            if (Math.abs(chunkX - currentChunk) > 10) {
+                this.chunkRenderCache.delete(chunkX);
+            }
+        }
+        
+        // Limit render cache size
+        if (this.chunkRenderCache.size > this.maxChunkCacheSize) {
+            const sortedEntries = renderCacheEntries.sort((a, b) => Math.abs(a[0] - currentChunk) - Math.abs(b[0] - currentChunk));
+            const toRemove = sortedEntries.slice(this.maxChunkCacheSize);
+            toRemove.forEach(([chunkX]) => this.chunkRenderCache.delete(chunkX));
+        }
+        
+        // Clean up obstacle positions that are too old
+        this.obstaclePositions = this.obstaclePositions.filter(pos => 
+            Math.abs(pos.x - camera.x) < 2000
+        );
+        
+        this.sawPositions = this.sawPositions.filter(pos => 
+            Math.abs(pos.x - camera.x) < 2000
+        );
+        
+        // Clean up pooled chunks
+        if (this.chunkPooling.size > this.maxPoolSize) {
+            const poolEntries = Array.from(this.chunkPooling.entries());
+            const toRemove = poolEntries.slice(0, poolEntries.length - this.maxPoolSize);
+            toRemove.forEach(([key]) => this.chunkPooling.delete(key));
+        }
+    }
+
+    /**
+     * Periodic cleanup of old chunks and obstacle tracking
+     */
+    periodicCleanup(cameraX) {
+        const currentTime = Date.now();
+        
+        // Clean up every 5 seconds
+        if (currentTime - this.lastObstaclesCleanup < 5000) {
+            return;
+        }
+        
+        this.lastObstaclesCleanup = currentTime;
+        
+        // Clean up old obstacle positions to prevent memory bloat
+        const cleanupDistance = cameraX - 3000; // Keep 3000 units behind camera
+        this.obstaclePositions = this.obstaclePositions.filter(pos => pos.x > cleanupDistance);
+        this.sawPositions = this.sawPositions.filter(pos => pos.x > cleanupDistance);
+        
+        // Clean up old chunks that are far behind
+        const oldChunks = [];
+        this.chunks.forEach((chunk, chunkX) => {
+            const chunkWorldX = chunkX * GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE;
+            if (chunkWorldX < cleanupDistance) {
+                oldChunks.push(chunkX);
+            }
+        });
+        
+        // Remove old chunks
+        oldChunks.forEach(chunkX => {
+            this.chunks.delete(chunkX);
+            this.clearChunkCache(chunkX);
+        });
+        
+        if (oldChunks.length > 0) {
+            console.log(`🧹 Cleaned up ${oldChunks.length} old chunks and ${this.obstaclePositions.length} obstacle positions`);
+        }
+    }
+
+    /**
+     * Reset world state for new game
+     */
+    reset() {
+        // Clear all chunks and caches
+        this.chunks.clear();
+        this.chunkRenderCache.clear();
+        this.visibleChunks.clear();
+        
+        // Reset position tracking
+        this.obstaclePositions = [];
+        this.sawPositions = [];
+        this.lastGeneratedChunk = -2;
+        
+        // Reset difficulty progression
+        this.difficulty = 1;
+        this.currentDistance = 0;
+        this.currentGroundLevel = this.groundLevel;
+        
+        // Force generation of spawn chunk
+        this.generateChunk(0);
     }
 }

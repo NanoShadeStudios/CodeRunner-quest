@@ -15,16 +15,21 @@ export const GAME_CONFIG = {
     // Generation settings
     GENERATION_DISTANCE: 3,
     CLEANUP_DISTANCE: 5,    // Physics constants
-    GRAVITY: 800,
-    MAX_FALL_SPEED: 400,
+    GRAVITY: 900,  // Slightly increased for snappier feel
+    MAX_FALL_SPEED: 450,  // Slightly faster max fall
     
     // Player settings
     PLAYER_WIDTH: 28,
     PLAYER_HEIGHT: 44,
-    MOVE_SPEED: 180,
-    JUMP_POWER: -420,
-    FRICTION: 0.75,
-    AIR_RESISTANCE: 0.92,
+    MOVE_SPEED: 150,  // Reduced base speed for better control
+    JUMP_POWER: -440,  // Slightly higher jump for better feel
+    FRICTION: 0.82,  // Improved ground friction for better stopping
+    AIR_RESISTANCE: 0.95,  // Better air control    // Enhanced movement constants
+    ACCELERATION: 500,   // How fast player accelerates (slightly increased for better feel)
+    DECELERATION: 800,   // How fast player decelerates when no input (increased to prevent drift)
+    AIR_ACCELERATION: 250,  // Air movement control (slightly increased)
+    JUMP_BUFFER_TIME: 150,  // Jump input buffer in ms
+    COYOTE_TIME: 120,  // Grace period for jumping after leaving ground
     
     // Health system
     PLAYER_HEALTH: 3,
@@ -62,15 +67,20 @@ export const TILE_TYPES = {
 };
 
 export const GAME_STATES = {
+    LOADING: 'loading',
     INITIALIZING: 'initializing',
     OPENING_ANIMATION: 'openingAnimation',
     POST_ANIMATION_POPUP: 'postAnimationPopup',
     LOGIN_PROMPT: 'loginPrompt',
+    TUTORIAL: 'tutorial',
     HOME: 'home',
+    OPTIONS: 'options',
     DIFFICULTY_SELECT: 'difficultySelect',
     CREDITS: 'credits',
     CHANGELOG: 'changelog',
     LEADERBOARD: 'leaderboard',
+    ACHIEVEMENTS: 'achievements',
+    SETTINGS: 'settings',
     RESET_CONFIRM: 'resetConfirm',
     SHOP: 'shop',
     PLAYING: 'playing',
@@ -82,30 +92,47 @@ export const DIFFICULTY_LEVELS = {
     EASY: {
         name: 'Easy',
         emoji: '🔹',
-        description: 'Fast regeneration - Perfect for beginners',
-        healthRegenInterval: 60000, // 1 minute
-        color: '#40d158'
-    },
-    MEDIUM: {
+        description: 'Frequent life boxes - Perfect for beginners',
+        healthRegenInterval: 60000, // 1 minute (deprecated)
+        color: '#40d158',
+        // Progressive difficulty scaling
+        obstacleScaling: 0.15, // Slower obstacle increase
+        gapScaling: 0.1, // Smaller gap increases
+        difficultyInterval: 1500, // Every 1500m increase difficulty
+        maxDifficultyMultiplier: 2.5 // Cap at 2.5x base difficulty
+    },    MEDIUM: {
         name: 'Medium',
         emoji: '🔸',
-        description: 'Moderate regeneration - Balanced challenge',
-        healthRegenInterval: 180000, // 3 minutes
-        color: '#ffd700'
-    },
-    HARD: {
+        description: 'Moderate life boxes - Balanced challenge',
+        healthRegenInterval: 180000, // 3 minutes (deprecated)
+        color: '#ffd700',
+        // Progressive difficulty scaling
+        obstacleScaling: 0.25, // Moderate obstacle increase
+        gapScaling: 0.2, // Moderate gap increases
+        difficultyInterval: 1200, // Every 1200m increase difficulty
+        maxDifficultyMultiplier: 3.0 // Cap at 3x base difficulty
+    },    HARD: {
         name: 'Hard',
         emoji: '🔴',
-        description: 'Slow regeneration - For experienced players',
-        healthRegenInterval: 420000, // 7 minutes
-        color: '#ff6b35'
-    },
-    EXTREME: {
+        description: 'Rare life boxes - For experienced players',
+        healthRegenInterval: 420000, // 7 minutes (deprecated)
+        color: '#ff6b35',
+        // Progressive difficulty scaling
+        obstacleScaling: 0.35, // Faster obstacle increase
+        gapScaling: 0.3, // Larger gap increases
+        difficultyInterval: 1000, // Every 1000m increase difficulty
+        maxDifficultyMultiplier: 4.0 // Cap at 4x base difficulty
+    },    EXTREME: {
         name: 'Extreme',
         emoji: '❌',
-        description: 'No regeneration - Ultimate survival challenge',
-        healthRegenInterval: 0, // Never
-        color: '#f85149'
+        description: 'No life boxes - Ultimate survival challenge',
+        healthRegenInterval: 0, // Never (deprecated)
+        color: '#f85149',
+        // Progressive difficulty scaling
+        obstacleScaling: 0.5, // Aggressive obstacle increase
+        gapScaling: 0.4, // Largest gap increases
+        difficultyInterval: 800, // Every 800m increase difficulty
+        maxDifficultyMultiplier: 5.0 // Cap at 5x base difficulty
     }
 };
 

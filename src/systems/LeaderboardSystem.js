@@ -1506,6 +1506,13 @@ export class LeaderboardSystem {
         this.savePlayerName(name);
         console.log('✅ Profile name saved in LeaderboardSystem');
         
+        // Track achievement: Title Hacker
+        if (this.game && this.game.achievementSystem && name && name.trim().length > 0) {
+            this.game.achievementSystem.trackEvent('profileNameSet', {
+                name: name
+            });
+        }
+        
         return `Profile name set to: ${name}`;
     }
 }

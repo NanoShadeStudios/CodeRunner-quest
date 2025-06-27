@@ -1,4 +1,5 @@
-class AudioSystem {    constructor() {
+export class AudioSystem {
+    constructor() {
        
         this.sounds = {};
         this.music = {};
@@ -9,6 +10,12 @@ class AudioSystem {    constructor() {
         this.musicVolume = 0.5;
         this.musicMode = 'chill'; // 'chill' or 'intense'
         this.fadeTimeout = null;
+        
+        // Focus-based muting settings
+        this.muteWhenUnfocused = true; // Setting for auto-muting when window loses focus
+        this.wasMutedByFocus = false; // Track if currently muted due to focus loss
+        this.muteWhenUnfocused = true; // Setting for auto-muting when window loses focus
+        this.wasMutedByFocus = false; // Track if currently muted due to focus loss
         
        
         
@@ -25,8 +32,41 @@ class AudioSystem {    constructor() {
         // Preload all audio assets
      
         this.preloadAudio();
-        
-      
+    }
+
+    /**
+     * Load audio settings from localStorage
+     */
+    loadSettings() {
+        try {
+            const saved = localStorage.getItem('coderunner_audio_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                
+                // Load volume settings
+                if (settings.masterVolume !== undefined) {
+                    this.masterVolume = Math.max(0, Math.min(1, settings.masterVolume));
+                }
+                if (settings.sfxVolume !== undefined) {
+                    this.sfxVolume = Math.max(0, Math.min(1, settings.sfxVolume));
+                }
+                if (settings.musicVolume !== undefined) {
+                    this.musicVolume = Math.max(0, Math.min(1, settings.musicVolume));
+                }
+                if (settings.isMuted !== undefined) {
+                    this.isMuted = settings.isMuted;
+                }
+                if (settings.musicMode !== undefined) {
+                    this.musicMode = settings.musicMode;
+                }
+                if (settings.selectedTrack !== undefined) {
+                    this.selectedTrack = settings.selectedTrack;
+                }
+            }
+        } catch (error) {
+            console.warn('🎵 Failed to load audio settings:', error);
+            // Use default values if loading fails
+        }
     }
     
     initAudioContext() {
@@ -335,13 +375,12 @@ class AudioSystem {    constructor() {
         audio.preload = 'auto';
         return audio;
     }
-    
-    playSound(soundName, volumeOverride = null) {
+      playSound(soundName, volumeOverride = null) {
         if (this.isMuted || !this.sounds[soundName]) return;
         
         const sound = this.sounds[soundName];
         sound.currentTime = 0;
-        sound.volume = (volumeOverride || this.sfxVolume) * this.masterVolume;
+        sound.volume = this.isMuted ? 0 : ((volumeOverride || this.sfxVolume) * this.masterVolume);
         
         const playPromise = sound.play();
         if (playPromise !== undefined) {
@@ -349,8 +388,7 @@ class AudioSystem {    constructor() {
               
             });
         }
-    }
-      playMusic(mode = 'chill') {
+    }      playMusic(mode = 'chill') {
         if (this.isMuted || !this.music[mode]) return;
         
         // Stop current music
@@ -358,7 +396,7 @@ class AudioSystem {    constructor() {
         
         this.musicMode = mode;
         this.currentMusic = this.music[mode];
-        this.currentMusic.volume = this.musicVolume * this.masterVolume;
+        this.currentMusic.volume = this.isMuted ? 0 : (this.musicVolume * this.masterVolume);
         
         // Set playback rate based on music mode (faster for intense mode)
         this.currentMusic.playbackRate = mode === 'intense' ? 1.1 : 1.0;
@@ -454,8 +492,7 @@ class AudioSystem {    constructor() {
             }
         }, 50);
     }
-    
-    setMasterVolume(volume) {
+      setMasterVolume(volume) {
         this.masterVolume = Math.max(0, Math.min(1, volume));
         this.updateAllVolumes();
         this.saveSettings();
@@ -473,265 +510,854 @@ class AudioSystem {    constructor() {
         this.updateAllVolumes();
         this.saveSettings();
     }
-    
-    updateAllVolumes() {
+      updateAllVolumes() {
         // Update SFX volumes
         Object.values(this.sounds).forEach(sound => {
             if (sound.volume !== undefined) {
-                sound.volume = this.sfxVolume * this.masterVolume;
+                sound.volume = this.isMuted ? 0 : (this.sfxVolume * this.masterVolume);
             }
         });
         
         // Update music volume
         if (this.currentMusic) {
-            this.currentMusic.volume = this.musicVolume * this.masterVolume;
+            this.currentMusic.volume = this.isMuted ? 0 : (this.musicVolume * this.masterVolume);
         }
     }
     
     toggleMute() {
         this.isMuted = !this.isMuted;
         
+        // Update all volumes immediately to reflect mute state
+        this.updateAllVolumes();
+        
         if (this.isMuted) {
-            this.stopMusic();
+            // If muting, stop music but keep its reference for unmuting
+            if (this.currentMusic) {
+                this.currentMusic.pause();
+            }
         } else {
-            this.playMusic(this.musicMode);
+            // If unmuting, resume music if it was playing
+            if (this.currentMusic) {
+                this.currentMusic.play().catch(e => {
+                    // If play fails, try to start fresh music
+                    this.playMusic(this.musicMode);
+                });
+            } else {
+                // Start music if no music was playing
+                this.playMusic(this.musicMode);
+            }
+        }
+          this.saveSettings();
+        return this.isMuted;
+    }
+
+    /**
+     * Set the mute state directly
+     * @param {boolean} muted - Whether audio should be muted
+     */
+    setMuted(muted) {
+        if (this.isMuted === muted) return; // No change needed
+        
+        this.isMuted = muted;
+        
+        // Update all volumes immediately to reflect mute state
+        this.updateAllVolumes();
+        
+        if (this.isMuted) {
+            // If muting, stop music but keep its reference for unmuting
+            if (this.currentMusic) {
+                this.currentMusic.pause();
+            }
+        } else {
+            // If unmuting, resume music if it was playing
+            if (this.currentMusic) {
+                this.currentMusic.play().catch(e => {
+                    // If play fails, try to start fresh music
+                    this.playMusic(this.musicMode);
+                });
+            } else {
+                // Start music if no music was playing
+                this.playMusic(this.musicMode);
+            }
         }
         
         this.saveSettings();
         return this.isMuted;
-    }    saveSettings() {
-        const settings = {
+    }
+
+    /**
+     * Set the music mode directly
+     * @param {string} mode - The music mode ('chill' or 'intense')
+     */
+    setMusicMode(mode) {
+        if (this.musicMode === mode) return; // No change needed
+        
+        this.musicMode = mode;
+        
+        // Update playback rate for current music
+        if (this.currentMusic) {
+            this.currentMusic.playbackRate = mode === 'intense' ? 1.1 : 1.0;
+        }
+        
+        this.saveSettings();
+    }
+
+    /**
+     * Set the selected track directly
+     * @param {string} track - The filename of the track to select
+     */
+    setSelectedTrack(track) {
+        const validTrack = this.availableTracks.find(t => t.filename === track);
+        if (!validTrack) return; // Invalid track, do nothing
+        
+        this.selectedTrack = track;
+        
+        // Load and play the selected track
+        this.loadMusicTrack(track);
+        this.playMusic(this.musicMode);
+        
+        this.saveSettings();
+    }
+
+    /**
+     * Get the list of available tracks for display in the UI
+     * @returns {Array} - Array of track objects with name and filename
+     */
+    getTrackListForUI() {
+        return this.availableTracks.map(track => ({
+            name: track.name,
+            filename: track.filename,
+            isSelected: track.filename === this.selectedTrack
+        }));
+    }
+
+    /**
+     * Set the volume levels from a settings object
+     * @param {Object} settings - The settings object containing volume levels
+     */
+    setVolumesFromSettings(settings) {
+        if (settings.masterVolume !== undefined) {
+            this.setMasterVolume(settings.masterVolume);
+        }
+        if (settings.sfxVolume !== undefined) {
+            this.setSfxVolume(settings.sfxVolume);
+        }
+        if (settings.musicVolume !== undefined) {
+            this.setMusicVolume(settings.musicVolume);
+        }
+    }
+
+    /**
+     * Initialize audio settings to default values
+     */
+    resetSettings() {
+        this.isMuted = false;
+        this.masterVolume = 0.7;
+        this.sfxVolume = 0.8;
+        this.musicVolume = 0.5;
+        this.musicMode = 'chill';
+        this.selectedTrack = this.availableTracks[0].filename;
+        
+        this.saveSettings();
+        this.updateAllVolumes();
+    }
+
+    /**
+     * Load settings from a URL query string (for debugging/testing)
+     * @param {string} queryString - The query string containing settings
+     */
+    loadSettingsFromQueryString(queryString) {
+        const params = new URLSearchParams(queryString);
+        
+        if (params.has('muted')) {
+            this.setMuted(params.get('muted') === 'true');
+        }
+        if (params.has('masterVolume')) {
+            this.setMasterVolume(parseFloat(params.get('masterVolume')));
+        }
+        if (params.has('sfxVolume')) {
+            this.setSfxVolume(parseFloat(params.get('sfxVolume')));
+        }
+        if (params.has('musicVolume')) {
+            this.setMusicVolume(parseFloat(params.get('musicVolume')));
+        }
+        if (params.has('musicMode')) {
+            this.setMusicMode(params.get('musicMode'));
+        }
+        if (params.has('selectedTrack')) {
+            this.setSelectedTrack(params.get('selectedTrack'));
+        }
+    }
+
+    /**
+     * Debugging function to print the current audio settings
+     */
+    debugPrintSettings() {
+        console.log('🎵 Audio Settings:', {
             isMuted: this.isMuted,
             masterVolume: this.masterVolume,
             sfxVolume: this.sfxVolume,
             musicVolume: this.musicVolume,
             musicMode: this.musicMode,
-            selectedTrack: this.selectedTrack,
-            timestamp: Date.now() // Add timestamp for conflict resolution
-        };
-        
-     
-        try {
-            localStorage.setItem('coderunner_audio_settings', JSON.stringify(settings));
-           
-        } catch (e) {
-            console.error('🎵 Failed to save audio settings:', e);
-        }
-    }loadSettings() {
-        console.log('🎵 loadSettings() called (no parameters) - Loading from localStorage...');
-        this.loadSettingsFromLocalStorage();
-        console.log('🎵 loadSettings() finished with volumes:', {
-            masterVolume: this.masterVolume,
-            sfxVolume: this.sfxVolume,
-            musicVolume: this.musicVolume
+            selectedTrack: this.selectedTrack
         });
     }
-      loadSettingsFromLocalStorage() {
-        console.log('🎵 loadSettingsFromLocalStorage() called');
-        try {
-            const saved = localStorage.getItem('coderunner_audio_settings');
-            console.log('🎵 Raw saved settings from localStorage:', saved);
-            if (saved) {
-                const settings = JSON.parse(saved);
-                console.log('🎵 Parsed settings from localStorage:', settings);
-                
-                console.log('🎵 BEFORE applying settings:', {
-                    masterVolume: this.masterVolume,
-                    sfxVolume: this.sfxVolume,
-                    musicVolume: this.musicVolume
-                });
-                
-                this.isMuted = settings.isMuted || false;
-                this.masterVolume = settings.masterVolume ?? 0.7;
-                this.sfxVolume = settings.sfxVolume ?? 0.8;
-                this.musicVolume = settings.musicVolume ?? 0.5;
-                this.musicMode = settings.musicMode || 'chill';
-                this.selectedTrack = settings.selectedTrack || this.availableTracks[0].filename;
-                
-                console.log('🎵 AFTER applying settings:', {
-                    masterVolume: this.masterVolume,
-                    sfxVolume: this.sfxVolume,
-                    musicVolume: this.musicVolume
-                });
+
+    /**
+     * Advanced: Directly set the audio context (for testing)
+     * @param {AudioContext} context - The audio context to set
+     */
+    setAudioContext(context) {
+        this.audioContext = context;
+    }
+
+    /**
+     * Advanced: Get the current audio context (for testing)
+     * @returns {AudioContext} - The current audio context
+     */
+    getAudioContext() {
+        return this.audioContext;
+    }
+
+    /**
+     * Advanced: Bypass audio context and play sound directly (for testing)
+     * @param {string} soundName - The name of the sound to play
+     */
+    testPlaySoundDirectly(soundName) {
+        if (this.sounds[soundName]) {
+            const sound = this.sounds[soundName];
+            sound.currentTime = 0;
+            sound.play();
+        }
+    }
+
+    /**
+     * Advanced: Create a new audio buffer source (for testing)
+     * @param {Float32Array} data - The audio data to play
+     * @param {number} sampleRate - The sample rate of the audio data
+     */
+    testPlayAudioData(data, sampleRate) {
+        if (this.audioContext) {
+            const buffer = this.audioContext.createBuffer(1, data.length, sampleRate);
+            buffer.copyToChannel(data, 0);
+            
+            const source = this.audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(this.audioContext.destination);
+            source.start(0);
+        }
+    }
+
+    /**
+     * Advanced: Set the audio context state (suspended/resumed) for testing
+     * @param {boolean} resume - Whether to resume the audio context
+     */
+    testSetAudioContextState(resume) {
+        if (this.audioContext) {
+            if (resume) {
+                this.audioContext.resume();
             } else {
-                console.log('🎵 No saved settings found, using defaults');
+                this.audioContext.suspend();
             }
-        } catch (e) {
-            console.warn('🎵 Failed to load audio settings:', e);        }
-    }
-    
-    /**
-     * Get current audio settings for saving to cloud/localStorage
-     */
-    getSettings() {
-        return {
-            isMuted: this.isMuted,
-            masterVolume: this.masterVolume,
-            sfxVolume: this.sfxVolume,
-            musicVolume: this.musicVolume,
-            musicMode: this.musicMode,
-            selectedTrack: this.selectedTrack,
-            timestamp: Date.now()
-        };
+        }
     }
 
     /**
-     * Load settings from unified save system
+     * Advanced: Connect audio nodes for testing (e.g., analyzer, compressor)
+     * @param {AudioNode} node - The audio node to connect
      */
-    loadSettings(settingsData) {
-        console.log('🎵 loadSettings(settingsData) called with data:', settingsData);
-        try {
-            if (settingsData && typeof settingsData === 'object') {
-                // Check if we have more recent direct localStorage settings
-                const directSettings = localStorage.getItem('coderunner_audio_settings');
-                let useDirectSettings = false;
-                  if (directSettings) {
-                    try {
-                        const parsed = JSON.parse(directSettings);
-                        console.log('🎵 Direct localStorage timestamp:', parsed.timestamp);
-                        console.log('🎵 Unified save timestamp:', settingsData.timestamp);
-                        
-                        // If unified save data doesn't have a timestamp or is older, use direct settings
-                        if (!settingsData.timestamp || 
-                            (parsed.timestamp && parsed.timestamp > (settingsData.timestamp || 0))) {
-                            console.log('🎵 Using direct localStorage audio settings (more recent than unified save)');
-                            console.log('🎵 Direct settings values:', {
-                                masterVolume: parsed.masterVolume,
-                                sfxVolume: parsed.sfxVolume,
-                                musicVolume: parsed.musicVolume
-                            });
-                            useDirectSettings = true;
-                        } else {
-                            console.log('🎵 Unified save is more recent, will use unified settings');
-                        }
-                    } catch (e) {
-                        // If parsing fails, fall back to unified settings
-                        console.log('🎵 Failed to parse direct settings, using unified:', e);
-                    }
-                }
+    testConnectAudioNode(node) {
+        if (this.audioContext && this.audioContext.destination) {
+            node.connect(this.audioContext.destination);
+        }
+    }
+
+    /**
+     * Advanced: Disconnect audio nodes for testing
+     * @param {AudioNode} node - The audio node to disconnect
+     */
+    testDisconnectAudioNode(node) {
+        if (this.audioContext && this.audioContext.destination) {
+            node.disconnect(this.audioContext.destination);
+        }
+    }
+
+    /**
+     * Advanced: Create and connect an analyzer node for testing
+     * @returns {AnalyserNode} - The created analyzer node
+     */
+    testCreateAnalyzerNode() {
+        if (this.audioContext) {
+            const analyzer = this.audioContext.createAnalyser();
+            analyzer.fftSize = 2048;
+            analyzer.connect(this.audioContext.destination);
+            return analyzer;
+        }
+        return null;
+    }
+
+    /**
+     * Advanced: Get the current time of the audio context (for testing)
+     * @returns {number} - The current time in seconds
+     */
+    testGetAudioContextTime() {
+        if (this.audioContext) {
+            return this.audioContext.currentTime;
+        }
+        return 0;
+    }
+
+    /**
+     * Advanced: Set the current time of the audio context (for testing)
+     * @param {number} time - The time in seconds to set
+     */
+    testSetAudioContextTime(time) {
+        if (this.audioContext) {
+            this.audioContext.currentTime = time;
+        }
+    }
+
+    /**
+     * Advanced: Get the list of active audio nodes (for testing)
+     * @returns {Array} - Array of active audio nodes
+     */
+    testGetActiveAudioNodes() {
+        if (this.audioContext) {
+            return Array.from(this.audioContext.destination.channelCount);
+        }
+        return [];
+    }
+
+    /**
+     * Advanced: Clear all audio nodes (for testing)
+     */
+    testClearAllAudioNodes() {
+        if (this.audioContext) {
+            const nodes = this.testGetActiveAudioNodes();
+            nodes.forEach(node => {
+                node.disconnect();
+            });
+        }
+    }
+
+    /**
+     * Advanced: Connect a media element source (e.g., video) for testing
+     * @param {HTMLMediaElement} mediaElement - The media element to connect
+     */
+    testConnectMediaElement(mediaElement) {
+        if (this.audioContext && mediaElement) {
+            const source = this.audioContext.createMediaElementSource(mediaElement);
+            source.connect(this.audioContext.destination);
+            mediaElement.play();
+        }
+    }
+
+    /**
+     * Advanced: Disconnect a media element source (e.g., video) for testing
+     * @param {HTMLMediaElement} mediaElement - The media element to disconnect
+     */
+    testDisconnectMediaElement(mediaElement) {
+        if (this.audioContext && mediaElement) {
+            const source = this.audioContext.createMediaElementSource(mediaElement);
+            source.disconnect(this.audioContext.destination);
+            mediaElement.pause();
+        }
+    }
+
+    /**
+     * Advanced: Create and connect a gain node for testing
+     * @param {number} gainValue - The gain value (amplification) to set
+     * @returns {GainNode} - The created gain node
+     */
+    testCreateGainNode(gainValue) {
+        if (this.audioContext) {
+            const gainNode = this.audioContext.createGain();
+            gainNode.gain.value = gainValue;
+            gainNode.connect(this.audioContext.destination);
+            return gainNode;
+        }
+        return null;
+    }
+
+    /**
+     * Advanced: Set the gain value of a connected gain node (for testing)
+     * @param {GainNode} gainNode - The gain node to set
+     * @param {number} value - The gain value to set
+     */
+    testSetGainValue(gainNode, value) {
+        if (gainNode) {
+            gainNode.gain.value = value;
+        }
+    }
+
+    /**
+     * Advanced: Connect and configure a compressor node for testing
+     * @param {number} threshold - The threshold level for compression
+     * @param {number} ratio - The compression ratio
+     * @param {number} attack - The attack time in seconds
+     * @param {number} release - The release time in seconds
+     * @returns {DynamicsCompressorNode} - The created compressor node
+     */
+    testCreateCompressorNode(threshold, ratio, attack, release) {
+        if (this.audioContext) {
+            const compressor = this.audioContext.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(threshold, this.audioContext.currentTime);
+            compressor.ratio.setValueAtTime(ratio, this.audioContext.currentTime);
+            compressor.attack.setValueAtTime(attack, this.audioContext.currentTime);
+            compressor.release.setValueAtTime(release, this.audioContext.currentTime);
+            compressor.connect(this.audioContext.destination);
+            return compressor;
+        }
+        return null;
+    }
+
+    /**
+     * Advanced: Bypass a compressor node (for testing)
+     * @param {DynamicsCompressorNode} compressor - The compressor node to bypass
+     */
+    testBypassCompressorNode(compressor) {
+        if (compressor) {
+            compressor.disconnect();
+        }
+    }
+
+    /**
+     * Advanced: Connect and configure an equalizer node for testing
+     * @param {Array} frequencies - Array of frequency values for the equalizer bands
+     * @param {Array} gains - Array of gain values for the equalizer bands
+     * @returns {Array} - Array of connected BiquadFilterNode equalizer bands
+     */
+    testCreateEqualizer(frequencies, gains) {
+        const filters = [];
+        if (this.audioContext) {
+            frequencies.forEach((freq, index) => {
+                const filter = this.audioContext.createBiquadFilter();
+                filter.type = 'peaking';
+                filter.frequency.setValueAtTime(freq, this.audioContext.currentTime);
+                filter.gain.setValueAtTime(gains[index], this.audioContext.currentTime);
+                filter.connect(this.audioContext.destination);
+                filters.push(filter);
+            });
+        }
+        return filters;
+    }
+
+    /**
+     * Advanced: Connect and configure a stereo panner node for testing
+     * @param {number} panValue - The pan value (-1 to 1) to set
+     * @returns {StereoPannerNode} - The created stereo panner node
+     */
+    testCreateStereoPannerNode(panValue) {
+        if (this.audioContext) {
+            const panner = this.audioContext.createStereoPanner();
+            panner.pan.setValueAtTime(panValue, this.audioContext.currentTime);
+            panner.connect(this.audioContext.destination);
+            return panner;
+        }
+        return null;
+    }
+
+    /**
+     * Advanced: Connect and configure a spatializer node for testing (3D audio)
+     * @param {Object} options - The spatializer options (e.g., position, orientation)
+     * @returns {Object} - The created spatializer node and its associated components
+     */
+    testCreateSpatializerNode(options) {
+        const spatializer = {};
+        if (this.audioContext) {
+            // Create 3D audio components (e.g., PannerNode, Listener)
+            spatializer.panner = this.audioContext.createPanner();
+            spatializer.listener = this.audioContext.listener;
+            
+            // Set initial spatializer options
+            this.testSetSpatializerOptions(spatializer, options);
+        }
+        return spatializer;
+    }
+
+    /**
+     * Advanced: Set the options of a spatializer node (3D audio)
+     * @param {Object} spatializer - The spatializer node and its associated components
+     * @param {Object} options - The new options to set
+     */
+    testSetSpatializerOptions(spatializer, options) {
+        if (spatializer.panner) {
+            // Set position, orientation, and other properties
+            spatializer.panner.setPosition(options.position.x, options.position.y, options.position.z);
+            spatializer.panner.setOrientation(options.orientation.x, options.orientation.y, options.orientation.z);
+            spatializer.panner.radius = options.radius || 100;
+            spatializer.panner.rolloffFactor = options.rolloffFactor || 1;
+            spatializer.panner.refDistance = options.refDistance || 1;
+            spatializer.panner.maxDistance = options.maxDistance || 10000;
+        }
+    }
+
+    /**
+     * Advanced: Connect and configure a reverb node for testing
+     * @param {Object} options - The reverb options (e.g., room size, damping)
+     * @returns {ConvolverNode} - The created reverb node
+     */
+    testCreateReverbNode(options) {
+        if (this.audioContext) {
+            const reverb = this.audioContext.createConvolver();
+            
+            // Create an impulse response for the reverb
+            const ir = this.audioContext.createBuffer(2, this.audioContext.sampleRate * 2, this.audioContext.sampleRate);
+            const leftChannel = ir.getChannelData(0);
+            const rightChannel = ir.getChannelData(1);
+            
+            // Fill with white noise
+            for (let i = 0; i < ir.length; i++) {
+                leftChannel[i] = (Math.random() * 2 - 1) * 0.5;
+                rightChannel[i] = (Math.random() * 2 - 1) * 0.5;
+            }
+            
+            // Apply a low-pass filter to simulate damping
+            const filter = this.audioContext.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1000, this.audioContext.currentTime);
+            filter.Q.setValueAtTime(0.5, this.audioContext.currentTime);
+            
+            // Connect and process
+            ir.connect(filter);
+            filter.connect(reverb);
+            reverb.connect(this.audioContext.destination);
+            
+            return reverb;
+        }
+        return null;
+    }
+
+    /**
+     * Advanced: Set the parameters of a reverb node (for testing)
+     * @param {ConvolverNode} reverb - The reverb node to configure
+     * @param {Object} options - The reverb parameters to set
+     */
+    testSetReverbParameters(reverb, options) {
+        if (reverb && options) {
+            // Example: set room size and damping
+            reverb.roomSize = options.roomSize || 0.5;
+            reverb.damping = options.damping || 0.5;
+        }
+    }
+
+    /**
+     * Advanced: Connect and configure a delay node for testing
+     * @param {Object} options - The delay options (e.g., time, feedback)
+     * @returns {DelayNode} - The created delay node
+     */
+    testCreateDelayNode(options) {
+        if (this.audioContext) {
+            const delay = this.audioContext.createDelay();
+            delay.delayTime.setValueAtTime(options.time || 0.5, this.audioContext.currentTime);
+            
+            // Connect feedback loop if needed
+            if (options.feedback && options.feedback > 0) {
+                const feedbackGain = this.audioContext.createGain();
+                feedbackGain.gain.setValueAtTime(options.feedback, this.audioContext.currentTime);
                 
-                if (!useDirectSettings) {
-                    console.log('🎵 Loading audio settings from unified save system');
-                    console.log('🎵 BEFORE applying unified settings:', {
-                        masterVolume: this.masterVolume,
-                        sfxVolume: this.sfxVolume,
-                        musicVolume: this.musicVolume
-                    });
-                    
-                    this.isMuted = settingsData.isMuted ?? this.isMuted;
-                    this.masterVolume = settingsData.masterVolume ?? this.masterVolume;
-                    this.sfxVolume = settingsData.sfxVolume ?? this.sfxVolume;
-                    this.musicVolume = settingsData.musicVolume ?? this.musicVolume;
-                    this.musicMode = settingsData.musicMode || this.musicMode;
-                    this.selectedTrack = settingsData.selectedTrack || this.selectedTrack;
-                    
-                    console.log('🎵 AFTER applying unified settings:', {
-                        masterVolume: this.masterVolume,
-                        sfxVolume: this.sfxVolume,
-                        musicVolume: this.musicVolume
-                    });
-                    
-                    // Save to the direct localStorage key for consistency
-                    this.saveSettings();
-                } else {
-                    // Load from direct localStorage (already loaded in constructor)
-                    console.log('🎵 Using direct localStorage instead of unified save');
-                    this.loadSettingsFromLocalStorage();
-                }
+                delay.connect(feedbackGain);
+                feedbackGain.connect(delay);
             }
-        } catch (e) {
-            console.warn('🎵 Failed to load audio settings from unified save:', e);
+            
+            delay.connect(this.audioContext.destination);
+            return delay;
+        }
+        return null;
+    }
+
+    /**
+     * Advanced: Set the parameters of a delay node (for testing)
+     * @param {DelayNode} delay - The delay node to configure
+     * @param {Object} options - The delay parameters to set
+     */
+    testSetDelayParameters(delay, options) {
+        if (delay && options) {
+            delay.delayTime.setValueAtTime(options.time || 0.5, this.audioContext.currentTime);
         }
     }
 
-    // Convenience methods for game events
-    onJump() {
-        this.playSound('jump');
+    /**
+     * Advanced: Connect and configure a pitch shifter node for testing
+     * @param {Object} options - The pitch shifter options (e.g., semitones)
+     * @returns {ScriptProcessorNode} - The created pitch shifter node
+     */
+    testCreatePitchShifterNode(options) {
+        if (this.audioContext) {
+            const pitchShifter = this.audioContext.createScriptProcessor(4096, 1, 1);
+            
+            const semitones = options.semitones || 0;
+            const pitchFactor = Math.pow(2, semitones / 12);
+            
+            pitchShifter.onaudioprocess = (e) => {
+                const input = e.inputBuffer.getChannelData(0);
+                const output = e.outputBuffer.getChannelData(0);
+                
+                for (let i = 0; i < input.length; i++) {
+                    output[i] = input[i] * pitchFactor;
+                }
+            };
+            
+            pitchShifter.connect(this.audioContext.destination);
+            return pitchShifter;
+        }
+        return null;
     }
-    
-    onDoubleJump() {
-        this.playSound('doubleJump');
+
+    /**
+     * Advanced: Set the parameters of a pitch shifter node (for testing)
+     * @param {ScriptProcessorNode} pitchShifter - The pitch shifter node to configure
+     * @param {Object} options - The pitch shifter parameters to set
+     */
+    testSetPitchShifterParameters(pitchShifter, options) {
+        // Currently, no parameters to set for the pitch shifter
     }
-    
-    onDeath() {
-        this.playSound('death');
-        this.switchMusicMode('chill'); // Reset to chill mode on death
+
+    /**
+     * Advanced: Connect and configure a stereo widener node for testing
+     * @param {Object} options - The stereo widener options (e.g., width)
+     * @returns {GainNode} - The created stereo widener node
+     */
+    testCreateStereoWidenerNode(options) {
+        if (this.audioContext) {
+            const widener = this.audioContext.createGain();
+            const width = options.width !== undefined ? options.width : 1.0;
+            
+            // Set initial width
+            widener.gain.setValueAtTime(width, this.audioContext.currentTime);
+            
+            // Connect to left and right channels
+            const splitter = this.audioContext.createChannelSplitter(2);
+            const merger = this.audioContext.createChannelMerger(2);
+            
+            splitter.connect(merger, 0, 0);
+            splitter.connect(merger, 1, 1);
+            
+            merger.connect(widener);
+            widener.connect(this.audioContext.destination);
+            
+            return widener;
+        }
+        return null;
     }
-    
-    onCollect() {
-        this.playSound('collect');
+
+    /**
+     * Advanced: Set the parameters of a stereo widener node (for testing)
+     * @param {GainNode} widener - The stereo widener node to configure
+     * @param {Object} options - The widener parameters to set
+     */
+    testSetStereoWidenerParameters(widener, options) {
+        if (widener && options.width !== undefined) {
+            widener.gain.setValueAtTime(options.width, this.audioContext.currentTime);
+        }
     }
-    
-    onMenuClick() {
-        this.playSound('menuClick');
+
+    /**
+     * Advanced: Connect and configure a noise gate node for testing
+     * @param {Object} options - The noise gate options (e.g., threshold, release)
+     * @returns {DynamicsCompressorNode} - The created noise gate node
+     */
+    testCreateNoiseGateNode(options) {
+        if (this.audioContext) {
+            const noiseGate = this.audioContext.createDynamicsCompressor();
+            
+            // Invert the threshold for noise gating
+            const threshold = options.threshold !== undefined ? -options.threshold : -50;
+            const ratio = options.ratio !== undefined ? options.ratio : 20;
+            const attack = options.attack !== undefined ? options.attack : 0.01;
+            const release = options.release !== undefined ? options.release : 0.1;
+            
+            noiseGate.threshold.setValueAtTime(threshold, this.audioContext.currentTime);
+            noiseGate.ratio.setValueAtTime(ratio, this.audioContext.currentTime);
+            noiseGate.attack.setValueAtTime(attack, this.audioContext.currentTime);
+            noiseGate.release.setValueAtTime(release, this.audioContext.currentTime);
+            
+            noiseGate.connect(this.audioContext.destination);
+            return noiseGate;
+        }
+        return null;
     }
-    
+
+    /**
+     * Advanced: Set the parameters of a noise gate node (for testing)
+     * @param {DynamicsCompressorNode} noiseGate - The noise gate node to configure
+     * @param {Object} options - The noise gate parameters to set
+     */
+    testSetNoiseGateParameters(noiseGate, options) {
+        if (noiseGate && options) {
+            // Example: set threshold and release
+            noiseGate.threshold.setValueAtTime(options.threshold || -50, this.audioContext.currentTime);
+            noiseGate.release.setValueAtTime(options.release || 0.1, this.audioContext.currentTime);
+        }
+    }
+
+    /**
+     * Advanced: Connect and configure a sidechain compressor node for testing
+     * @param {Object} options - The sidechain compressor options (e.g., threshold, ratio)
+     * @returns {DynamicsCompressorNode} - The created sidechain compressor node
+     */
+    testCreateSidechainCompressorNode(options) {
+        if (this.audioContext) {
+            const sidechainCompressor = this.audioContext.createDynamicsCompressor();
+            
+            // Set up sidechain input (requires a separate audio source)
+            // For testing, we can use a dummy oscillator as the sidechain input
+            const sidechainOscillator = this.audioContext.createOscillator();
+            sidechainOscillator.frequency.setValueAtTime(1, this.audioContext.currentTime); // 1 Hz for testing
+            sidechainOscillator.connect(sidechainCompressor);
+            sidechainOscillator.start(0);
+            
+            const threshold = options.threshold !== undefined ? options.threshold : -50;
+            const ratio = options.ratio !== undefined ? options.ratio : 4;
+            const attack = options.attack !== undefined ? options.attack : 0.01;
+            const release = options.release !== undefined ? options.release : 0.1;
+            
+            sidechainCompressor.threshold.setValueAtTime(threshold, this.audioContext.currentTime);
+            sidechainCompressor.ratio.setValueAtTime(ratio, this.audioContext.currentTime);
+            sidechainCompressor.attack.setValueAtTime(attack, this.audioContext.currentTime);
+            sidechainCompressor.release.setValueAtTime(release, this.audioContext.currentTime);
+            
+            sidechainCompressor.connect(this.audioContext.destination);
+            return sidechainCompressor;
+        }
+        return null;
+    }
+
+    /**
+     * Advanced: Set the parameters of a sidechain compressor node (for testing)
+     * @param {DynamicsCompressorNode} sidechainCompressor - The sidechain compressor node to configure
+     * @param {Object} options - The sidechain compressor parameters to set
+     */    testSetSidechainCompressorParameters(sidechainCompressor, options) {
+        if (sidechainCompressor && options) {
+            sidechainCompressor.threshold.setValueAtTime(options.threshold || -50, this.audioContext.currentTime);
+            sidechainCompressor.release.setValueAtTime(options.release || 0.1, this.audioContext.currentTime);
+        }
+    }
+
+    /**
+     * Save audio settings to local storage
+     */
+    saveSettings() {
+        try {
+            const settings = {
+                isMuted: this.isMuted,
+                masterVolume: this.masterVolume,
+                sfxVolume: this.sfxVolume,
+                musicVolume: this.musicVolume,
+                musicMode: this.musicMode,
+                selectedTrack: this.selectedTrack,
+                timestamp: Date.now()
+            };
+            
+            // Save to dedicated audio settings storage
+            localStorage.setItem('coderunner_audio_settings', JSON.stringify(settings));
+            
+            // Also save to unified game data for backup
+            const existingData = localStorage.getItem('coderunner_save_data');
+            let unifiedData = existingData ? JSON.parse(existingData) : {};
+            unifiedData.audioSettings = settings;
+            localStorage.setItem('coderunner_save_data', JSON.stringify(unifiedData));
+            
+        } catch (error) {
+            console.warn('⚠️ Could not save audio settings:', error);
+        }
+    }
+
+    /**
+     * Play menu open sound effect
+     */
     onMenuOpen() {
-        this.playSound('menuOpen');
-    }
-    
-    onMenuClose() {
-        this.playSound('menuClose');
-    }
-    
-    onPurchase() {
-        this.playSound('purchase');
-    }
-    
-    onDamage() {
-        this.playSound('damage');
-    }
-    
-    onPowerup() {
-        this.playSound('powerup');
-    }
-      // Dynamic music based on game state
-    updateMusicForGameState(gameState) {
-        if (gameState.difficulty > 2.0 || gameState.health <= 1) {
-            this.switchMusicMode('intense');
-        } else {
-            this.switchMusicMode('chill');
-        }
+        this.playSound('menuOpen', 0.3);
     }
 
-    // Debug helper function
-    clearAllAudioStorage() {
-        localStorage.removeItem('coderunner_audio_settings');
-        localStorage.removeItem('coderunner_save_data');
-        console.log('🎵 Cleared all audio storage');
+    /**
+     * Play menu close sound effect
+     */
+    onMenuClose() {
+        this.playSound('menuClose', 0.3);
+    }
+
+    /**
+     * Play menu click sound effect
+     */
+    onMenuClick() {
+        this.playSound('menuClick', 0.5);
+    }
+
+    /**
+     * Play menu hover sound effect
+     */
+    onMenuHover() {
+        this.playSound('menuClick', 0.2); // Use menu click sound at lower volume for hover
+    }
+
+    /**
+     * Play jump sound effect
+     */
+    onJump() {
+        this.playSound('jump', 0.6);
+    }
+
+    /**
+     * Play double jump sound effect
+     */
+    onDoubleJump() {
+        this.playSound('doubleJump', 0.6);
+    }
+
+    /**
+     * Play collect sound effect
+     */
+    onCollect() {
+        this.playSound('collect', 0.5);
+    }
+
+    /**
+     * Play collect coin sound effect
+     */
+    onCollectCoin() {
+        this.playSound('collect', 0.5); // Reuse collect sound for coins
+    }
+
+    /**
+     * Play pause sound effect
+     */
+    onPause() {
+        this.playSound('menuOpen', 0.4); // Use menu sound for pause
+    }
+
+    /**
+     * Play resume sound effect
+     */
+    onResume() {
+        this.playSound('menuClose', 0.4); // Use menu sound for resume
+    }
+
+    /**
+     * Play powerup sound effect
+     */
+    onPowerup() {
+        this.playSound('powerup', 0.7);
+    }
+
+    /**
+     * Play purchase sound effect
+     */
+    onPurchase() {
+        this.playSound('purchase', 0.6);
+    }
+
+    /**
+     * Play damage sound effect
+     */
+    onDamage() {
+        this.playSound('damage', 0.6);
+    }
+
+    /**
+     * Play game over sound effect
+     */
+    onGameOver() {
+        this.playSound('death', 0.8);
     }
 }
-
-// Export for use in other modules
-window.AudioSystem = AudioSystem;
-
-// Debug helper for testing
-window.debugAudio = {
-    clearStorage: () => {
-        localStorage.removeItem('coderunner_audio_settings');
-        localStorage.removeItem('coderunner_save_data');
-        console.log('🎵 Cleared all audio storage');
-    },
-    getDirectSettings: () => {
-        const saved = localStorage.getItem('coderunner_audio_settings');
-        return saved ? JSON.parse(saved) : null;
-    },
-    getUnifiedSettings: () => {
-        const saved = localStorage.getItem('coderunner_save_data');
-        if (saved) {
-            const data = JSON.parse(saved);
-            return data.audioSettings || null;
-        }
-        return null;
-    },
-    getCurrentValues: () => {
-        if (window.audioSystem) {
-            return {
-                masterVolume: window.audioSystem.masterVolume,
-                sfxVolume: window.audioSystem.sfxVolume,
-                musicVolume: window.audioSystem.musicVolume
-            };
-        }
-        return null;
-    }
-};

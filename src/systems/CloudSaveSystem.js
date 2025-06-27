@@ -17,24 +17,24 @@ export class CloudSaveSystem {
         try {
             if (window.firebaseAuth) {
                 this.auth = window.firebaseAuth;
-                console.log('✅ Firebase Auth initialized');
+               
                 
                 // Only initialize Firestore if it's available and working
                 if (window.firebaseFirestore) {
                     this.firestore = window.firebaseFirestore;
                     this.isInitialized = true;
-                    console.log('✅ CloudSaveSystem initialized with Firestore');
+                   
                     
                     // Test Firestore connectivity on a delay to avoid blocking initialization
                     setTimeout(() => this.testFirestoreConnectivity(), 2000);
                 } else {
-                    console.warn('⚠️ Firestore not available, using localStorage only');
+                   
                 }
             } else {
-                console.warn('⚠️ Firebase not available, using localStorage only');
+               
             }
         } catch (error) {
-            console.error('❌ Error initializing CloudSaveSystem:', error);
+           
             this.isInitialized = false;
         }
     }
@@ -52,9 +52,9 @@ export class CloudSaveSystem {
                 testRef.get(),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
             ]);
-            console.log('✅ Firestore connectivity confirmed');
+           
         } catch (error) {
-            console.warn('⚠️ Firestore connectivity test failed, disabling cloud saves:', error.message);
+           
             this.isInitialized = false; // Disable Firestore operations
         }
     }
@@ -91,13 +91,13 @@ export class CloudSaveSystem {
             await Promise.race([testPromise, timeoutPromise]);
             return true;
         } catch (error) {
-            console.log('📶 Firestore connectivity check failed:', error.message);
+          
             
             // If we get specific offline errors, disable Firestore temporarily
             if (error.message.includes('offline') || 
                 error.message.includes('unavailable') ||
                 error.code === 'unavailable') {
-                console.warn('⚠️ Disabling Firestore due to connectivity issues');
+                
                 this.isInitialized = false;
             }
             
@@ -121,13 +121,13 @@ export class CloudSaveSystem {
                     
                     const success = await Promise.race([cloudSavePromise, timeoutPromise]);
                     if (success) {
-                        console.log('☁️ Successfully saved to cloud');
+                       
                         // Also save to localStorage as backup
                         this.saveToLocalStorage(sanitizedData);
                         return true;
                     }
                 } catch (cloudError) {
-                    console.warn('⚠️ Cloud save failed, using localStorage:', cloudError.message);
+                  
                     // Disable Firestore if we get connectivity errors
                     if (cloudError.message.includes('offline') || 
                         cloudError.message.includes('unavailable') ||
@@ -138,11 +138,11 @@ export class CloudSaveSystem {
             }
             
             // Fall back to localStorage
-            console.log('💾 Saving to localStorage');
+          
             return this.saveToLocalStorage(sanitizedData);
             
         } catch (error) {
-            console.error('❌ Error saving game data:', error);
+           
             // Always fall back to localStorage on any error
             return this.saveToLocalStorage(saveData);
         }
@@ -163,11 +163,11 @@ export class CloudSaveSystem {
                     ]);
                     
                     if (cloudData) {
-                        console.log('☁️ Successfully loaded data from cloud');
+                       
                         return cloudData;
                     }
                 } catch (cloudError) {
-                    console.warn('⚠️ Cloud load failed, falling back to localStorage:', cloudError.message);
+                  
                     // Disable Firestore if we get connectivity errors
                     if (cloudError.message.includes('offline') || 
                         cloudError.message.includes('unavailable') ||
@@ -178,11 +178,11 @@ export class CloudSaveSystem {
             }
             
             // Fall back to localStorage
-            console.log('💾 Loading data from localStorage');
+          
             return this.loadFromLocalStorage();
             
         } catch (error) {
-            console.error('❌ Error loading game data:', error);
+          
             // Always fall back to localStorage on any error
             return this.loadFromLocalStorage();
         }
@@ -215,21 +215,29 @@ export class CloudSaveSystem {
                 cloudSaveData.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
             }
         } catch (timestampError) {
-            console.warn('⚠️ Could not add server timestamp:', timestampError.message);
+           
         }
-        
-        try {
+          try {
             await docRef.set(cloudSaveData);
-            console.log('☁️ Game data saved to cloud for user:', userId);
-            return true;
-        } catch (error) {
+           
+            return true;        } catch (error) {
+            // Handle permission errors gracefully
+            if (error.code === 'permission-denied' || 
+                error.message.includes('Missing or insufficient permissions')) {
+              
+                this.isInitialized = false; // Disable cloud saves going forward
+                return this.saveToLocalStorage(sanitizedData);
+            }
+            
             // Handle offline errors gracefully
             if (error.code === 'unavailable' || error.message.includes('offline')) {
-                console.warn('⚠️ Device is offline, data will be saved when connection is restored');
+               
                 // Fall back to localStorage for now
                 return this.saveToLocalStorage(sanitizedData);
             }
-            throw error;
+            
+         
+            return this.saveToLocalStorage(sanitizedData);
         }
     }
     
@@ -271,10 +279,10 @@ export class CloudSaveSystem {
         
         if (doc.exists) {
             const data = doc.data();
-            console.log('☁️ Game data loaded from cloud for user:', userId);
+        
             return data;
         } else {
-            console.log('☁️ No cloud save data found for user:', userId);
+           
             return null;
         }
     }
@@ -285,10 +293,10 @@ export class CloudSaveSystem {
     saveToLocalStorage(saveData) {
         try {
             localStorage.setItem('coderunner_save_data', JSON.stringify(saveData));
-            console.log('💾 Game data saved to localStorage');
+         
             return true;
         } catch (error) {
-            console.error('❌ Error saving to localStorage:', error);
+          
             return false;
         }
     }
@@ -300,12 +308,12 @@ export class CloudSaveSystem {
         try {
             const savedData = localStorage.getItem('coderunner_save_data');
             if (savedData) {
-                console.log('💾 Game data loaded from localStorage');
+               
                 return JSON.parse(savedData);
             }
             return null;
         } catch (error) {
-            console.error('❌ Error loading from localStorage:', error);
+           
             return null;
         }
     }
@@ -328,7 +336,7 @@ export class CloudSaveSystem {
             // Check localStorage
             return localStorage.getItem('coderunner_save_data') !== null;
         } catch (error) {
-            console.error('❌ Error checking for saved data:', error);
+           
             // Fall back to localStorage check
             return localStorage.getItem('coderunner_save_data') !== null;
         }
@@ -337,7 +345,7 @@ export class CloudSaveSystem {
      */
     async migrateLocalDataToCloud() {
         if (!this.isUserLoggedIn() || !this.isInitialized) {
-            console.log('⚠️ Migration skipped: User not logged in or Firestore disabled');
+           
             return false;
         }
         
@@ -345,7 +353,7 @@ export class CloudSaveSystem {
             // Check if there's local data to migrate
             const localData = this.loadFromLocalStorage();
             if (!localData) {
-                console.log('ℹ️ No local data found to migrate');
+               
                 return false;
             }
             
@@ -356,41 +364,57 @@ export class CloudSaveSystem {
             );
             
             return await Promise.race([migrationPromise, timeoutPromise]);
+              } catch (error) {
+          
+        
             
-        } catch (error) {
-            console.error('❌ Error migrating data to cloud:', error);
-            console.log('⚠️ Migration failed, data will remain in localStorage');
-            
-            // Disable Firestore if we get connectivity errors
+            // Disable Firestore if we get permissions or connectivity errors
             if (error.message.includes('offline') || 
                 error.message.includes('unavailable') ||
-                error.code === 'unavailable') {
+                error.message.includes('permissions') ||
+                error.message.includes('Missing or insufficient permissions') ||
+                error.code === 'unavailable' ||
+                error.code === 'permission-denied') {
                 this.isInitialized = false;
+             
             }
             
             return false;
         }
     }
-    
-    /**
+      /**
      * Perform the actual migration logic
      */
     async performMigration(localData) {
         try {
+            // Check if user is authenticated before attempting cloud operations
+            if (!this.auth || !this.auth.currentUser) {
+                throw new Error('User not authenticated for cloud migration');
+            }
+            
             // Check if cloud data already exists
             const cloudData = await this.loadFromCloud();
             if (cloudData) {
                 // Cloud data exists, merge with local data
-                console.log('☁️ Both local and cloud data exist, merging...');
+              
                 return await this.mergeLocalAndCloudData(localData, cloudData);
             } else {
                 // No cloud data, upload local data
-                console.log('☁️ Migrating local data to cloud...');
+               
                 const sanitizedData = this.sanitizeData(localData);
                 return await this.saveToCloud(sanitizedData);
             }
         } catch (error) {
-            throw error; // Re-throw to be handled by the timeout wrapper
+            // Check for authentication/permission errors
+            if (error.message.includes('permissions') || 
+                error.message.includes('Missing or insufficient permissions') ||
+                error.code === 'permission-denied' ||
+                error.message.includes('User not authenticated')) {
+              
+                // Return local data unchanged instead of throwing
+                return localData;
+            }
+            throw error; // Re-throw other errors to be handled by the timeout wrapper
         }
     }
     
@@ -425,10 +449,10 @@ export class CloudSaveSystem {
             
             // Save merged data to cloud
             await this.saveToCloud(mergedData);
-            console.log('☁️ Successfully merged and saved data to cloud');
+          
             return true;
         } catch (error) {
-            console.error('❌ Error merging data:', error);
+          
             return false;
         }
     }
@@ -464,7 +488,7 @@ export class CloudSaveSystem {
      */
     async attemptFirestoreReconnection() {
         if (this.firestore && !this.isInitialized && this.isUserLoggedIn()) {
-            console.log('🔄 Attempting to reconnect to Firestore...');
+           
             try {
                 // Test connectivity with a very short timeout
                 const testPromise = this.firestore.collection('_test').doc('reconnect').get();
@@ -476,10 +500,10 @@ export class CloudSaveSystem {
                 
                 // If we get here, connection is working
                 this.isInitialized = true;
-                console.log('✅ Firestore reconnection successful');
+              
                 return true;
             } catch (error) {
-                console.log('❌ Firestore reconnection failed:', error.message);
+                
                 return false;
             }
         }

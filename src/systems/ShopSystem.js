@@ -76,36 +76,7 @@ export class ShopSystem {
                 effect: { type: 'maxHealth', value: 1 }
             },
 
-            // Score & Data Upgrades
-            'datapack-multiplier': {
-                name: 'Datapack Multiplier',
-                price: 75,
-                category: 'score',
-                description: 'Doubles all datapacks collected, significantly boosting your earning potential.',
-                effect: { type: 'datapackMultiplier', value: 2 }
-            },            'score-multiplier': {
-                name: 'Score Multiplier',
-                price: 80,
-                category: 'score',
-                description: 'Increases score gained over time, helping you climb the leaderboards faster.',
-                effect: { type: 'scoreMultiplier', value: 1.25 }
-            },
-
-            // Game-Changing Mechanics
-            'ally-drone': {
-                name: 'Ally Drone',
-                price: 120,
-                category: 'mechanics',
-                description: 'A small helper that shoots or clears obstacles ahead of you automatically.',
-                effect: { type: 'allyDrone', value: true }
-            },
-            'extra-lane': {
-                name: 'Extra Lane',
-                price: 150,
-                category: 'mechanics',
-                description: 'Temporarily opens a new running path with more rewards and fewer obstacles.',
-                effect: { type: 'extraLane', value: true }
-            },            // Cosmetic Unlocks
+            // Cosmetic Unlocks
             'sprite-cosmic': {
                 name: 'Cosmic Runner',
                 price: 50,
@@ -117,21 +88,21 @@ export class ShopSystem {
                 name: 'Neon Guardian',
                 price: 75,
                 category: 'cosmetic',
-                description: 'A vibrant character with glowing neon accents and futuristic design.',
+                description: 'A vibrant character glowing with bright neon energy trails.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_1.png' }
             },
             'sprite-shadow': {
                 name: 'Shadow Walker',
                 price: 100,
                 category: 'cosmetic',
-                description: 'A mysterious dark figure that moves through shadows with elegance.',
+                description: 'A mysterious character that moves through shadows with stealth.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_2.png' }
             },
             'sprite-flame': {
                 name: 'Flame Sprinter',
                 price: 125,
                 category: 'cosmetic',
-                description: 'A fiery character that leaves trails of ember in their wake.',
+                description: 'A fiery character leaving blazing trails with every step.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_3.png' }
             },
             'sprite-ice': {
@@ -146,8 +117,32 @@ export class ShopSystem {
                 price: 200,
                 category: 'cosmetic',
                 description: 'A high-energy character crackling with electrical power.',
-                effect: { type: 'sprite', value: 'buyable cosmetics/sprite_5.png' }
-            }
+                effect: { type: 'sprite', value: 'buyable cosmetics/sprite_5.png' }            },
+
+            // PowerUp Unlocks (Tier 1 - Basic)
+            'quantum-dash': {
+                name: 'Quantum Dash',
+                price: 500,
+                category: 'powerups',
+                description: 'Unlocks Quantum Dash powerup. Instantly teleports forward through obstacles during gameplay.',
+                effect: { type: 'powerupUnlock', value: 'quantum-dash' }
+            },
+            'firewall-shield': {
+                name: 'Firewall Shield',
+                price: 750,
+                category: 'powerups',
+                description: 'Unlocks Firewall Shield powerup. Absorbs one hit from any obstacle or trap.',
+                effect: { type: 'powerupUnlock', value: 'firewall-shield' }
+            },
+            'coin-magnetizer': {
+                name: 'Coin Magnetizer',
+                price: 600,
+                category: 'powerups',
+                description: 'Unlocks Coin Magnetizer powerup. Pulls in nearby coins and collectibles for 6 seconds.',
+                effect: { type: 'powerupUnlock', value: 'coin-magnetizer' }
+            },
+
+            // Movement Upgrades (continued)
         };
     }    buyUpgrade(upgradeId) {
         const upgrade = this.upgradeData[upgradeId];
@@ -203,10 +198,28 @@ export class ShopSystem {
         console.log(`✅ Successfully purchased upgrade: ${upgradeId} for ${upgrade.price} datapackets`);
         console.log(`📦 Owned upgrades now: [${Array.from(this.ownedUpgrades).join(', ')}]`);
         
+        // Track achievement: Style.exe for cosmetic purchases
+        if (this.game.achievementSystem && upgrade.category === 'cosmetic') {
+            this.game.achievementSystem.trackEvent('cosmeticEquipped', {
+                upgradeId: upgradeId
+            });
+        }
+        
         return true;
-    }applyUpgradeEffect(upgradeId, upgrade) {
+    }    applyUpgradeEffect(upgradeId, upgrade) {
         const player = this.game.player;
-          // Handle sprite cosmetics
+        
+        // Handle powerup unlocks
+        if (upgrade.effect && upgrade.effect.type === 'powerupUnlock') {
+            console.log(`🔓 Powerup unlocked: ${upgrade.effect.value}`);
+            
+            // Refresh the powerup system's unlocked powerups
+            if (this.game.powerUpSystem) {
+                this.game.powerUpSystem.refreshUnlockedPowerUps();
+            }
+        }
+        
+        // Handle sprite cosmetics
         if (upgrade.effect && upgrade.effect.type === 'sprite') {
             // Apply sprite cosmetic
             if (window.profileManager) {
@@ -246,11 +259,7 @@ export class ShopSystem {
             'dash': 'dash',
             'dash-module-1': 'dashModule1',
             'dash-module-2': 'dashModule2',            'dash-module-3': 'dashModule3',
-            'health-upgrade': 'healthUpgrade',
-            'datapack-multiplier': 'datapackMultiplier',
-            'score-multiplier': 'scoreMultiplier',
-            'ally-drone': 'allyDrone',
-            'extra-lane': 'extraLane'
+            'health-upgrade': 'healthUpgrade'
         };
         
         return idMap[upgradeId] || upgradeId;

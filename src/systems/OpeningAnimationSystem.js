@@ -68,8 +68,14 @@ export class OpeningAnimationSystem {
      */
     shouldPlay() {
         // Check if opening animation is enabled in settings
-        if (window.generalSettings && !window.generalSettings.isOpeningAnimationEnabled()) {
-            return false;
+        try {
+            const settings = JSON.parse(localStorage.getItem('gameSettings') || '{}');
+            if (settings.showOpeningAnimation === false) {
+                console.log('🎬 Opening animation disabled in settings');
+                return false;
+            }
+        } catch (error) {
+            console.warn('🎬 Could not check opening animation setting:', error);
         }
         
         return !this.hasPlayed;
@@ -79,7 +85,14 @@ export class OpeningAnimationSystem {
      * Start the opening animation
      */
     start() {
-        if (this.hasPlayed) return;
+        console.log('🎬 OpeningAnimationSystem.start() called');
+        console.log('🎬 hasPlayed:', this.hasPlayed);
+        console.log('🎬 shouldPlay():', this.shouldPlay());
+        
+        if (this.hasPlayed) {
+            console.log('🎬 Animation already played, skipping');
+            return;
+        }
         
         this.isActive = true;
         this.hasPlayed = true;
@@ -91,6 +104,8 @@ export class OpeningAnimationSystem {
         this.audioPlayed = false;
         
         console.log('🎬 Starting opening animation sequence');
+        console.log('🎬 Logo image loaded:', this.logoImageLoaded);
+        console.log('🎬 Game logo image loaded:', this.gameLogoImageLoaded);
     }
     
     /**
@@ -203,11 +218,28 @@ export class OpeningAnimationSystem {
     
     /**
      * Update login phase
-     */
-    updateLoginPhase(elapsed) {
+     */    updateLoginPhase(elapsed) {
         // Keep visible
         this.fadeAlpha = 1;
         this.glowIntensity = 0.5;
+        
+        // On first frame of login phase, start the login system and update UI
+        if (elapsed < 50) { // Within first 50ms
+            console.log('🎬 Login phase started, initiating login system');
+            
+            // Set game state to login prompt
+            this.game.gameState = GAME_STATES.LOGIN_PROMPT;
+            
+            if (this.game && this.game.loginSystem && this.game.loginSystem.shouldShow()) {
+                this.game.loginSystem.start();
+            }
+            
+            // Update HTML UI to show login state
+            if (window.updateLoginStatus) {
+                console.log('🎬 Updating login status during login phase');
+                window.updateLoginStatus();
+            }
+        }
     }
     
     /**
@@ -217,8 +249,7 @@ export class OpeningAnimationSystem {
         // Fade in
         this.fadeAlpha = Math.min(elapsed / 1000, 1);
         this.glowIntensity = 0.3;
-    }
-      /**
+    }    /**
      * Check if user should see login screen
      */
     shouldShowLogin() {
@@ -234,10 +265,9 @@ export class OpeningAnimationSystem {
     
     /**
      * Check if user is logged in
-     */
-    isUserLoggedIn() {
+     */    isUserLoggedIn() {
         if (window.gameInstance && window.gameInstance.loginSystem) {
-            return window.gameInstance.loginSystem.isAuthenticated;
+            return window.gameInstance.loginSystem.isUserAuthenticated();
         }
         return false;
     }
@@ -246,7 +276,12 @@ export class OpeningAnimationSystem {
      * Render the animation
      */
     render() {
-        if (!this.isActive) return;
+        if (!this.isActive) {
+            console.log('🎬 render() called but animation not active');
+            return;
+        }
+        
+        console.log('🎬 render() called - phase:', this.currentPhase, 'fadeAlpha:', this.fadeAlpha);
         
         // Clear canvas with dark background
         this.ctx.fillStyle = '#000000';
@@ -429,12 +464,12 @@ export class OpeningAnimationSystem {
         // Check if user needs to login after animation
         if (this.shouldShowLogin() && this.game.loginSystem && this.game.loginSystem.shouldShow()) {
             console.log('🎬 → Transitioning to login after animation');
-            this.game.gameState = GAME_STATES.LOGIN_PROMPT;
+            this.game.setGameState(GAME_STATES.LOGIN_PROMPT);
             this.game.loginSystem.start();
         } else {
             // User is logged in or doesn't need login, go to home
             console.log('🎬 → Transitioning to home after animation');
-            this.game.gameState = GAME_STATES.HOME;
+            this.game.setGameState(GAME_STATES.HOME);
         }
     }
 }

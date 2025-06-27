@@ -4,7 +4,8 @@
 
 import { GAME_CONFIG } from '../utils/constants.js';
 
-export class UpgradeSystem {    constructor() {
+export class UpgradeSystem {    constructor(game) {
+        this.game = game; // Store game reference for save system access
         this.dataPackets = 0; // Currency for upgrades
         
         // Upgrade levels (reset each game)
@@ -17,15 +18,14 @@ export class UpgradeSystem {    constructor() {
         this.scoreMultiplierBonus = 0;
         this.powerUpDurationBonus = 0;
           this.selectedUpgrade = 0; // For menu navigation
-        this.maxUpgrades = 3;
-        
-        // Initialize with 0 data packets for new players (saved amounts restored by autosave)
-        this.dataPackets = 0;
+        this.maxUpgrades = 3;        // Load saved data packets immediately (don't await in constructor)
+        this.loadUpgradeData().catch(error => {
+            console.warn('Failed to load upgrade data in constructor:', error);
+        });
     }
       /**
      * Add data packets from game collection
-     */
-    addDataPackets(amount) {
+     */    addDataPackets(amount) {
         const previousAmount = this.dataPackets;
         this.dataPackets += amount;
         
@@ -33,11 +33,13 @@ export class UpgradeSystem {    constructor() {
         if (window.debugMode) {
             console.log(`💾 DataPackets added: ${previousAmount} + ${amount} = ${this.dataPackets}`);
         }
+        
+        // Save immediately when data packets are added
+        this.saveUpgradeData();
     }
       /**
      * Spend data packets (for shop purchases)
-     */
-    spendDataPackets(amount) {
+     */    spendDataPackets(amount) {
         if (this.dataPackets >= amount) {
             const previousAmount = this.dataPackets;
             this.dataPackets -= amount;
@@ -46,6 +48,9 @@ export class UpgradeSystem {    constructor() {
             if (window.debugMode) {
                 console.log(`💰 DataPackets spent: ${previousAmount} - ${amount} = ${this.dataPackets}`);
             }
+            
+            // Save immediately when data packets are spent
+            this.saveUpgradeData();
             
             return true;
         }
@@ -172,5 +177,93 @@ export class UpgradeSystem {    constructor() {
             scoreMultiplier: 1.0 + this.scoreMultiplierBonus,
             powerUpDuration: this.powerUpDurationBonus
         };
+    }
+    
+    /**
+     * Save upgrade data to localStorage and cloud
+     */
+    saveUpgradeData() {
+        try {
+            const upgradeData = {
+                dataPackets: this.dataPackets,
+                timestamp: Date.now()
+            };
+            
+            // Save to localStorage immediately
+            localStorage.setItem('coderunner_upgrade_data', JSON.stringify(upgradeData));
+            
+            // Also trigger cloud save if available
+            if (this.game && this.game.cloudSaveSystem) {
+                const saveData = {
+                    dataPackets: this.dataPackets,
+                    timestamp: Date.now()
+                };
+                this.game.cloudSaveSystem.saveGameData(saveData).catch(error => {
+                    console.warn('Failed to save upgrade data to cloud:', error);
+                });
+            }
+            
+            console.log(`💾 Upgrade data saved - Data Packets: ${this.dataPackets}`);
+        } catch (error) {
+            console.warn('⚠️ Failed to save upgrade data:', error);
+        }
+    }
+    
+    /**
+     * Load upgrade data from localStorage and cloud
+     */
+    async loadUpgradeData() {
+        try {
+            // Try to load from cloud first if logged in
+            if (this.game && this.game.cloudSaveSystem && this.game.cloudSaveSystem.isUserLoggedIn()) {
+                try {
+                    const cloudData = await this.game.cloudSaveSystem.loadGameData();
+                    if (cloudData && cloudData.dataPackets !== undefined) {
+                        this.dataPackets = cloudData.dataPackets;
+                        console.log(`💾 Loaded data packets from cloud: ${this.dataPackets}`);
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Failed to load from cloud, falling back to localStorage:', error);
+                }
+            }
+            
+            // Fall back to localStorage
+            const saved = localStorage.getItem('coderunner_upgrade_data');
+            if (saved) {
+                const upgradeData = JSON.parse(saved);
+                if (upgradeData.dataPackets !== undefined) {
+                    this.dataPackets = upgradeData.dataPackets;
+                    console.log(`💾 Loaded data packets from localStorage: ${this.dataPackets}`);
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to load upgrade data:', error);
+            // Keep default values on error
+        }
+    }
+    
+    /**
+     * Get save data for unified save system
+     */
+    getSaveData() {
+        return {
+            dataPackets: this.dataPackets,
+            timestamp: Date.now()
+        };
+    }
+    
+    /**
+     * Load from unified save system
+     */
+    loadSavedData(upgradeData) {
+        try {
+            if (upgradeData && upgradeData.dataPackets !== undefined) {
+                this.dataPackets = upgradeData.dataPackets;
+                console.log(`💾 Loaded data packets from unified save: ${this.dataPackets}`);
+            }
+        } catch (error) {
+            console.warn('Failed to load upgrade data from unified save:', error);
+        }
     }
 }

@@ -3817,15 +3817,20 @@
                     confirm: ['Enter'],
                     continue: ['KeyC'],
                     skip: ['Escape'],
-                    
-                    // Menu controls
+                      // Menu controls
                     leaderboard: ['KeyL'],
                     uploadScore: ['KeyE'],
                     fullscreen: ['KeyF'],
                     changeName: ['KeyN'],
                     shop: ['KeyQ'],
                     togglePerformance: ['F3'],
-                    deleteEntry: ['Delete']
+                    deleteEntry: ['Delete'],
+                    
+                    // Scrolling controls
+                    shopScrollUp: ['ArrowUp'],
+                    shopScrollDown: ['ArrowDown'],
+                    achievementsScrollUp: ['ArrowUp'],
+                    achievementsScrollDown: ['ArrowDown']
                 };
                 
                 this.keybinds = { ...this.defaultKeybinds };
@@ -4204,20 +4209,27 @@
         initializeGeneralSettings();
     </script>
     
-    <!-- Audio System -->
-    <script src="src/systems/AudioSystem.js"></script>
+    <!-- Audio System will be initialized by the game module system -->
     <script>
-        // Initialize Audio System
-        let audioSystem;        document.addEventListener('DOMContentLoaded', function() {
-            audioSystem = new AudioSystem();
-            
-            // Make audio system globally available
-            window.audioSystem = audioSystem;
-            
-            // Initialize audio controls after a short delay to ensure AudioSystem is fully loaded
-            setTimeout(() => {
-                initializeAudioControls();
-            }, 50);
+        // Audio system will be made available by the game instance
+        let audioSystem;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait for game instance to be ready
+            const checkAudioSystem = () => {
+                if (window.gameInstance && window.gameInstance.audioSystem) {
+                    audioSystem = window.gameInstance.audioSystem;
+                    window.audioSystem = audioSystem;
+                    
+                    // Initialize audio controls
+                    setTimeout(() => {
+                        initializeAudioControls();
+                    }, 50);
+                } else {
+                    setTimeout(checkAudioSystem, 50);
+                }
+            };
+            checkAudioSystem();
             
             // Initialize music selector after a short delay to ensure AudioSystem is fully loaded
             setTimeout(() => {

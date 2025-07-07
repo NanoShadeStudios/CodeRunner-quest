@@ -239,6 +239,11 @@ export class GameRenderer {
             return;
         }
         
+        if (this.game.gameState === GAME_STATES.PROFILE) {
+            this.drawProfileScreen();
+            return;
+        }
+        
         if (this.game.gameState === GAME_STATES.OPTIONS) {
             this.drawOptionsMenu();
             return;
@@ -286,6 +291,14 @@ export class GameRenderer {
         
         if (this.game.gameState === GAME_STATES.SETTINGS) {
             this.drawSettings();
+            return;
+        }
+        
+        if (this.game.gameState === GAME_STATES.CHARACTER_CUSTOMIZATION) {
+            // Use the CharacterCustomizationSystem's enhanced render method
+            if (this.game.characterCustomizationSystem) {
+                this.game.characterCustomizationSystem.render(this.ctx, this.canvas, this.game.characterCustomizationHitAreas);
+            }
             return;
         }
         
@@ -1268,6 +1281,15 @@ export class GameRenderer {
     }
 
     /**
+     * Draw the profile screen using UserProfileSystem
+     */
+    drawProfileScreen() {
+        if (this.game.userProfileSystem) {
+            this.game.userProfileSystem.render();
+        }
+    }
+
+    /**
      * Draw the options menu using OptionsSystem
      */
     drawOptionsMenu() {
@@ -1301,34 +1323,20 @@ export class GameRenderer {
     }
     
     /**
-     * Set rendering optimizations based on performance requirements
+     * Set renderer optimization settings
+     * @param {Object} options - Optimization options
+     * @param {boolean} [options.skipBackgroundParticles] - Whether to skip background particles
+     * @param {boolean} [options.reduceGradientComplexity] - Whether to reduce gradient complexity
+     * @param {number} [options.particleQuality] - Quality factor for particles (0-1)
+     * @param {string} [options.shadowQuality] - Shadow quality (none, low, medium, high)
+     * @param {string} [options.lightingQuality] - Lighting quality (none, low, medium, high)
      */
     setRenderOptimizations(options) {
-        Object.assign(this.renderOptimizations, options);
-        
-        // Clear gradient cache if caching is disabled
-        if (!this.renderOptimizations.cacheGradients) {
-            this.gradientCache.clear();
-        }
-    }
-
-    /**
-     * Get performance statistics for monitoring
-     */
-    getRenderStats() {
-        return {
-            gradientCacheSize: this.gradientCache.size,
-            particleSkipFrames: this.particleSkipFrames,
-            optimizations: { ...this.renderOptimizations }
+        this.renderOptimizations = {
+            ...this.renderOptimizations,
+            ...options
         };
+        
+        console.log('🎮 Render optimizations applied:', this.renderOptimizations);
     }
-
-    /**
-     * Clear all caches to free memory
-     */
-    clearCaches() {
-        this.gradientCache.clear();
-        this.lastRenderState = null;
-    }
-
 }

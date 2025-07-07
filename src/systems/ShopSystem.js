@@ -365,4 +365,13 @@ export class ShopSystem {
         }
         return upgrades;
     }
+
+    /**
+     * Reset animations (required by GameNavigation when entering shop state)
+     */
+    resetAnimations() {
+        // ShopSystem doesn't have animation states to reset
+        // This method exists for compatibility with the navigation system
+        console.log('🛒 Shop animations reset');
+    }
 }

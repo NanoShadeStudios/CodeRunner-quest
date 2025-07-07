@@ -67,15 +67,48 @@ export class OpeningAnimationSystem {
      * Check if animation should play
      */
     shouldPlay() {
-        // Check if opening animation is enabled in settings
+        // Check SettingsSystem first
         try {
-            const settings = JSON.parse(localStorage.getItem('gameSettings') || '{}');
+            if (this.game && this.game.settingsSystem) {
+                const shouldShow = this.game.settingsSystem.getSettingValue('showOpeningAnimation');
+                console.log('🎬 Opening animation setting from SettingsSystem:', shouldShow);
+                if (shouldShow === false) {
+                    return false;
+                }
+            }
+        } catch (error) {
+            console.warn('🎬 Could not check SettingsSystem opening animation setting:', error);
+        }
+        
+        // Check if opening animation is enabled in UserProfileSystem settings
+        try {
+            if (this.game && this.game.userProfileSystem) {
+                const shouldShow = this.game.userProfileSystem.shouldShowOpeningAnimation();
+                console.log('🎬 Opening animation setting from UserProfileSystem:', shouldShow);
+                if (!shouldShow) {
+                    return false;
+                }
+            }
+        } catch (error) {
+            console.warn('🎬 Could not check UserProfileSystem opening animation setting:', error);
+        }
+        
+        // Fallback to localStorage check
+        try {
+            const settings = JSON.parse(localStorage.getItem('coderunner_settings') || '{}');
             if (settings.showOpeningAnimation === false) {
-                console.log('🎬 Opening animation disabled in settings');
+                console.log('🎬 Opening animation disabled in localStorage settings');
+                return false;
+            }
+            
+            // Also check the old settings location
+            const gameSettings = JSON.parse(localStorage.getItem('gameSettings') || '{}');
+            if (gameSettings.showOpeningAnimation === false) {
+                console.log('🎬 Opening animation disabled in old localStorage settings');
                 return false;
             }
         } catch (error) {
-            console.warn('🎬 Could not check opening animation setting:', error);
+            console.warn('🎬 Could not check localStorage opening animation setting:', error);
         }
         
         return !this.hasPlayed;
@@ -253,13 +286,30 @@ export class OpeningAnimationSystem {
      * Check if user should see login screen
      */
     shouldShowLogin() {
-        // Check if user is already logged in or in guest mode
-        if (this.game && this.game.loginSystem) {
-            const isAuthenticated = this.game.loginSystem.isUserAuthenticated();
-            console.log('🎬 Login check - isAuthenticated:', isAuthenticated);
+        // First check if this is after a sign out (force login popup)
+        const forceLoginAfterSignout = sessionStorage.getItem('coderunner_force_login_after_signout');
+        if (forceLoginAfterSignout === 'true') {
+            console.log('🎬 Login check - forcing login after sign out');
+            // Clear the flag so it doesn't persist
+            sessionStorage.removeItem('coderunner_force_login_after_signout');
+            return true;
+        }
+        
+        // Check if user is already logged in via UserProfileSystem
+        if (this.game && this.game.userProfileSystem) {
+            const isAuthenticated = this.game.userProfileSystem.isLoggedIn;
+            console.log('🎬 Login check - UserProfileSystem isLoggedIn:', isAuthenticated);
             return !isAuthenticated;
         }
-        console.log('🎬 Login check - no login system, showing login');
+        
+        // Fallback check for legacy login system
+        if (this.game && this.game.loginSystem) {
+            const isAuthenticated = this.game.loginSystem.isUserAuthenticated();
+            console.log('🎬 Login check - LoginSystem isAuthenticated:', isAuthenticated);
+            return !isAuthenticated;
+        }
+        
+        console.log('🎬 Login check - no authentication system, showing login');
         return true; // Default to showing login if system not ready
     }
     
@@ -462,10 +512,17 @@ export class OpeningAnimationSystem {
         console.log('🎬 Opening animation sequence completed');
         
         // Check if user needs to login after animation
-        if (this.shouldShowLogin() && this.game.loginSystem && this.game.loginSystem.shouldShow()) {
+        if (this.shouldShowLogin()) {
             console.log('🎬 → Transitioning to login after animation');
             this.game.setGameState(GAME_STATES.LOGIN_PROMPT);
-            this.game.loginSystem.start();
+            
+            // Start UserProfileSystem if available
+            if (this.game.userProfileSystem) {
+                this.game.userProfileSystem.start();
+            } else if (this.game.loginSystem && this.game.loginSystem.shouldShow()) {
+                // Fallback to legacy login system
+                this.game.loginSystem.start();
+            }
         } else {
             // User is logged in or doesn't need login, go to home
             console.log('🎬 → Transitioning to home after animation');

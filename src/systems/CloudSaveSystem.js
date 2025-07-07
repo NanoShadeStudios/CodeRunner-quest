@@ -516,4 +516,235 @@ export class CloudSaveSystem {
     shouldAttemptReconnection() {
         return this.firestore && !this.isInitialized && this.isUserLoggedIn();
     }
+
+    /**
+     * Save user profile data to cloud
+     */
+    async saveUserProfile(profileData) {
+        if (!this.isUserLoggedIn() || !this.isInitialized) {
+            console.log('☁️ User not logged in or Firebase not initialized - saving profile locally');
+            return this.saveProfileToLocalStorage(profileData);
+        }
+        
+        try {
+            const userId = this.getCurrentUserId();
+            const docRef = this.firestore.collection('user_profiles').doc(userId);
+            
+            const sanitizedData = this.sanitizeData(profileData);
+            
+            // Add timestamp information
+            const cloudProfileData = {
+                ...sanitizedData,
+                updatedAt: Date.now(),
+                version: '1.0.0'
+            };
+            
+            // Add server timestamp if available
+            try {
+                if (this.firestore.FieldValue && this.firestore.FieldValue.serverTimestamp) {
+                    cloudProfileData.lastUpdated = this.firestore.FieldValue.serverTimestamp();
+                } else if (firebase.firestore && firebase.firestore.FieldValue) {
+                    cloudProfileData.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+                }
+            } catch (timestampError) {
+                console.log('⚠️ Server timestamp not available, using local timestamp');
+            }
+            
+            await docRef.set(cloudProfileData, { merge: true });
+            console.log('☁️ User profile saved to cloud successfully');
+            
+            // Also save to localStorage as backup
+            this.saveProfileToLocalStorage(profileData);
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Error saving user profile to cloud:', error);
+            
+            // Fall back to localStorage
+            return this.saveProfileToLocalStorage(profileData);
+        }
+    }
+    
+    /**
+     * Load user profile data from cloud
+     */
+    async loadUserProfile() {
+        if (!this.isUserLoggedIn() || !this.isInitialized) {
+            console.log('☁️ User not logged in or Firebase not initialized - loading profile locally');
+            return this.loadProfileFromLocalStorage();
+        }
+        
+        try {
+            const userId = this.getCurrentUserId();
+            const docRef = this.firestore.collection('user_profiles').doc(userId);
+            
+            const doc = await Promise.race([
+                docRef.get(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Profile load timeout')), 3000)
+                )
+            ]);
+            
+            if (doc.exists) {
+                const data = doc.data();
+                console.log('☁️ User profile loaded from cloud successfully');
+                
+                // Update localStorage with cloud data
+                this.saveProfileToLocalStorage(data);
+                
+                return data;
+            } else {
+                console.log('☁️ No cloud profile found, checking local storage');
+                return this.loadProfileFromLocalStorage();
+            }
+            
+        } catch (error) {
+            console.error('❌ Error loading user profile from cloud:', error);
+            
+            // Fall back to localStorage
+            return this.loadProfileFromLocalStorage();
+        }
+    }
+    
+    /**
+     * Save profile data to localStorage
+     */
+    saveProfileToLocalStorage(profileData) {
+        try {
+            localStorage.setItem('coderunner_user_profile', JSON.stringify(profileData));
+            console.log('💾 User profile saved to localStorage');
+            return true;
+        } catch (error) {
+            console.error('❌ Error saving profile to localStorage:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Load profile data from localStorage
+     */
+    loadProfileFromLocalStorage() {
+        try {
+            const saved = localStorage.getItem('coderunner_user_profile');
+            if (saved) {
+                const data = JSON.parse(saved);
+                console.log('💾 User profile loaded from localStorage');
+                return data;
+            }
+            return null;
+        } catch (error) {
+            console.error('❌ Error loading profile from localStorage:', error);
+            return null;
+        }
+    }
+    
+    /**
+     * Sync user statistics with cloud
+     */
+    async syncUserStats(userStats) {
+        if (!this.isUserLoggedIn() || !this.isInitialized) {
+            return this.saveStatsToLocalStorage(userStats);
+        }
+        
+        try {
+            const userId = this.getCurrentUserId();
+            const docRef = this.firestore.collection('user_stats').doc(userId);
+            
+            const sanitizedStats = this.sanitizeData(userStats);
+            
+            // Add timestamp information
+            const cloudStatsData = {
+                ...sanitizedStats,
+                updatedAt: Date.now(),
+                userId: userId
+            };
+            
+            await docRef.set(cloudStatsData, { merge: true });
+            console.log('📊 User stats synced to cloud successfully');
+            
+            // Also save to localStorage as backup
+            this.saveStatsToLocalStorage(userStats);
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Error syncing user stats to cloud:', error);
+            
+            // Fall back to localStorage
+            return this.saveStatsToLocalStorage(userStats);
+        }
+    }
+    
+    /**
+     * Load user statistics from cloud
+     */
+    async loadUserStats() {
+        if (!this.isUserLoggedIn() || !this.isInitialized) {
+            return this.loadStatsFromLocalStorage();
+        }
+        
+        try {
+            const userId = this.getCurrentUserId();
+            const docRef = this.firestore.collection('user_stats').doc(userId);
+            
+            const doc = await Promise.race([
+                docRef.get(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Stats load timeout')), 3000)
+                )
+            ]);
+            
+            if (doc.exists) {
+                const data = doc.data();
+                console.log('📊 User stats loaded from cloud successfully');
+                
+                // Update localStorage with cloud data
+                this.saveStatsToLocalStorage(data);
+                
+                return data;
+            } else {
+                console.log('📊 No cloud stats found, checking local storage');
+                return this.loadStatsFromLocalStorage();
+            }
+            
+        } catch (error) {
+            console.error('❌ Error loading user stats from cloud:', error);
+            
+            // Fall back to localStorage
+            return this.loadStatsFromLocalStorage();
+        }
+    }
+    
+    /**
+     * Save stats data to localStorage
+     */
+    saveStatsToLocalStorage(statsData) {
+        try {
+            localStorage.setItem('coderunner_user_stats', JSON.stringify(statsData));
+            console.log('💾 User stats saved to localStorage');
+            return true;
+        } catch (error) {
+            console.error('❌ Error saving stats to localStorage:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Load stats data from localStorage
+     */
+    loadStatsFromLocalStorage() {
+        try {
+            const saved = localStorage.getItem('coderunner_user_stats');
+            if (saved) {
+                const data = JSON.parse(saved);
+                console.log('💾 User stats loaded from localStorage');
+                return data;
+            }
+            return null;
+        } catch (error) {
+            console.error('❌ Error loading stats from localStorage:', error);
+            return null;
+        }
+    }
 }

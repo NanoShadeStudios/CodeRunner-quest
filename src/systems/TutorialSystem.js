@@ -623,6 +623,16 @@ export class TutorialSystem {
         console.log('🎓 Tutorial completed');
     }
       /**
+     * Stop the tutorial without completing it (for state transitions)
+     */
+    stopTutorial() {
+        this.isActive = false;
+        this.currentTutorial = null;
+        this.currentStep = 0;
+        this.removeEventListeners();
+        console.log('🎓 Tutorial stopped');
+    }
+    /**
      * Update tutorial system (animations, etc.)
      */
     update(deltaTime) {

@@ -413,14 +413,26 @@ export class LeaderboardSystem {
         
         console.log(`🎯 Preparing score upload: ${score} in ${difficulty} mode (${survivalTime}s)`);
         
-        // Check if we have a saved player name for automatic submission
-        const savedName = this.getSavedPlayerName();
-          if (savedName && savedName.trim() && savedName !== 'Anonymous') {
-            console.log(`🚀 Auto-submitting score with saved name: ${savedName}`);
-            return this.autoSubmitScore(score, difficulty, survivalTime, savedName);
-        } else {
-            console.log(`📝 No saved name found, showing name selection dialog`);
+        // Check if we have a valid display name for automatic submission
+        const displayName = this.getDisplayName();
+        const isAuthenticated = this.isUserAuthenticated();
+        
+        if (this.hasValidDisplayName()) {
+            console.log(`🚀 Auto-submitting score with display name: ${displayName}`);
+            return this.autoSubmitScore(score, difficulty, survivalTime, displayName);
+        } else if (isAuthenticated && !this.hasValidDisplayName()) {
+            console.log(`📝 Authenticated user needs to set display name, showing name selection dialog`);
             return this.showNameSelectionDialog(difficulty, score, survivalTime);
+        } else {
+            // Check for saved name for guest users
+            const savedName = this.getSavedPlayerName();
+            if (savedName && savedName.trim() && savedName !== 'Anonymous') {
+                console.log(`🚀 Auto-submitting score with saved name: ${savedName}`);
+                return this.autoSubmitScore(score, difficulty, survivalTime, savedName);
+            } else {
+                console.log(`📝 No saved name found, showing name selection dialog`);
+                return this.showNameSelectionDialog(difficulty, score, survivalTime);
+            }
         }
     }
 
@@ -828,10 +840,10 @@ export class LeaderboardSystem {
      */
     cancelUpload() {
         this.showUploadPrompt = false;
+        this.nameInputActive = false;
         this.currentUpload = null;
         this.playerName = '';
-        this.nameInputActive = false;
-        this.uploadResult = null;
+        console.log('📊 Upload cancelled');
     }
     
     /**
@@ -1376,6 +1388,74 @@ export class LeaderboardSystem {
     }
 
     /**
+     * Select a tab with smooth animation effect
+     */
+    selectTabWithAnimation(difficulty) {
+        if (DIFFICULTY_LEVELS[difficulty] && this.selectedDifficulty !== difficulty) {
+            this.selectedDifficulty = difficulty;
+            
+            // Add a subtle animation effect
+            this.tabSwitchAnimation = {
+                startTime: Date.now(),
+                duration: 300,
+                fromTab: this.selectedDifficulty,
+                toTab: difficulty
+            };
+            
+            // Refresh leaderboards when switching tabs (for live updates)
+            if (this.isOnline) {
+                this.refreshLeaderboards();
+            }
+            
+            console.log(`📊 Switched to ${difficulty} leaderboard`);
+        }
+    }
+    
+    /**
+     * Handle clicks on leaderboard entries for additional info
+     */
+    handleLeaderboardEntryClick(x, y) {
+        // Get the current leaderboard entries
+        const entries = this.getLeaderboard(this.selectedDifficulty);
+        const tableWidth = 600;
+        const tableX = (this.gameInstance?.canvas?.width || 800) / 2 - tableWidth / 2;
+        let tableY = 170 + 30; // Start after header
+        
+        entries.forEach((entry, index) => {
+            const entryY = tableY + (index * 40);
+            
+            // Check if click is within this entry's row
+            if (x >= tableX - 20 && x <= tableX + tableWidth && 
+                y >= entryY - 20 && y <= entryY + 20) {
+                
+                // Show detailed info tooltip for the entry
+                this.showEntryTooltip(entry, index, x, y);
+                return;
+            }
+        });
+    }
+    
+    /**
+     * Show tooltip with detailed entry information
+     */
+    showEntryTooltip(entry, rank, x, y) {
+        this.entryTooltip = {
+            entry: entry,
+            rank: rank + 1,
+            x: x,
+            y: y,
+            timestamp: Date.now()
+        };
+        
+        // Auto-hide tooltip after 3 seconds
+        setTimeout(() => {
+            if (this.entryTooltip && this.entryTooltip.timestamp === Date.now()) {
+                this.entryTooltip = null;
+            }
+        }, 3000);
+    }
+    
+    /**
      * Save player entries to localStorage
      */
     savePlayerEntries() {
@@ -1421,98 +1501,200 @@ export class LeaderboardSystem {
     }
     
     /**
-     * Load saved data from unified save system
+     * Get display name from UserProfileSystem or fall back to saved name
      */
-    loadSavedData(leaderboardData) {
-        try {
-            if (leaderboardData && typeof leaderboardData === 'object') {
-                // Load saved player name
-                if (leaderboardData.savedPlayerName) {
-                    this.savedPlayerName = leaderboardData.savedPlayerName;
+    getDisplayName() {
+        // Check if UserProfileSystem is available and user is logged in
+        if (this.gameInstance && this.gameInstance.userProfileSystem) {
+            const userProfile = this.gameInstance.userProfileSystem;
+            if (userProfile.isLoggedIn) {
+                const displayName = userProfile.getLeaderboardDisplayName();
+                if (displayName && displayName !== 'Guest' && displayName !== 'Anonymous') {
+                    return displayName;
                 }
-                
-                // Load uploaded difficulties
-                if (Array.isArray(leaderboardData.uploadedDifficulties)) {
-                    this.uploadedDifficulties = new Set(leaderboardData.uploadedDifficulties);
-                }
-                
-                // Load player entries
-                if (leaderboardData.playerEntries && typeof leaderboardData.playerEntries === 'object') {
-                    this.playerEntries = new Map(Object.entries(leaderboardData.playerEntries));
-                }
-                
-                // Also save to individual localStorage keys for compatibility
-                this.savePlayerName(this.savedPlayerName || '');
-                this.saveUploadHistory();
-                this.savePlayerEntries();
             }
-        } catch (error) {
-            console.warn('Failed to load leaderboard data from unified save:', error);
         }
+        
+        // Fall back to saved player name
+        const savedName = this.getSavedPlayerName();
+        if (savedName) {
+            return savedName;
+        }
+        
+        // Final fallback
+        return 'Anonymous';
     }
     
     /**
-     * DEBUG: Test automatic leaderboard submission
-     * This method can be called from browser console to test the feature
+     * Check if user has a valid display name for leaderboard
      */
-    testAutoSubmission() {
-        console.log('🧪 Testing automatic leaderboard submission...');
-        
-        // Check current profile name
-        const savedName = this.getSavedPlayerName();
-        console.log(`Current saved name: "${savedName}"`);
-        
-        // Test with a high score
-        const testScore = 1500;
-        const testDifficulty = 'MEDIUM';
-        const testStartTime = Date.now() - 60000; // 1 minute ago
-        
-        console.log(`Testing prepareScoreUpload with score: ${testScore}, difficulty: ${testDifficulty}`);
-        
-        // Call the method that would normally be called by Game.gameOver()
-        return this.prepareScoreUpload(testScore, testDifficulty, testStartTime);
+    hasValidDisplayName() {
+        const displayName = this.getDisplayName();
+        return displayName && displayName !== 'Anonymous' && displayName !== 'Guest';
+    }
+    
+    /**
+     * Get user authentication status
+     */
+    isUserAuthenticated() {
+        if (this.gameInstance && this.gameInstance.userProfileSystem) {
+            return this.gameInstance.userProfileSystem.isLoggedIn;
+        }
+        return false;
     }
 
     /**
-     * Get moderation status for the current player
+     * Handle click events on the leaderboard with enhanced UI feedback
      */
-    getModerationStatus() {
-        const status = {
-            violations: this.moderationData.violations,
-            isBanned: this.isPlayerBanned(),
-            banEndTime: this.moderationData.banEndTime,
-            warnings: this.moderationData.warningHistory
-        };
+    handleClick(x, y) {
+        console.log('📊 Leaderboard clicked at:', x, y);
         
-        return status;
+        // Handle difficulty tab clicks using the game's tab hit areas
+        if (this.gameInstance && this.gameInstance.tabHitAreas) {
+            const clickedTab = this.gameInstance.tabHitAreas.find(tab => 
+                x >= tab.x && x <= tab.x + tab.width && 
+                y >= tab.y && y <= tab.y + tab.height
+            );
+            
+            if (clickedTab) {
+                this.selectTabWithAnimation(clickedTab.difficulty);
+                return;
+            }
+        }
+        
+        // Handle name input clicks if active
+        if (this.nameInputActive) {
+            // Check if clicked outside name input area to deactivate
+            const nameInputArea = this.getNameInputArea();
+            if (nameInputArea && 
+                (x < nameInputArea.x || x > nameInputArea.x + nameInputArea.width ||
+                 y < nameInputArea.y || y > nameInputArea.y + nameInputArea.height)) {
+                this.nameInputActive = false;
+            } else if (nameInputArea &&
+                      x >= nameInputArea.x && x <= nameInputArea.x + nameInputArea.width &&
+                      y >= nameInputArea.y && y <= nameInputArea.y + nameInputArea.height) {
+                // Keep input active if clicked inside
+                this.nameInputActive = true;
+            }
+        }
+        
+        // Handle upload button clicks
+        if (this.showUploadPrompt) {
+            const uploadButton = this.getUploadButtonArea();
+            if (uploadButton && 
+                x >= uploadButton.x && x <= uploadButton.x + uploadButton.width &&
+                y >= uploadButton.y && y <= uploadButton.y + uploadButton.height) {
+                this.submitScoreFromUpload(this.playerName);
+                return;
+            }
+            
+            // Handle cancel button clicks
+            const cancelButton = this.getCancelButtonArea();
+            if (cancelButton && 
+                x >= cancelButton.x && x <= cancelButton.x + cancelButton.width &&
+                y >= cancelButton.y && y <= cancelButton.y + cancelButton.height) {
+                this.cancelUpload();
+                return;
+            }
+        }
+        
+        // Handle leaderboard entry clicks for additional info
+        this.handleLeaderboardEntryClick(x, y);
     }
     
     /**
-     * DEBUG: Set profile name for testing
-     * This method can be called from browser console to set a test name
+     * Get name input area bounds
      */
-    setTestProfileName(name) {
-        console.log(`🧪 Setting test profile name: "${name}"`);
+    getNameInputArea() {
+        if (!this.nameInputActive) return null;
         
-        // Set in ProfileManager if available
-        if (typeof window !== 'undefined' && window.profileManager) {
-            window.profileManager.profileData.name = name;
-            window.profileManager.saveProfile();
-            console.log('✅ Profile name set in ProfileManager');
-        }
+        // Return approximate bounds for name input area
+        return {
+            x: 300,
+            y: 300,
+            width: 200,
+            height: 40
+        };
+    }
+    
+    /**
+     * Get upload button area bounds
+     */
+    getUploadButtonArea() {
+        if (!this.showUploadPrompt) return null;
         
-        // Also set in LeaderboardSystem
-        this.savedPlayerName = name;
-        this.savePlayerName(name);
-        console.log('✅ Profile name saved in LeaderboardSystem');
+        const canvasWidth = this.gameInstance?.canvas?.width || 800;
+        const canvasHeight = this.gameInstance?.canvas?.height || 600;
         
-        // Track achievement: Title Hacker
-        if (this.game && this.game.achievementSystem && name && name.trim().length > 0) {
-            this.game.achievementSystem.trackEvent('profileNameSet', {
-                name: name
-            });
-        }
+        const dialogWidth = 450;
+        const dialogHeight = 350;
+        const dialogX = (canvasWidth - dialogWidth) / 2;
+        const dialogY = (canvasHeight - dialogHeight) / 2;
         
-        return `Profile name set to: ${name}`;
+        const buttonWidth = 120;
+        const buttonHeight = 40;
+        const buttonY = dialogY + 260;
+        const uploadButtonX = canvasWidth / 2 - buttonWidth - 10;
+        
+        return {
+            x: uploadButtonX,
+            y: buttonY,
+            width: buttonWidth,
+            height: buttonHeight
+        };
+    }
+    
+    /**
+     * Get cancel button area bounds
+     */
+    getCancelButtonArea() {
+        if (!this.showUploadPrompt) return null;
+        
+        const canvasWidth = this.gameInstance?.canvas?.width || 800;
+        const canvasHeight = this.gameInstance?.canvas?.height || 600;
+        
+        const dialogWidth = 450;
+        const dialogHeight = 350;
+        const dialogX = (canvasWidth - dialogWidth) / 2;
+        const dialogY = (canvasHeight - dialogHeight) / 2;
+        
+        const buttonWidth = 120;
+        const buttonHeight = 40;
+        const buttonY = dialogY + 260;
+        const cancelButtonX = canvasWidth / 2 + 10;
+        
+        return {
+            x: cancelButtonX,
+            y: buttonY,
+            width: buttonWidth,
+            height: buttonHeight
+        };
+    }
+    
+    /**
+     * Get name input area bounds
+     */
+    getNameInputArea() {
+        if (!this.nameInputActive && !this.showUploadPrompt) return null;
+        
+        const canvasWidth = this.gameInstance?.canvas?.width || 800;
+        const canvasHeight = this.gameInstance?.canvas?.height || 600;
+        
+        const dialogWidth = 450;
+        const dialogHeight = 350;
+        const dialogX = (canvasWidth - dialogWidth) / 2;
+        const dialogY = (canvasHeight - dialogHeight) / 2;
+        
+        const inputBoxWidth = 350;
+        const inputBoxHeight = 45;
+        const inputBoxX = (canvasWidth - inputBoxWidth) / 2;
+        const inputBoxY = dialogY + 190;
+        
+        return {
+            x: inputBoxX,
+            y: inputBoxY,
+            width: inputBoxWidth,
+            height: inputBoxHeight
+        };
     }
 }

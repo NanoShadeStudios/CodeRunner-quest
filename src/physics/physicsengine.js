@@ -130,6 +130,24 @@ export class PhysicsEngine {
             return bottommost;
         }
         
+        // For horizontal movement, prioritize collision in the direction of movement
+        if (direction === 0) { // Horizontal movement
+            const playerCenterX = playerX + playerWidth / 2;
+            
+            // Sort by proximity to player center horizontally
+            let closest = collisions[0];
+            let minDistance = Math.abs((closest.tileX + 0.5) * GAME_CONFIG.TILE_SIZE - playerCenterX);
+            
+            for (const collision of collisions) {
+                const distance = Math.abs((collision.tileX + 0.5) * GAME_CONFIG.TILE_SIZE - playerCenterX);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closest = collision;
+                }
+            }
+            return closest;
+        }
+        
         // For horizontal movement or no direction, choose the closest collision
         return this.getClosestCollision(collisions, playerX, playerY, playerWidth, playerHeight);
     }
@@ -166,9 +184,12 @@ export class PhysicsEngine {
         const dy = playerCenterY - tileCenterY;
         
         return Math.sqrt(dx * dx + dy * dy);
-    }    /**
+    }
+    
+    /**
      * Check if a tile is solid based on game rules
-     */    isTileSolid(tileType, direction, playerDropping) {
+     */
+    isTileSolid(tileType, direction, playerDropping) {
         const currentTime = Date.now();
         
         switch (tileType) {
@@ -179,8 +200,10 @@ export class PhysicsEngine {
             case TILE_TYPES.SPIKE:
                 return false;
             case TILE_TYPES.GLITCH:
-                return false; // Glitches are no longer solid in single mode            case TILE_TYPES.SAW:
-                return false; // Saws damage but don't block            case TILE_TYPES.LASER:
+                return false; // Glitches are no longer solid in single mode
+            case TILE_TYPES.SAW:
+                return false; // Saws damage but don't block
+            case TILE_TYPES.LASER:
                 // Laser source tiles act like platforms - solid when landing from above
                 return direction === 1 && !playerDropping;
             case TILE_TYPES.CRUSHER:
@@ -192,29 +215,53 @@ export class PhysicsEngine {
                 return false;
         }
     }
-      /**
+    
+    /**
      * Handle horizontal movement with collision
-     */    handleHorizontalMovement(entity, deltaSeconds) {
+     */
+    handleHorizontalMovement(entity, deltaSeconds) {
         if (!this.world) {
             entity.x += entity.vx * deltaSeconds;
             return;
         }
         
-        const newX = entity.x + entity.vx * deltaSeconds;
-        const collision = this.checkCollision(newX, entity.y, entity.width, entity.height);
+        const originalX = entity.x;
+        const deltaX = entity.vx * deltaSeconds;
+        const newX = originalX + deltaX;
+        
+        // Check if the new position would cause a collision
+        const collision = this.checkCollision(newX, entity.y, entity.width, entity.height, 0);
         
         if (collision.collision) {
             const movingRight = entity.vx > 0;
-            entity.vx = 0;
             
             if (movingRight) {
-                // Moving right, stop just before the tile - prevent clipping
-                entity.x = collision.tileX * GAME_CONFIG.TILE_SIZE - entity.width - 0.1;
+                // Moving right - stop just before the collision tile
+                const tileLeft = collision.tileX * GAME_CONFIG.TILE_SIZE;
+                const stopPosition = tileLeft - entity.width - 1;
+                
+                // Only stop if we're actually moving into the tile
+                if (newX + entity.width > tileLeft && originalX + entity.width <= tileLeft + 2) {
+                    entity.x = Math.max(originalX, stopPosition);
+                    entity.vx = 0;
+                } else {
+                    entity.x = newX;
+                }
             } else {
-                // Moving left, stop just after the tile - prevent clipping
-                entity.x = (collision.tileX + 1) * GAME_CONFIG.TILE_SIZE + 0.1;
+                // Moving left - stop just after the collision tile
+                const tileRight = (collision.tileX + 1) * GAME_CONFIG.TILE_SIZE;
+                const stopPosition = tileRight + 1;
+                
+                // Only stop if we're actually moving into the tile
+                if (newX < tileRight && originalX >= tileRight - 2) {
+                    entity.x = Math.min(originalX, stopPosition);
+                    entity.vx = 0;
+                } else {
+                    entity.x = newX;
+                }
             }
         } else {
+            // No collision - move freely
             entity.x = newX;
         }
         
@@ -224,7 +271,8 @@ export class PhysicsEngine {
             entity.vx = 0;
         }
     }
-      /**
+    
+    /**
      * Handle vertical movement with collision
      */
     handleVerticalMovement(entity, deltaSeconds) {

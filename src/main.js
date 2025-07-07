@@ -1,5 +1,6 @@
 // Main entry point for CodeRunner game
 import { Game } from './core/Game.js';
+import './systems/ProfileManager.js'; // Initialize ProfileManager
 
 // Initialize and start the game when the page loads
 window.addEventListener('DOMContentLoaded', () => {
@@ -49,5 +50,7 @@ window.addEventListener('DOMContentLoaded', () => {
         checkGeneralSettings();
     }
     
+    console.log('🎮 Starting game...');
+    game.start();
     console.log('🎮 Game initialization completed');
 });

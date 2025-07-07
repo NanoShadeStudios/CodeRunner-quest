@@ -102,8 +102,8 @@ export class WorldGenerator {
     
     generateChunksForCamera(camera) {
         const currentChunk = Math.floor(camera.x / (GAME_CONFIG.CHUNK_WIDTH * GAME_CONFIG.TILE_SIZE));
-        const minChunk = Math.max(0, currentChunk - 1); // Never generate negative chunks, start from 0
-        const maxChunk = currentChunk + GAME_CONFIG.GENERATION_DISTANCE;
+        const minChunk = Math.max(0, currentChunk - 2); // Generate chunks further behind the player
+        const maxChunk = currentChunk + GAME_CONFIG.GENERATION_DISTANCE + 2; // Generate chunks further ahead
         
         // Generate chunks from minChunk to maxChunk
         for (let chunkX = minChunk; chunkX <= maxChunk; chunkX++) {

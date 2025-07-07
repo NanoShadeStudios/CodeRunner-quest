@@ -74,6 +74,7 @@ export const GAME_STATES = {
     LOGIN_PROMPT: 'loginPrompt',
     TUTORIAL: 'tutorial',
     HOME: 'home',
+    PROFILE: 'profile',
     OPTIONS: 'options',
     DIFFICULTY_SELECT: 'difficultySelect',
     CREDITS: 'credits',
@@ -83,6 +84,7 @@ export const GAME_STATES = {
     SETTINGS: 'settings',
     RESET_CONFIRM: 'resetConfirm',
     SHOP: 'shop',
+    CHARACTER_CUSTOMIZATION: 'characterCustomization',
     PLAYING: 'playing',
     PAUSED: 'paused',
     GAME_OVER: 'gameOver'

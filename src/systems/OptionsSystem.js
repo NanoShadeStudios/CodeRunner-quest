@@ -39,11 +39,25 @@ export class OptionsSystem {
                 description: 'View your progress and unlocks'
             },
             { 
+                text: 'Leaderboard', 
+                action: 'leaderboard', 
+                icon: '🏅', 
+                color: '#f97316',
+                description: 'View top scores and rankings'
+            },
+            { 
                 text: 'Shop', 
                 action: 'shop', 
                 icon: '🛒', 
                 color: '#10b981',
                 description: 'Upgrade your abilities and buy cosmetics'
+            },
+            { 
+                text: 'Character', 
+                action: 'character', 
+                icon: '👤', 
+                color: '#06b6d4',
+                description: 'Customize your character appearance'
             },
             { 
                 text: 'Settings', 

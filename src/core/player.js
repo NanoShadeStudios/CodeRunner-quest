@@ -205,28 +205,27 @@ export class Player {
                 this.facingDirection = 1;  // Facing right
             } else if (moveInput < 0) {
                 this.facingDirection = -1; // Facing left
-            }            // Frame-rate independent smooth movement for 60fps feel
+            }            
+            // Frame-rate independent smooth movement for 60fps feel
             const targetVelocity = moveInput * maxSpeed;
             const velocityDiff = targetVelocity - this.vx;
             
-            // Use exponential smoothing for buttery smooth movement
-            const smoothingFactor = 1.0 - Math.pow(0.01, deltaSeconds); // Very smooth transition
-            this.vx += velocityDiff * smoothingFactor;
+            // Use faster acceleration for more responsive movement
+            const accelerationFactor = this.onGround ? GAME_CONFIG.ACCELERATION : GAME_CONFIG.AIR_ACCELERATION;
+            const maxChange = accelerationFactor * deltaSeconds;
             
-            // Snap to target if very close to prevent micro-oscillations
-            if (Math.abs(velocityDiff) < 1.0) {
+            if (Math.abs(velocityDiff) <= maxChange) {
                 this.vx = targetVelocity;
+            } else {
+                this.vx += Math.sign(velocityDiff) * maxChange;
             }
         } else {
-            // Smooth deceleration using exponential decay
-            const decayFactor = 1.0 - Math.pow(0.001, deltaSeconds); // Even smoother stop
-            this.vx *= (1.0 - decayFactor);
-            
-            // Full stop when velocity is very small
-            if (Math.abs(this.vx) < 0.5) {
-                this.vx = 0;
-            }
+            // Apply instant deceleration when no input (no sliding)
+            this.vx = 0;
         }
+        
+        // Ensure velocity doesn't exceed maximum
+        this.vx = Math.max(-maxSpeed, Math.min(maxSpeed, this.vx));
     }    updateJumping(inputKeys, deltaTime) {
         // Disable jumping and dash during quantum dash
         if (this.quantumDashActive) {
@@ -884,27 +883,49 @@ export class Player {
      * Load the selected sprite from profile manager
      */
     loadSelectedSprite() {
-        let selectedSprite = 'original-run-sprite0.png'; // Default to the single running sprite
+        let selectedSprite = 'player-sprite.png'; // Default sprite
           // Try to get selected sprite from profile manager
         if (typeof window !== 'undefined' && window.profileManager) {
             selectedSprite = window.profileManager.getSelectedSprite();
           
             // Ensure we're getting a valid sprite name
             if (!selectedSprite || typeof selectedSprite !== 'string') {
-                selectedSprite = 'original-run-sprite0.png';
+                selectedSprite = 'player-sprite.png';
             }
         } else {
+            // Fallback: try to get from localStorage directly
+            try {
+                const savedSprite = localStorage.getItem('coderunner_selected_sprite');
+                if (savedSprite && typeof savedSprite === 'string') {
+                    selectedSprite = savedSprite;
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load sprite from localStorage:', error);
+            }
+            
             // If profile manager isn't ready yet, retry after a short delay
-            setTimeout(() => this.loadSelectedSprite(), 200);
-            return;
+            if (typeof window !== 'undefined' && !window.profileManager) {
+                setTimeout(() => this.loadSelectedSprite(), 200);
+                return;
+            }
         }
         
-        // Use the Main Sprite folder for the default, or assets folder for others
-        if (selectedSprite === 'original-run-sprite0.png') {
-            this.sprite.src = `./assets/Main Sprite/${selectedSprite}`;
+        // Handle different sprite paths based on the sprite name
+        let spritePath;
+        if (selectedSprite.startsWith('original-run-sprite') || selectedSprite.startsWith('Untitled design (13)') || selectedSprite.startsWith('Untitled design (14)')) {
+            // Main Sprite folder
+            spritePath = `./assets/Main Sprite/${selectedSprite}`;
+        } else if (selectedSprite.startsWith('sprite_')) {
+            // Buyable cosmetics folder
+            spritePath = `./assets/buyable cosmetics/${selectedSprite}`;
         } else {
-            this.sprite.src = `./assets/${selectedSprite}`;
+            // Root assets folder
+            spritePath = `./assets/${selectedSprite}`;
         }
+        
+        console.log(`🎮 Loading sprite: ${selectedSprite} from ${spritePath}`);
+        // Use changeSprite to properly handle sprite loading state
+        this.changeSprite(spritePath);
     }/**
      * Refresh sprite from profile manager (called when profile manager becomes available)
      */

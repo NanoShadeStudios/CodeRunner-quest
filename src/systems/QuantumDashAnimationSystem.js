@@ -50,7 +50,7 @@ export class QuantumDashAnimationSystem {
     startAnimation(startX, startY, endX, endY) {
         if (this.isAnimating) return; // Prevent multiple animations
 
-        console.log('⚡ Starting quantum dash animation');
+      
         
         this.isAnimating = true;
         this.animationStartTime = Date.now();
@@ -101,35 +101,34 @@ export class QuantumDashAnimationSystem {
      * Update effects based on current animation phase
      */
     updateCurrentPhase(elapsed) {
-        console.log(`🎬 Animation phase update - elapsed: ${elapsed}ms`);
         
         // Charge phase
         if (elapsed >= this.phases.charge.start && elapsed < this.phases.charge.start + this.phases.charge.duration) {
-            console.log(`⚡ Charge phase active - progress: ${((elapsed - this.phases.charge.start) / this.phases.charge.duration * 100).toFixed(1)}%`);
+           
             this.updateChargePhase(elapsed - this.phases.charge.start);
         }
         
         // Burst phase
         if (elapsed >= this.phases.burst.start && elapsed < this.phases.burst.start + this.phases.burst.duration) {
-            console.log(`💥 Burst phase active - progress: ${((elapsed - this.phases.burst.start) / this.phases.burst.duration * 100).toFixed(1)}%`);
+           
             this.updateBurstPhase(elapsed - this.phases.burst.start);
         }
         
         // Teleport phase
         if (elapsed >= this.phases.teleport.start && elapsed < this.phases.teleport.start + this.phases.teleport.duration) {
-            console.log(`🌀 Teleport phase active - progress: ${((elapsed - this.phases.teleport.start) / this.phases.teleport.duration * 100).toFixed(1)}%`);
+           
             this.updateTeleportPhase(elapsed - this.phases.teleport.start);
         }
         
         // Ripple phase
         if (elapsed >= this.phases.ripple.start && elapsed < this.phases.ripple.start + this.phases.ripple.duration) {
-            console.log(`🌊 Ripple phase active - progress: ${((elapsed - this.phases.ripple.start) / this.phases.ripple.duration * 100).toFixed(1)}%`);
+            
             this.updateRipplePhase(elapsed - this.phases.ripple.start);
         }
         
         // Fade phase
         if (elapsed >= this.phases.fade.start && elapsed < this.phases.fade.start + this.phases.fade.duration) {
-            console.log(`🌅 Fade phase active - progress: ${((elapsed - this.phases.fade.start) / this.phases.fade.duration * 100).toFixed(1)}%`);
+            
             this.updateFadePhase(elapsed - this.phases.fade.start);
         }
     }
@@ -140,7 +139,7 @@ export class QuantumDashAnimationSystem {
     updateChargePhase(phaseTime) {
         const progress = phaseTime / this.phases.charge.duration;
         
-        console.log(`⚡ Charge phase update - progress: ${(progress * 100).toFixed(1)}%`);
+       
         
         // Play charge sound once
         if (!this.audioPlayed.charge && this.game.audioSystem) {
@@ -150,8 +149,7 @@ export class QuantumDashAnimationSystem {
         
         // Increase flash intensity
         this.flashIntensity = progress * 0.3;
-        console.log(`🔆 Flash intensity set to: ${this.flashIntensity}`);
-        
+       
         // Add energy particles at start position
         this.addEnergyParticles(this.startPosition.x, this.startPosition.y, progress);
     }
@@ -162,7 +160,7 @@ export class QuantumDashAnimationSystem {
     updateBurstPhase(phaseTime) {
         const progress = phaseTime / this.phases.burst.duration;
         
-        console.log(`💥 Burst phase update - progress: ${(progress * 100).toFixed(1)}%`);
+    
         
         // Play burst sound once
         if (!this.audioPlayed.burst && this.game.audioSystem) {
@@ -172,7 +170,7 @@ export class QuantumDashAnimationSystem {
         
         // Maximum flash
         this.flashIntensity = 0.8 * (1 - progress);
-        console.log(`🔆 Flash intensity set to: ${this.flashIntensity}`);
+      
         
         // Intense screen shake
         this.screenShake.intensity = 15 * (1 - progress);
@@ -180,7 +178,7 @@ export class QuantumDashAnimationSystem {
         // Create lightning bolts
         if (Math.random() < 0.8) {
             this.addLightningBolt(this.startPosition.x, this.startPosition.y);
-            console.log(`⚡ Added lightning bolt - total bolts: ${this.lightningBolts.length}`);
+           
         }
     }
 
@@ -367,7 +365,7 @@ export class QuantumDashAnimationSystem {
      * End the animation and resume game
      */
     endAnimation() {
-        console.log('⚡ Quantum dash animation completed');
+      
         
         this.isAnimating = false;
         
@@ -391,7 +389,7 @@ export class QuantumDashAnimationSystem {
     render(ctx, camera) {
         if (!this.isAnimating) return;
 
-        console.log('🎨 Rendering quantum dash animation - lightning bolts:', this.lightningBolts.length, 'ripples:', this.ripples.length, 'flash:', this.flashIntensity);
+      
         
         ctx.save();
         
@@ -419,7 +417,7 @@ export class QuantumDashAnimationSystem {
     renderLightningBolts(ctx, camera) {
         if (this.lightningBolts.length === 0) return;
 
-        console.log('⚡ Drawing', this.lightningBolts.length, 'lightning bolts');
+      
         
         ctx.save();
         ctx.globalCompositeOperation = 'screen'; // Additive blending for lightning
@@ -458,7 +456,7 @@ export class QuantumDashAnimationSystem {
     renderRipples(ctx, camera) {
         if (this.ripples.length === 0) return;
 
-        console.log('🌊 Drawing', this.ripples.length, 'ripples');
+       
         
         ctx.save();
           for (const ripple of this.ripples) {
@@ -505,7 +503,7 @@ export class QuantumDashAnimationSystem {
     renderScreenFlash(ctx) {
         if (this.flashIntensity <= 0) return;
 
-        console.log('💫 Drawing screen flash with intensity:', this.flashIntensity);
+      
         
         ctx.save();
         ctx.globalCompositeOperation = 'screen';

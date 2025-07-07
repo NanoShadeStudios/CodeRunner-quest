@@ -2,7 +2,9 @@
  * Input Manager - Centralized input handling
  */
 
-export class InputManager {    constructor() {        this.keys = {
+export class InputManager {
+    constructor() {
+        this.keys = {
             left: false,
             right: false,
             up: false,
@@ -10,7 +12,9 @@ export class InputManager {    constructor() {        this.keys = {
             space: false,
             x: false,
             shift: false
-        };        this.callbacks = {            pause: null,
+        };
+        
+        this.callbacks = {            pause: null,
             restart: null,
             confirm: null,
             skip: null,
@@ -38,7 +42,8 @@ export class InputManager {    constructor() {        this.keys = {
         
         this.setupEventListeners();
     }
-      /**
+    
+    /**
      * Set a function to check if name input is active
      */
     setNameInputChecker(checker) {
@@ -55,7 +60,9 @@ export class InputManager {    constructor() {        this.keys = {
             activeElement.tagName === 'TEXTAREA' ||
             activeElement.contentEditable === 'true'
         );
-    }    setupEventListeners() {
+    }
+    
+    setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
         document.addEventListener('keyup', (e) => this.handleKeyUp(e));
         
@@ -138,33 +145,44 @@ export class InputManager {    constructor() {        this.keys = {
             }
             if (actions.includes('x')) {
                 this.keys.x = true;
-            }            if (actions.includes('shift')) {
+            }
+            if (actions.includes('shift')) {
                 this.keys.shift = true;
             }
         }
         
-        // FALLBACK: If keybindManager fails or no actions found, handle arrow keys directly
+        // IMPROVED FALLBACK: Always handle basic movement keys if keybind manager fails
         if (!isInNameInput && !isTypingInField && actions.length === 0) {
-           
-            if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
-                this.keys.left = true;
-              
-            }
-            if (e.code === 'ArrowRight' || e.code === 'KeyD') {
-                this.keys.right = true;
-                
-            }
-            if (e.code === 'ArrowUp' || e.code === 'KeyW') {
-                this.keys.up = true;
-              
-            }
-            if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-                this.keys.down = true;
-               
-            }
-            if (e.code === 'Space') {
-                this.keys.space = true;
-              
+            // Enhanced fallback handling for movement keys
+            switch (e.code) {
+                case 'ArrowLeft':
+                case 'KeyA':
+                    this.keys.left = true;
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    this.keys.right = true;
+                    break;
+                case 'ArrowUp':
+                case 'KeyW':
+                    this.keys.up = true;
+                    if (this.callbacks.shopScrollUp) this.callbacks.shopScrollUp();
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    this.keys.down = true;
+                    if (this.callbacks.shopScrollDown) this.callbacks.shopScrollDown();
+                    break;
+                case 'Space':
+                    this.keys.space = true;
+                    break;
+                case 'KeyX':
+                    this.keys.x = true;
+                    break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    this.keys.shift = true;
+                    break;
             }
         }
 
@@ -226,11 +244,17 @@ export class InputManager {    constructor() {        this.keys = {
             this.callbacks.backspace();
         }
         
-        // FALLBACK: Handle Home key directly if keybind manager fails
-        if (!isInNameInput && !isTypingInField && actions.length === 0 && e.code === 'Home' && this.callbacks.home) {
-            this.callbacks.home();
+        // FALLBACK: Handle Escape and Home keys directly if keybind manager fails
+        if (!isInNameInput && !isTypingInField && actions.length === 0) {
+            if (e.code === 'Escape' && this.callbacks.skip) {
+                this.callbacks.skip();
+            } else if (e.code === 'Home' && this.callbacks.home) {
+                this.callbacks.home();
+            }
         }
-    }handleKeyPress(e) {
+    }
+
+    handleKeyPress(e) {
         // Only handle text input if we're in name input mode
         const isInNameInput = this.isNameInputActive && this.isNameInputActive();
         
@@ -242,7 +266,8 @@ export class InputManager {    constructor() {        this.keys = {
             }
         }
     }
-      handleKeyUp(e) {
+    
+    handleKeyUp(e) {
         // Get actions for this key from keybind manager
         const actions = window.keybindManager ? window.keybindManager.getActionsForKey(e.code) : [];
         
@@ -268,12 +293,45 @@ export class InputManager {    constructor() {        this.keys = {
         if (actions.includes('shift')) {
             this.keys.shift = false;
         }
+        
+        // FALLBACK: Handle key releases if keybind manager fails
+        if (actions.length === 0) {
+            switch (e.code) {
+                case 'ArrowLeft':
+                case 'KeyA':
+                    this.keys.left = false;
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    this.keys.right = false;
+                    break;
+                case 'ArrowUp':
+                case 'KeyW':
+                    this.keys.up = false;
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    this.keys.down = false;
+                    break;
+                case 'Space':
+                    this.keys.space = false;
+                    break;
+                case 'KeyX':
+                    this.keys.x = false;
+                    break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    this.keys.shift = false;
+                    break;
+            }
+        }
     }
     
     setCallback(event, callback) {
         this.callbacks[event] = callback;
     }
-      getKeys() {
+    
+    getKeys() {
         return { ...this.keys };
     }
 

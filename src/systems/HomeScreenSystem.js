@@ -32,6 +32,13 @@ export class HomeScreenSystem {
                 description: 'Start your coding journey'
             },
             { 
+                text: 'Profile', 
+                action: 'profile', 
+                icon: '👤', 
+                color: '#8b5cf6',
+                description: 'View stats and manage account'
+            },
+            { 
                 text: 'Options', 
                 action: 'options', 
                 icon: '⚙️', 
@@ -461,17 +468,14 @@ export class HomeScreenSystem {
      * Draw footer information
      */
     drawFooterInfo(ctx, width, height) {
-        if (this.buttonsAnimationProgress < 0.8) return;
-        
         ctx.save();
-        
-        const footerAlpha = (this.buttonsAnimationProgress - 0.8) / 0.2;
-        ctx.globalAlpha = footerAlpha;
-        
-        ctx.font = '14px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = 'rgba(139, 148, 158, 0.8)';
+        ctx.font = '12px Courier New';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.textAlign = 'center';
-        ctx.fillText('Use WASD or Arrow Keys to move • Space to jump', width / 2, height - 50);
+        
+        // Draw footer text
+        const footerY = height - 30;
+        ctx.fillText('Press ESC to toggle fullscreen', width / 2, footerY);
         
         ctx.restore();
     }

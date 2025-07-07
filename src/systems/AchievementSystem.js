@@ -1,3 +1,4 @@
+
 /**
  * Achievement System for CodeRunner
  * Tracks and unlocks achievements based on player progress
@@ -1389,5 +1390,84 @@ export class AchievementSystem {
         
         // Return maximum scroll offset (0 if content fits on screen)
         return Math.max(0, totalContentHeight - visibleAreaHeight);
+    }
+
+    /**
+     * Reset animations (required by GameNavigation when entering achievements state)
+     */
+    resetAnimations() {
+        // Since AchievementSystem uses time-based animations, 
+        // we don't need to reset specific animation states
+        // This method exists for compatibility with the navigation system
+        console.log('🏆 Achievements animations reset');
+    }
+
+    /**
+     * Handle clicks in the achievements screen
+     */
+    handleClick(x, y) {
+        console.log('🏆 Achievement click at:', x, y);
+        
+        // Get canvas dimensions from game instance
+        const canvasWidth = this.gameInstance?.canvas?.width || 1200;
+        const canvasHeight = this.gameInstance?.canvas?.height || 800;
+        
+        // Check back button hit area first
+        const backButtonX = 35;
+        const backButtonY = canvasHeight - 75;
+        const backButtonWidth = 110;
+        const backButtonHeight = 45;
+        
+        if (x >= backButtonX && x <= backButtonX + backButtonWidth && 
+            y >= backButtonY && y <= backButtonY + backButtonHeight) {
+            console.log('🏆 Back button clicked');
+            
+            // Navigate back to previous state or home
+            if (this.gameInstance) {
+                const backState = this.gameInstance.previousGameState || 'home';
+                this.gameInstance.navigateToState(backState);
+            }
+            return { action: 'back' };
+        }
+        
+        // Category filter buttons hit detection
+        const categories = [
+            { id: 'all', name: 'All', icon: '🌟' },
+            { id: 'progress', name: 'Progress', icon: '🚀' },
+            { id: 'death', name: 'Death', icon: '💀' },
+            { id: 'customization', name: 'Style', icon: '🎨' },
+            { id: 'meta', name: 'Meta', icon: '🧠' }
+        ];
+        
+        const buttonWidth = 120;
+        const buttonHeight = 38;
+        const buttonSpacing = 10;
+        const totalButtonsWidth = categories.length * buttonWidth + (categories.length - 1) * buttonSpacing;
+        const startX = (canvasWidth - totalButtonsWidth) / 2;
+        const startY = 155;
+        
+        // Check if click is within category buttons area
+        if (y >= startY && y <= startY + buttonHeight) {
+            for (let index = 0; index < categories.length; index++) {
+                const category = categories[index];
+                const buttonX = startX + index * (buttonWidth + buttonSpacing);
+                
+                if (x >= buttonX && x <= buttonX + buttonWidth) {
+                    console.log(`🏆 Category tab clicked: ${category.id}`);
+                    
+                    // Update the category filter
+                    if (this.gameInstance) {
+                        this.gameInstance.achievementCategory = category.id;
+                        // Reset scroll when changing categories
+                        this.gameInstance.achievementsScrollOffset = 0;
+                        console.log(`🏆 Achievement category changed to: ${category.id}`);
+                    }
+                    
+                    return { action: 'filter', category: category.id };
+                }
+            }
+        }
+        
+        return null;
     }
 }

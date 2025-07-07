@@ -10,11 +10,13 @@ export class PowerUpSystem {
         this.spawnedPowerUps = []; // Powerups currently on screen
         this.unlockedPowerUps = new Set(); // Powerups unlocked in shop
         this.lastSpawnDistance = 0; // Track last milestone for spawning
-        this.lastActualSpawnDistance = 0; // Track when we actually spawned a powerup        this.lastSpawnedPowerUpId = null; // Track last spawned powerup for variety
+        this.lastActualSpawnDistance = 0; // Track when we actually spawned a powerup
+        this.lastGuaranteedSpawnDistance = 0; // Track when we last spawned a guaranteed powerup
+        this.hadRandomSpawnSinceLastGuaranteed = false; // Track if we've had a random spawn since last guaranteed        this.lastSpawnedPowerUpId = null; // Track last spawned powerup for variety
         this.lastLoggedMeter = -1; // For debug logging
         this.spawnInterval = 50; // Check every 50m instead of 30m (less frequent)
         this.baseSpawnChance = 0.15; // Reduced from 25% to 15% base chance
-        this.maxDistanceWithoutSpawn = 750; // Increased from 500m to 750m guarantee
+        this.guaranteedSpawnInterval = 400; // Guaranteed spawn every 400m (changed from 750m)
           // UI notification system
         this.powerUpNotifications = []; // Active notifications
         this.maxNotifications = 3; // Maximum simultaneous notifications
@@ -204,68 +206,84 @@ export class PowerUpSystem {
         // Log when powerups become available for the first time
         if (currentMeter === 50 && this.lastLoggedMeter < 50) {
             console.log(`🎉 50m reached! Powerups are now available for spawning!`);
-        }          // Check if we've reached a 50m milestone (less frequent checks)
+        }
+        
+        // Check for guaranteed spawn every 400m (only if no random spawn occurred)
+        const distanceSinceLastGuaranteed = currentMeter - this.lastGuaranteedSpawnDistance;
+        if (distanceSinceLastGuaranteed >= this.guaranteedSpawnInterval) {
+            if (!this.hadRandomSpawnSinceLastGuaranteed) {
+                console.log(`🎯 Guaranteed spawn triggered at ${currentMeter}m (400m since last guaranteed, no random spawns)`);
+                this.spawnGuaranteedPowerUp();
+                this.lastGuaranteedSpawnDistance = currentMeter;
+                this.lastActualSpawnDistance = currentMeter;
+                this.hadRandomSpawnSinceLastGuaranteed = false;
+                return; // Skip random spawn check this frame
+            } else {
+                console.log(`✅ 400m reached but skipping guaranteed spawn - had random spawn since last guaranteed`);
+                // Reset for next 400m cycle
+                this.lastGuaranteedSpawnDistance = currentMeter;
+                this.hadRandomSpawnSinceLastGuaranteed = false;
+            }
+        }
+        
+        // Check if we've reached a 50m milestone (less frequent checks)
         const currentMilestone = Math.floor(currentMeter / this.spawnInterval);
         const lastMilestone = Math.floor(this.lastSpawnDistance / this.spawnInterval);          // Debug logging every 50m
         if (currentMeter % this.spawnInterval === 0 && currentMeter !== this.lastLoggedMeter) {
             const distanceSinceLastSpawn = currentMeter - this.lastActualSpawnDistance;
+            const distanceToNextGuaranteed = this.guaranteedSpawnInterval - distanceSinceLastGuaranteed;
             console.log(`🏃 Current distance: ${currentMeter}m - Distance since last spawn: ${distanceSinceLastSpawn}m`);
             console.log(`🔓 Unlocked powerups: ${Array.from(this.unlockedPowerUps).join(', ')}`);
-              // Show progress toward guaranteed spawn
-            if (distanceSinceLastSpawn > 300) {
-                const remaining = this.maxDistanceWithoutSpawn - distanceSinceLastSpawn;
-                if (remaining > 0) {
-                    console.log(`⏰ ${remaining}m until guaranteed powerup spawn`);
-                } else {
-                    console.log(`🎯 GUARANTEED POWERUP INCOMING!`);
-                }
-            }
+            console.log(`⏰ Next guaranteed spawn in: ${distanceToNextGuaranteed}m (random spawn since last: ${this.hadRandomSpawnSinceLastGuaranteed})`);
             
             this.lastLoggedMeter = currentMeter;
-        }if (currentMilestone > lastMilestone) {
+        }
+
+        if (currentMilestone > lastMilestone) {
             this.lastSpawnDistance = currentMeter;
             
             // Calculate progressive spawn chance based on distance since last spawn
             const distanceSinceLastSpawn = currentMeter - this.lastActualSpawnDistance;
             let spawnChance = this.baseSpawnChance;
-              // Increase spawn chance progressively (less aggressive)
-            if (distanceSinceLastSpawn > 300) {
-                spawnChance = 0.25; // 25% after 300m
+              // Increase spawn chance progressively (less aggressive than before)
+            if (distanceSinceLastSpawn > 150) {
+                spawnChance = 0.20; // 20% after 150m
             }
-            if (distanceSinceLastSpawn > 500) {
-                spawnChance = 0.4; // 40% after 500m
+            if (distanceSinceLastSpawn > 250) {
+                spawnChance = 0.30; // 30% after 250m
             }
-            if (distanceSinceLastSpawn >= this.maxDistanceWithoutSpawn) {
-                spawnChance = 1.0; // 100% after 750m (guaranteed)
+            if (distanceSinceLastSpawn > 350) {
+                spawnChance = 0.50; // 50% after 350m (close to guaranteed threshold)
             }
             
             console.log(`🎯 Reached ${currentMeter}m milestone - ${distanceSinceLastSpawn}m since last spawn`);
-            console.log(`🎲 Spawn chance: ${(spawnChance * 100).toFixed(0)}%`);
+            console.log(`🎲 Random spawn chance: ${(spawnChance * 100).toFixed(0)}%`);
             
-            // Roll for powerup spawn
+            // Roll for random powerup spawn
             if (Math.random() < spawnChance) {
-                console.log(`✅ Powerup spawn chance succeeded!`);
+                console.log(`✅ Random powerup spawn chance succeeded!`);
                 this.lastActualSpawnDistance = currentMeter; // Update last spawn distance
-                this.guaranteedSpawnPowerUp();
+                this.hadRandomSpawnSinceLastGuaranteed = true; // Mark that we had a random spawn
+                this.spawnRandomPowerUp();
             } else {
-                console.log(`❌ Powerup spawn chance failed, better luck in ${this.spawnInterval}m`);
+                console.log(`❌ Random powerup spawn chance failed, trying again in ${this.spawnInterval}m`);
             }
         }
     }
 
-    guaranteedSpawnPowerUp() {
-        console.log(`🔎 guaranteedSpawnPowerUp() called at ${Date.now()}`);
-          // Enforce 50m minimum distance rule even for debug/guaranteed spawns
+    spawnGuaranteedPowerUp() {
+        console.log(`🔎 spawnGuaranteedPowerUp() called - guaranteed spawn every 400m`);
+          // Enforce 50m minimum distance rule even for guaranteed spawns
         const currentDistance = this.game.player ? this.game.player.x : 0;
         const currentMeter = Math.floor(currentDistance / 10);
         
         if (currentMeter < 50) {
-            console.log(`🚫 guaranteedSpawnPowerUp blocked: Only ${currentMeter}m traveled, need 50m minimum`);
+            console.log(`🚫 spawnGuaranteedPowerUp blocked: Only ${currentMeter}m traveled, need 50m minimum`);
             console.log(`💡 ${50 - currentMeter}m remaining until powerups are available`);
             return;
         }
         
-        console.log(`🔍 Attempting powerup spawn - Unlocked count: ${this.unlockedPowerUps.size}`);
+        console.log(`🔍 Attempting guaranteed powerup spawn - Unlocked count: ${this.unlockedPowerUps.size}`);
         console.log(`🔍 Unlocked powerups: [${Array.from(this.unlockedPowerUps).join(', ')}]`);
         
         if (this.unlockedPowerUps.size === 0) {
@@ -313,13 +331,49 @@ export class PowerUpSystem {
         // Remember this powerup for next time
         this.lastSpawnedPowerUpId = chosenPowerUp.id;
         
-        console.log(`🎯 Chosen powerup for spawn:`, chosenPowerUp);
+        console.log(`🎯 Chosen powerup for guaranteed spawn:`, chosenPowerUp);
         console.log(`🚀 About to call spawnPowerUp with:`, chosenPowerUp.name);
         
         this.spawnPowerUp(chosenPowerUp);
         
-        console.log(`✨ Guaranteed powerup spawned at milestone: ${chosenPowerUp.name}`);
+        console.log(`✨ Guaranteed powerup spawned at 400m milestone: ${chosenPowerUp.name}`);
         console.log(`📍 Spawned powerups on screen: ${this.spawnedPowerUps.length}`);
+    }
+
+    spawnRandomPowerUp() {
+        console.log(`🎲 spawnRandomPowerUp() called - rolling individual spawn chances`);
+        
+        if (this.unlockedPowerUps.size === 0) {
+            console.log('❌ No unlocked powerups available for spawning');
+            return;
+        }
+        
+        console.log(`🎲 Rolling individual powerup spawn chances...`);
+        
+        // Get available powerups that can spawn based on their individual rarity
+        const availablePowerUps = Array.from(this.unlockedPowerUps)
+            .map(id => this.powerUpDefinitions[id])
+            .filter(def => {
+                const spawns = Math.random() < def.rarity;
+                console.log(`   ${def.name}: ${(def.rarity * 100).toFixed(1)}% chance - ${spawns ? '✅ SUCCESS' : '❌ failed'}`);
+                return spawns;
+            });
+        
+        if (availablePowerUps.length === 0) {
+            console.log('❌ No powerups passed their individual spawn chances');
+            return;
+        }
+        
+        // Pick random powerup from available ones
+        const chosenPowerUp = availablePowerUps[Math.floor(Math.random() * availablePowerUps.length)];
+        console.log(`🎯 Random spawn: ${chosenPowerUp.name}`);
+        this.spawnPowerUp(chosenPowerUp);
+    }
+
+    guaranteedSpawnPowerUp() {
+        // Legacy method - redirect to new guaranteed spawn logic
+        console.log(`� Legacy guaranteedSpawnPowerUp() called - redirecting to spawnGuaranteedPowerUp()`);
+        this.spawnGuaranteedPowerUp();
     }
 
     trySpawnPowerUp() {
@@ -510,7 +564,7 @@ export class PowerUpSystem {
         // Clear the last spawned powerup tracking to reset variety system
         this.lastSpawnedPowerUpId = null;
         
-        console.log(`📍 Spawn tracking reset - next powerup guaranteed within ${this.maxDistanceWithoutSpawn}m`);
+        console.log(`📍 Spawn tracking reset - next powerup guaranteed within ${this.guaranteedSpawnInterval}m`);
         
         // Play sound effect
         if (this.game.audioSystem) {
@@ -1055,12 +1109,15 @@ export class PowerUpSystem {
         if (this.game.player && this.unlockedPowerUps.size > 0) {
             const currentDistance = this.game.player.x;
             const currentMeter = Math.floor(currentDistance / 10);
-            const distanceSinceLastSpawn = currentMeter - this.lastActualSpawnDistance;            // Only show progress after first 50m and when we haven't spawned in a while
+            const distanceSinceLastGuaranteed = currentMeter - this.lastGuaranteedSpawnDistance;
+            const distanceSinceLastSpawn = currentMeter - this.lastActualSpawnDistance;
+            
+            // Only show progress after first 50m and when we haven't spawned in a while
             if (currentMeter > 50 && distanceSinceLastSpawn > 150) {
                 const x = 20;
                 const y = 60; // Move below data packets counter (which is around y=10-40)
-                const width = 200; // Smaller width
-                const height = 30; // Smaller height
+                const width = 220; // Slightly wider for new info
+                const height = 40; // Taller for extra info
                 
                 // Background
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
@@ -1068,47 +1125,70 @@ export class PowerUpSystem {
                 
                 // Border (changes color as we get closer to guaranteed spawn)
                 let borderColor = '#888888';
-                if (distanceSinceLastSpawn > 500) borderColor = '#ff6600'; // Orange when close (updated)
-                if (distanceSinceLastSpawn >= this.maxDistanceWithoutSpawn) borderColor = '#ff0000'; // Red when guaranteed
+                if (distanceSinceLastGuaranteed > 200) borderColor = '#ffff00'; // Yellow at 200m
+                if (distanceSinceLastGuaranteed > 300) borderColor = '#ff6600'; // Orange at 300m
+                if (distanceSinceLastGuaranteed >= this.guaranteedSpawnInterval) borderColor = '#ff0000'; // Red when guaranteed
                 
                 ctx.strokeStyle = borderColor;
                 ctx.lineWidth = 2;
                 ctx.strokeRect(x, y, width, height);
-                  // Title
+                
+                // Title
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 10px Arial';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'top';
-                ctx.fillText('Next Powerup:', x + 5, y + 3);
                 
-                // Progress bar
-                const progressBarWidth = 120; // Smaller
+                // Show different text based on whether we've had a random spawn
+                if (this.hadRandomSpawnSinceLastGuaranteed) {
+                    ctx.fillText('Next Guaranteed: (Random spawn occurred)', x + 5, y + 3);
+                } else {
+                    ctx.fillText('Next Guaranteed:', x + 5, y + 3);
+                }
+                
+                // Progress bar for guaranteed spawn (400m cycle)
+                const progressBarWidth = 140;
                 const progressBarHeight = 6;
                 const progressBarX = x + 5;
                 const progressBarY = y + 15;
                 
-                const progress = Math.min(1, distanceSinceLastSpawn / this.maxDistanceWithoutSpawn);
+                const guaranteedProgress = Math.min(1, distanceSinceLastGuaranteed / this.guaranteedSpawnInterval);
                 
                 // Background bar
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
-                  // Progress fill (updated thresholds for 750m max)
+                
+                // Progress fill (updated thresholds for 400m max)
                 let fillColor = '#00ff00'; // Green
-                if (progress > 0.35) fillColor = '#ffff00'; // Yellow (was 0.4)
-                if (progress > 0.65) fillColor = '#ff6600'; // Orange (was 0.7)
-                if (progress >= 1.0) fillColor = '#ff0000'; // Red (guaranteed)
+                if (guaranteedProgress > 0.5) fillColor = '#ffff00'; // Yellow at 200m
+                if (guaranteedProgress > 0.75) fillColor = '#ff6600'; // Orange at 300m
+                if (guaranteedProgress >= 1.0) fillColor = '#ff0000'; // Red when guaranteed
                 
                 ctx.fillStyle = fillColor;
-                ctx.fillRect(progressBarX, progressBarY, progressBarWidth * progress, progressBarHeight);
-                  // Distance text
-                const remaining = Math.max(0, this.maxDistanceWithoutSpawn - distanceSinceLastSpawn);
+                ctx.fillRect(progressBarX, progressBarY, progressBarWidth * guaranteedProgress, progressBarHeight);
+                
+                // Distance text
+                const remainingToGuaranteed = Math.max(0, this.guaranteedSpawnInterval - distanceSinceLastGuaranteed);
                 ctx.fillStyle = '#cccccc';
                 ctx.font = '8px Arial';
-                if (remaining > 0) {
-                    ctx.fillText(`${remaining}m`, progressBarX + progressBarWidth + 5, progressBarY + 4);
+                if (remainingToGuaranteed > 0) {
+                    ctx.fillText(`${remainingToGuaranteed}m`, progressBarX + progressBarWidth + 5, progressBarY + 4);
                 } else {
                     ctx.fillStyle = '#ff0000';
-                    ctx.fillText('NOW!', progressBarX + progressBarWidth + 5, progressBarY + 4);
+                    if (this.hadRandomSpawnSinceLastGuaranteed) {
+                        ctx.fillText('SKIP', progressBarX + progressBarWidth + 5, progressBarY + 4);
+                    } else {
+                        ctx.fillText('NOW!', progressBarX + progressBarWidth + 5, progressBarY + 4);
+                    }
+                }
+                
+                // Additional info line
+                ctx.fillStyle = '#aaaaaa';
+                ctx.font = '7px Arial';
+                if (this.hadRandomSpawnSinceLastGuaranteed) {
+                    ctx.fillText(`Random spawn: YES (${distanceSinceLastSpawn}m ago)`, x + 5, y + 28);
+                } else {
+                    ctx.fillText(`Random spawn: NO (next guaranteed in ${remainingToGuaranteed}m)`, x + 5, y + 28);
                 }
             }
         }
@@ -1415,4 +1495,33 @@ export class PowerUpSystem {
             ctx.shadowBlur = 8;
             ctx.fill();
             ctx.restore();        }    }
+
+    /**
+     * Reset the PowerUp system for a new game
+     * Clears all active powerups and resets spawn tracking
+     */
+    reset() {
+        console.log('🔄 Resetting PowerUpSystem for new game...');
+        
+        // Clear all active powerup effects
+        this.activePowerUps.clear();
+        
+        // Clear spawned powerups on screen
+        this.spawnedPowerUps = [];
+        
+        // Reset spawn tracking
+        this.lastSpawnDistance = 0;
+        this.lastActualSpawnDistance = 0;
+        this.lastGuaranteedSpawnDistance = 0;
+        this.hadRandomSpawnSinceLastGuaranteed = false;
+        this.lastSpawnedPowerUpId = null;
+        
+        // Clear notifications
+        this.powerUpNotifications = [];
+        
+        // Clear floating collectibles (for magnetizer effect)
+        this.floatingCollectibles = [];
+        
+        console.log('✅ PowerUpSystem reset complete - all active effects cleared');
+    }
 }

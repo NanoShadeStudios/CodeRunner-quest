@@ -46,6 +46,11 @@ export class LoginSystem {
                 x: 0, y: 0, width: 220, height: 45,
                 hovered: false, color: '#dc2626'
             },
+            github: {
+                text: "🐙 Sign in with GitHub",
+                x: 0, y: 0, width: 220, height: 45,
+                hovered: false, color: '#333333'
+            },
             guest: {
                 text: "👤 Play as Guest",
                 x: 0, y: 0, width: 180, height: 45,
@@ -88,7 +93,9 @@ export class LoginSystem {
         
         this.initializeFirebaseAuth();
         this.setupEventListeners();
-    }    initializeFirebaseAuth() {
+    }
+    
+    initializeFirebaseAuth() {
         // Initialize Firebase Auth if available - use the separate auth app
         if (window.firebase && window.firebaseAuth) {
             this.auth = window.firebaseAuth;
@@ -147,7 +154,9 @@ export class LoginSystem {
             this.currentUser = null;
             this.isLoggedIn = false;
         }
-    }    setupEventListeners() {
+    }
+    
+    setupEventListeners() {
         // Store bound event handlers so we can remove them later
         this.boundKeyDownHandler = (e) => {
             if (this.isActive && this.currentView !== 'main') {
@@ -183,7 +192,9 @@ export class LoginSystem {
 
     shouldShow() {
         return !this.hasShown;
-    }    start() {
+    }
+    
+    start() {
         this.isActive = true;
         this.hasShown = true;
         this.loading = false; // Ensure we're not stuck in loading state
@@ -192,7 +203,9 @@ export class LoginSystem {
         this.slideOffset = 50;
         this.positionButtons();
         this.addEventListeners();
-    }positionButtons() {
+    }
+
+    positionButtons() {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         
@@ -261,7 +274,9 @@ export class LoginSystem {
     isPointInButton(x, y, button) {
         return x >= button.x && x <= button.x + button.width &&
                y >= button.y && y <= button.y + button.height;
-    }    handleClick(x, y) {
+    }
+    
+    handleClick(x, y) {
         if (!this.isActive) return false;
 
         // Handle button clicks based on current view
@@ -276,6 +291,10 @@ export class LoginSystem {
             }
             if (this.isPointInButton(x, y, this.buttons.google)) {
                 this.handleGoogleSignIn();
+                return true;
+            }
+            if (this.isPointInButton(x, y, this.buttons.github)) {
+                this.handleGitHubSignIn();
                 return true;
             }
             if (this.isPointInButton(x, y, this.buttons.guest)) {
@@ -307,7 +326,9 @@ export class LoginSystem {
     async handleLoginChoice() {
         console.log('Login chosen');
         // This method can be used for additional login logic if needed
-    }    handleGuestChoice() {
+    }
+    
+    handleGuestChoice() {
         console.log('Guest mode chosen');
         this.isGuest = true;
         this.isLoggedIn = false;
@@ -326,7 +347,9 @@ export class LoginSystem {
             console.log('Cloud saving enabled for:', this.currentUser.email);
             // Implement cloud saving logic here
         }
-    }    proceedToNextState() {
+    }
+    
+    proceedToNextState() {
         this.isActive = false;
         this.removeEventListeners();
         
@@ -356,7 +379,9 @@ export class LoginSystem {
                 console.error('Logout error:', error);
             }
         }
-    }    render() {
+    }
+    
+    render() {
         if (!this.isActive) return;
 
         this.ctx.save();
@@ -385,8 +410,10 @@ export class LoginSystem {
             this.drawLoadingIndicator();
         }
         
-        this.ctx.restore();
-    }drawContainer() {
+        this.        ctx.restore();
+    }
+
+    drawContainer() {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         const containerWidth = 500;
@@ -537,6 +564,7 @@ export class LoginSystem {
         this.drawButton(this.buttons.login);
         this.drawButton(this.buttons.register);
         this.drawButton(this.buttons.google);
+        this.drawButton(this.buttons.github);
         this.drawButton(this.buttons.guest);
         
         // Simple note below guest button
@@ -670,6 +698,45 @@ export class LoginSystem {
             
         } catch (error) {
             console.error('Google sign-in error:', error);
+            this.errorMessage = this.getErrorMessage(error.code);
+        } finally {
+            this.loading = false;
+        }
+    }
+
+    async handleGitHubSignIn() {
+        if (!this.auth) {
+            this.errorMessage = 'Authentication not available';
+            return;
+        }
+
+        this.loading = true;
+        this.errorMessage = '';
+
+        try {
+            const provider = new window.firebase.auth.GithubAuthProvider();
+            provider.addScope('user:email');
+            provider.addScope('read:user');
+            
+            const result = await this.auth.signInWithPopup(provider);
+            
+            this.currentUser = result.user;
+            this.isLoggedIn = true;
+            this.isGuest = false;
+            this.successMessage = 'Successfully signed in with GitHub!';
+            
+            console.log('🐙 GitHub sign-in successful:', {
+                user: result.user.email,
+                displayName: result.user.displayName,
+                photoURL: result.user.photoURL
+            });
+            
+            setTimeout(() => {
+                this.proceedToNextState();
+            }, 1500);
+            
+        } catch (error) {
+            console.error('GitHub sign-in error:', error);
             this.errorMessage = this.getErrorMessage(error.code);
         } finally {
             this.loading = false;

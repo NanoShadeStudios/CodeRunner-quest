@@ -57,6 +57,10 @@ export class ProfileManager {
     setSelectedSprite(spriteId) {
         this.profileData.selectedSprite = spriteId;
         this.saveProfile();
+        
+        // Also save to cloud if user is logged in
+        this.saveToCloud();
+        
         console.log(`🎮 Selected sprite updated: ${spriteId}`);
     }
 
@@ -96,6 +100,51 @@ export class ProfileManager {
         };
         this.saveProfile();
         console.log('🔄 Profile reset to defaults');
+    }
+
+    /**
+     * Save profile data to cloud if user is logged in
+     */
+    saveToCloud() {
+        // Check if UserProfileSystem is available and user is logged in
+        if (typeof window !== 'undefined' && 
+            window.userProfileSystem && 
+            window.userProfileSystem.isLoggedIn) {
+            
+            // Trigger cloud save through UserProfileSystem
+            window.userProfileSystem.saveUserProfile();
+            console.log('☁️ Profile data saved to cloud');
+        }
+    }
+
+    /**
+     * Load profile data from cloud (called when user logs in)
+     */
+    loadFromCloud(cloudData) {
+        if (cloudData && cloudData.selectedSprite) {
+            // Normalize the sprite path - extract just the filename
+            let spriteId = cloudData.selectedSprite;
+            if (spriteId.includes('/')) {
+                spriteId = spriteId.split('/').pop(); // Get just the filename
+            }
+            
+            this.profileData.selectedSprite = spriteId;
+            this.saveProfile(); // Save to localStorage for offline access
+            console.log('☁️ Profile data loaded from cloud:', cloudData.selectedSprite, '-> normalized to:', spriteId);
+            
+            // Update player sprite immediately if game is running
+            if (typeof window !== 'undefined' && window.game && window.game.player) {
+                window.game.player.loadSelectedSprite();
+            }
+        }
+    }
+
+    /**
+     * Force save current profile to cloud (for debugging/fixing cloud data)
+     */
+    forceSaveToCloud() {
+        console.log('🔧 Force saving current profile to cloud:', this.profileData.selectedSprite);
+        this.saveToCloud();
     }
 }
 

@@ -20,7 +20,7 @@ export class CharacterCustomizationSystem {
             },
             {
                 id: 'Untitled design (1).png',
-                name: 'Aqua Spirit',
+                name: 'Yellow Runner',
                 path: './assets/Untitled design (1).png',
                 category: 'free',
                 unlocked: true,
@@ -28,7 +28,7 @@ export class CharacterCustomizationSystem {
             },
             {
                 id: 'Untitled design (2).png',
-                name: 'Crimson Guardian',
+                name: 'Red Runner',
                 path: './assets/Untitled design (2).png',
                 category: 'free',
                 unlocked: true,
@@ -36,7 +36,7 @@ export class CharacterCustomizationSystem {
             },
             {
                 id: 'Untitled design (3).png',
-                name: 'Forest Phantom',
+                name: 'Blue Runner',
                 path: './assets/Untitled design (3).png',
                 category: 'free',
                 unlocked: true,
@@ -44,91 +44,59 @@ export class CharacterCustomizationSystem {
             },
             {
                 id: 'Untitled design (4).png',
-                name: 'Golden Racer',
+                name: 'Green Runner',
                 path: './assets/Untitled design (4).png',
                 category: 'free',
                 unlocked: true,
                 description: 'Gleaming golden speedster'
             },
             {
-                id: 'Untitled design (5).png',
-                name: 'Violet Shadow',
-                path: './assets/Untitled design (5).png',
-                category: 'free',
-                unlocked: true,
-                description: 'Mysterious purple runner'
-            },
-            {
-                id: 'Untitled design (6).png',
-                name: 'Neon Sprinter',
-                path: './assets/Untitled design (6).png',
-                category: 'free',
-                unlocked: true,
-                description: 'Electric neon athlete'
-            },
-            {
-                id: 'Untitled design (13).png',
-                name: 'Cyber Scout',
-                path: './assets/Main Sprite/Untitled design (13).png',
-                category: 'free',
-                unlocked: true,
-                description: 'Advanced cyber reconnaissance'
-            },
-            {
                 id: 'Untitled design (14).png',
-                name: 'Solar Voyager',
+                name: 'King Runner',
                 path: './assets/Main Sprite/Untitled design (14).png',
-                category: 'free',
-                unlocked: true,
-                description: 'Radiant solar explorer'
+                category: 'achievement',
+                unlocked: false,
+                description: 'Ultimate champion - unlocked by getting 100% achievements'
             },
             {
                 id: 'sprite_0.png',
-                name: 'Cosmic Explorer',
+                name: 'Bathtub Lover',
                 path: './assets/buyable cosmetics/sprite_0.png',
                 category: 'premium',
                 unlocked: false,
-                description: 'A futuristic space explorer'
-            },
-            {
-                id: 'sprite_1.png',
-                name: 'Neon Hacker',
-                path: './assets/buyable cosmetics/sprite_1.png',
-                category: 'premium',
-                unlocked: false,
-                description: 'Glowing cyberpunk warrior'
+                description: 'A futuristic space explorer with blue and white armor'
             },
             {
                 id: 'sprite_2.png',
-                name: 'Digital Phantom',
+                name: 'Rice Runner',
                 path: './assets/buyable cosmetics/sprite_2.png',
                 category: 'premium',
                 unlocked: false,
-                description: 'Mysterious digital entity'
+                description: 'Yellow and black stealth operative'
             },
             {
                 id: 'sprite_3.png',
-                name: 'Code Ninja',
+                name: 'Mexican Man',
                 path: './assets/buyable cosmetics/sprite_3.png',
                 category: 'premium',
                 unlocked: false,
-                description: 'Stealthy programming master'
+                description: 'Dark ninja with orange accents'
             },
             {
                 id: 'sprite_4.png',
-                name: 'Quantum Soldier',
+                name: 'Bomb Runner',
                 path: './assets/buyable cosmetics/sprite_4.png',
                 category: 'premium',
                 unlocked: false,
-                description: 'Elite quantum combatant'
+                description: 'Elite quantum combatant with advanced gear'
             },
             {
                 id: 'sprite_5.png',
-                name: 'Data Knight',
+                name: 'Robber',
                 path: './assets/buyable cosmetics/sprite_5.png',
                 category: 'premium',
                 unlocked: false,
-                description: 'Noble defender of the data realm'
+                description: 'Green and black data realm defender'
             }
         ];
         
@@ -179,7 +147,7 @@ export class CharacterCustomizationSystem {
             }
         }
         
-        // Load unlocked sprites from shop system
+        // Load unlocked sprites from shop system and achievements
         if (this.game.shopSystem) {
             const ownedUpgrades = this.game.shopSystem.getOwnedUpgrades();
             this.availableSprites.forEach(sprite => {
@@ -197,6 +165,15 @@ export class CharacterCustomizationSystem {
                     const upgradeId = spriteToUpgradeMap[sprite.id];
                     if (upgradeId) {
                         sprite.unlocked = ownedUpgrades.includes(upgradeId);
+                    }
+                } else if (sprite.category === 'achievement') {
+                    // Check if all achievements are unlocked for achievement-based sprites
+                    if (this.game.achievementSystem) {
+                        const totalAchievements = Object.keys(this.game.achievementSystem.achievements).length;
+                        const unlockedAchievements = this.game.achievementSystem.unlockedAchievements.size;
+                        sprite.unlocked = (unlockedAchievements >= totalAchievements);
+                        
+                        console.log(`🏆 King Runner unlock check: ${unlockedAchievements}/${totalAchievements} achievements`);
                     }
                 }
                 // Free and default sprites are always unlocked
@@ -515,6 +492,9 @@ export class CharacterCustomizationSystem {
                 } else if (sprite.category === 'premium') {
                     categoryColor = isUnlocked ? '#f59e0b' : '#d97706'; // Amber for premium
                     categoryText = '💎 PREMIUM';
+                } else if (sprite.category === 'achievement') {
+                    categoryColor = isUnlocked ? '#8b5cf6' : '#7c3aed'; // Purple for achievement
+                    categoryText = '🏆 ACHIEVEMENT';
                 }
                 
                 ctx.fillStyle = categoryColor;
@@ -896,9 +876,8 @@ export class CharacterCustomizationSystem {
             
             // Update profile manager if available
             if (typeof window !== 'undefined' && window.profileManager) {
-                // Set the selected sprite in profile data and save
-                window.profileManager.profileData.selectedSprite = selectedSprite.id;
-                window.profileManager.saveProfile();
+                // Use the new setSelectedSprite method which handles cloud saving
+                window.profileManager.setSelectedSprite(selectedSprite.id);
                 
                 // Refresh the sprite selector if available
                 if (typeof window.profileManager.refreshSpriteSelector === 'function') {
@@ -920,6 +899,30 @@ export class CharacterCustomizationSystem {
             if (this.game.player && this.game.player.loadSelectedSprite) {
                 this.game.player.loadSelectedSprite();
                 console.log('🎮 Player sprite updated immediately');
+            }
+            
+            // Also update any future game instances by forcing a global refresh
+            if (typeof window !== 'undefined' && window.game && window.game.player) {
+                console.log('🔄 Force updating current game player sprite');
+                window.game.player.loadSelectedSprite();
+            }
+            
+            // Force trigger a visual update by changing the sprite directly
+            if (this.game.player && this.game.player.changeSprite) {
+                // Handle different sprite paths based on the sprite name
+                let spritePath;
+                if (selectedSprite.id.startsWith('original-run-sprite') || 
+                    selectedSprite.id.startsWith('Untitled design (13)') || 
+                    selectedSprite.id.startsWith('Untitled design (14)')) {
+                    spritePath = `./assets/Main Sprite/${selectedSprite.id}`;
+                } else if (selectedSprite.id.startsWith('sprite_')) {
+                    spritePath = `./assets/buyable cosmetics/${selectedSprite.id}`;
+                } else {
+                    spritePath = `./assets/${selectedSprite.id}`;
+                }
+                
+                console.log(`🎭 Force changing sprite to: ${spritePath}`);
+                this.game.player.changeSprite(spritePath);
             }
             
             // Visual feedback
@@ -1052,5 +1055,41 @@ export class CharacterCustomizationSystem {
         const visibleAreaHeight = height - startY - 130;
         
         return Math.max(0, totalContentHeight - visibleAreaHeight);
+    }
+    
+    /**
+     * Debug function to check King Runner unlock status
+     */
+    debugKingRunnerStatus() {
+        if (!this.game.achievementSystem) {
+            console.log('❌ Achievement system not available');
+            return;
+        }
+        
+        const totalAchievements = Object.keys(this.game.achievementSystem.achievements).length;
+        const unlockedAchievements = this.game.achievementSystem.unlockedAchievements.size;
+        const percentage = Math.round((unlockedAchievements / totalAchievements) * 100);
+        
+        const kingRunner = this.availableSprites.find(sprite => sprite.id === 'Untitled design (14).png');
+        
+        console.log('👑 KING RUNNER STATUS:');
+        console.log(`🏆 Achievements: ${unlockedAchievements}/${totalAchievements} (${percentage}%)`);
+        console.log(`🔓 King Runner Unlocked: ${kingRunner ? kingRunner.unlocked : 'NOT FOUND'}`);
+        console.log(`📊 Required: 100% achievements (${totalAchievements}/${totalAchievements})`);
+        
+        if (unlockedAchievements >= totalAchievements) {
+            console.log('🎉 KING RUNNER SHOULD BE UNLOCKED!');
+        } else {
+            const remaining = totalAchievements - unlockedAchievements;
+            console.log(`⏳ Need ${remaining} more achievement${remaining !== 1 ? 's' : ''} to unlock King Runner`);
+        }
+        
+        return {
+            totalAchievements,
+            unlockedAchievements,
+            percentage,
+            kingRunnerUnlocked: kingRunner ? kingRunner.unlocked : false,
+            achievementsNeeded: Math.max(0, totalAchievements - unlockedAchievements)
+        };
     }
 }

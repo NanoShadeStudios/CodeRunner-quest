@@ -884,13 +884,19 @@ export class Player {
      */
     loadSelectedSprite() {
         let selectedSprite = 'player-sprite.png'; // Default sprite
-          // Try to get selected sprite from profile manager
+        
+        console.log('🎭 Loading selected sprite...');
+        console.log('🎭 ProfileManager available:', !!(typeof window !== 'undefined' && window.profileManager));
+        
+        // Try to get selected sprite from profile manager
         if (typeof window !== 'undefined' && window.profileManager) {
             selectedSprite = window.profileManager.getSelectedSprite();
+            console.log('🎭 Sprite from ProfileManager:', selectedSprite);
           
             // Ensure we're getting a valid sprite name
             if (!selectedSprite || typeof selectedSprite !== 'string') {
                 selectedSprite = 'player-sprite.png';
+                console.log('🎭 Invalid sprite from ProfileManager, using default');
             }
         } else {
             // Fallback: try to get from localStorage directly
@@ -898,6 +904,7 @@ export class Player {
                 const savedSprite = localStorage.getItem('coderunner_selected_sprite');
                 if (savedSprite && typeof savedSprite === 'string') {
                     selectedSprite = savedSprite;
+                    console.log('🎭 Sprite from localStorage:', selectedSprite);
                 }
             } catch (error) {
                 console.warn('⚠️ Failed to load sprite from localStorage:', error);
@@ -905,6 +912,7 @@ export class Player {
             
             // If profile manager isn't ready yet, retry after a short delay
             if (typeof window !== 'undefined' && !window.profileManager) {
+                console.log('🎭 ProfileManager not ready, retrying in 200ms...');
                 setTimeout(() => this.loadSelectedSprite(), 200);
                 return;
             }
@@ -924,6 +932,9 @@ export class Player {
         }
         
         console.log(`🎮 Loading sprite: ${selectedSprite} from ${spritePath}`);
+        console.log(`🎮 Current sprite src: ${this.sprite.src}`);
+        console.log(`🎮 Target sprite path: ${spritePath}`);
+        
         // Use changeSprite to properly handle sprite loading state
         this.changeSprite(spritePath);
     }/**
@@ -949,35 +960,39 @@ export class Player {
         const currentFilename = this.sprite.src ? this.sprite.src.split('/').pop() : '';
         const newFilename = spritePath ? spritePath.split('/').pop() : '';
         
-        
+        console.log(`🎮 changeSprite called with: ${spritePath}`);
+        console.log(`🎮 Current sprite file: ${currentFilename}`);
+        console.log(`🎮 New sprite file: ${newFilename}`);
+        console.log(`🎮 Sprite already loaded: ${this.spriteLoaded}`);
         
         // Don't reload if it's the same sprite file and it's already loaded
         if (currentFilename === newFilename && this.spriteLoaded) {
-            
+            console.log(`🎮 Same sprite already loaded, skipping: ${newFilename}`);
             return;
         }
         
         const previousSrc = this.sprite.src;
         this.spriteLoaded = false;
-       
+        
+        console.log(`🎮 Starting sprite load: ${spritePath}`);
           
         // Set up new load handlers
         this.sprite.onload = () => {
             this.spriteLoaded = true;
-           
+            console.log(`✅ Sprite loaded successfully: ${spritePath}`);
         };
           
         this.sprite.onerror = (error) => {
-           
+            console.error(`❌ Failed to load sprite: ${spritePath}`, error);
             this.spriteLoaded = false;
             // Try the default instead
             if (!previousSrc.endsWith('player-sprite.png')) {
-                
+                console.log(`🔄 Trying default sprite: ./assets/player-sprite.png`);
                 this.sprite.src = './assets/player-sprite.png';
             }
         };
         
-        
+        console.log(`🔄 Setting sprite.src to: ${spritePath}`);
         this.sprite.src = spritePath;
     }
 

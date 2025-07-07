@@ -78,45 +78,38 @@ export class ShopSystem {
 
             // Cosmetic Unlocks
             'sprite-cosmic': {
-                name: 'Cosmic Runner',
+                name: 'Bathtub Lover',
                 price: 50,
                 category: 'cosmetic',
-                description: 'A mystical character sprite with cosmic energy flowing through their form.',
+                description: 'A futuristic space explorer with blue and white armor.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_0.png' }
             },
-            'sprite-neon': {
-                name: 'Neon Guardian',
-                price: 75,
-                category: 'cosmetic',
-                description: 'A vibrant character glowing with bright neon energy trails.',
-                effect: { type: 'sprite', value: 'buyable cosmetics/sprite_1.png' }
-            },
             'sprite-shadow': {
-                name: 'Shadow Walker',
+                name: 'Rice Runner',
                 price: 100,
                 category: 'cosmetic',
-                description: 'A mysterious character that moves through shadows with stealth.',
+                description: 'Yellow and black stealth operative.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_2.png' }
             },
             'sprite-flame': {
-                name: 'Flame Sprinter',
+                name: 'Mexican Man',
                 price: 125,
                 category: 'cosmetic',
-                description: 'A fiery character leaving blazing trails with every step.',
+                description: 'Dark ninja with orange accents.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_3.png' }
             },
             'sprite-ice': {
-                name: 'Frost Runner',
+                name: 'Bomb Runner',
                 price: 150,
                 category: 'cosmetic',
-                description: 'A cool and collected character with crystalline ice effects.',
+                description: 'Elite quantum combatant with advanced gear.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_4.png' }
             },
             'sprite-electric': {
-                name: 'Electric Dash',
+                name: 'Robber',
                 price: 200,
                 category: 'cosmetic',
-                description: 'A high-energy character crackling with electrical power.',
+                description: 'Green and black data realm defender.',
                 effect: { type: 'sprite', value: 'buyable cosmetics/sprite_5.png' }            },
 
             // PowerUp Unlocks (Tier 1 - Basic)
@@ -221,22 +214,20 @@ export class ShopSystem {
         
         // Handle sprite cosmetics
         if (upgrade.effect && upgrade.effect.type === 'sprite') {
-            // Apply sprite cosmetic
-            if (window.profileManager) {
-                // Update the profile manager's selected sprite
-                window.profileManager.profileData.selectedSprite = upgrade.effect.value;
-                window.profileManager.saveProfile();
-                
-                // Update the player sprite if game instance exists
-                if (player) {
-                    player.changeSprite(`./assets/${upgrade.effect.value}`);
-                }
-                
-                // Refresh the sprite selector to show the newly unlocked cosmetic
-                window.profileManager.refreshSpriteSelector();
-                
-                console.log(`✨ Applied cosmetic sprite: ${upgrade.effect.value}`);
-            }
+            // For sprite cosmetics, just unlock them - don't automatically apply
+            // The user should choose which sprite to use via character customization
+            console.log(`🔓 Cosmetic sprite unlocked: ${upgrade.effect.value}`);
+            
+            // Don't change the selected sprite here - let the user choose via character customization
+            // if (window.profileManager) {
+            //     window.profileManager.profileData.selectedSprite = upgrade.effect.value;
+            //     window.profileManager.saveProfile();
+            //     if (player) {
+            //         player.changeSprite(`./assets/${upgrade.effect.value}`);
+            //     }
+            //     window.profileManager.refreshSpriteSelector();
+            //     console.log(`✨ Applied cosmetic sprite: ${upgrade.effect.value}`);
+            // }
             return;
         }
         

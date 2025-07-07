@@ -369,15 +369,43 @@ export class GameNavigation {
             this.game.player = new Player(0, 200, this.game); // Start at x=0 for 0 meters distance
             console.log('👤 Player created');
             
+            // Force load the selected sprite after player creation to ensure it's applied
+            if (this.game.player && this.game.player.loadSelectedSprite) {
+                // Small delay to ensure ProfileManager is fully ready
+                setTimeout(() => {
+                    this.game.player.loadSelectedSprite();
+                    console.log('🎭 Forced sprite reload after player creation');
+                }, 100);
+            }
+            
             // Reapply all owned shop upgrades to the new player instance
             if (this.game.shopSystem) {
                 const ownedUpgrades = this.game.shopSystem.getOwnedUpgrades();
+                
+                // Store the current selected sprite before applying upgrades
+                let selectedSprite = null;
+                if (typeof window !== 'undefined' && window.profileManager) {
+                    selectedSprite = window.profileManager.getSelectedSprite();
+                }
+                
                 for (const upgradeId of ownedUpgrades) {
                     const upgrade = this.game.shopSystem.upgradeData[upgradeId];
                     if (upgrade) {
                         this.game.shopSystem.applyUpgradeEffect(upgradeId, upgrade);
                     }
                 }
+                
+                // Restore the user's selected sprite after upgrades are applied
+                if (selectedSprite && typeof window !== 'undefined' && window.profileManager) {
+                    window.profileManager.profileData.selectedSprite = selectedSprite;
+                    window.profileManager.saveProfile();
+                    
+                    // Apply the selected sprite to the player
+                    if (this.game.player && this.game.player.loadSelectedSprite) {
+                        this.game.player.loadSelectedSprite();
+                    }
+                }
+                
                 console.log(`🔄 Reapplied ${ownedUpgrades.length} shop upgrades to new player`);
             }
             

@@ -416,6 +416,9 @@ export class GameEventHandlers {
                     this.game.navigateToState(GAME_STATES.CHARACTER_CUSTOMIZATION);
                 } else if (action === 'settings') {
                     this.game.navigateToState(GAME_STATES.SETTINGS);
+                } else if (action === 'feedback') {
+                    // Open feedback form in new tab
+                    window.open('https://forms.office.com/r/mr8ienGv77', '_blank');
                 } else if (action === 'back') {
                     this.game.navigateToState(GAME_STATES.HOME);
                 }

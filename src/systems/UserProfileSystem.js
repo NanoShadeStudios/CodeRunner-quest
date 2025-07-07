@@ -277,8 +277,18 @@ export class UserProfileSystem {
             if (profileDoc.exists) {
                 this.userProfile = profileDoc.data();
                 this.userStats = { ...this.userStats, ...this.userProfile.stats };
+                
+                // Load selected sprite from cloud profile if available
+                if (this.userProfile.selectedSprite && typeof window !== 'undefined' && window.profileManager) {
+                    window.profileManager.loadFromCloud(this.userProfile);
+                }
             } else {
-                // Create new profile
+                // Create new profile with default sprite from ProfileManager
+                let selectedSprite = 'player-sprite.png';
+                if (typeof window !== 'undefined' && window.profileManager) {
+                    selectedSprite = window.profileManager.getSelectedSprite();
+                }
+                
                 this.userProfile = {
                     uid: this.currentUser.uid,
                     email: this.currentUser.email,
@@ -286,6 +296,7 @@ export class UserProfileSystem {
                     photoURL: this.currentUser.photoURL || '',
                     provider: this.getAuthProvider(),
                     createdAt: new Date().toISOString(),
+                    selectedSprite: selectedSprite,
                     stats: this.userStats
                 };
                 
@@ -314,12 +325,22 @@ export class UserProfileSystem {
             this.userProfile.updatedAt = new Date().toISOString();
             this.userProfile.stats = this.userStats;
             
+            // Include selected sprite from ProfileManager if available
+            if (typeof window !== 'undefined' && window.profileManager) {
+                let selectedSprite = window.profileManager.getSelectedSprite();
+                // Ensure we store only the sprite ID/filename, not the full path
+                if (selectedSprite && selectedSprite.includes('/')) {
+                    selectedSprite = selectedSprite.split('/').pop();
+                }
+                this.userProfile.selectedSprite = selectedSprite;
+            }
+            
             await this.firestore
                 .collection('userProfiles')
                 .doc(this.currentUser.uid)
                 .set(this.userProfile, { merge: true });
             
-            console.log('👤 User profile saved successfully');
+            console.log('👤 User profile saved successfully with selected sprite:', this.userProfile.selectedSprite);
         } catch (error) {
             console.error('❌ Error saving user profile:', error);
             this.showError('Failed to save profile data');

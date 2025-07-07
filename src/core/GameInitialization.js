@@ -245,6 +245,11 @@ export class GameInitialization {
         // this.game.audioVideoPrompt = new AudioVideoPromptSystem(this.game); // Removed - going directly to login
         this.game.loginSystem = new LoginSystem(this.game);
         this.game.userProfileSystem = new UserProfileSystem(this.game); // User profile and authentication management
+        
+        // Make UserProfileSystem globally available for cross-system communication
+        if (typeof window !== 'undefined') {
+            window.userProfileSystem = this.game.userProfileSystem;
+        }
         this.game.openingAnimation = new OpeningAnimationSystem(this.game); // Create after loginSystem
         
         try {
@@ -529,6 +534,45 @@ export class GameInitialization {
             };
             console.log('🐛 Debug commands added to window.gameDebug');
         }
+        
+        // Debug helper methods for fixing character selection
+        window.debugCharacterSelection = {
+            getCurrentSprite: () => {
+                if (window.profileManager) {
+                    const current = window.profileManager.getSelectedSprite();
+                    console.log('Current sprite in ProfileManager:', current);
+                    return current;
+                }
+            },
+            setSprite: (spriteId) => {
+                if (window.profileManager) {
+                    console.log('Setting sprite to:', spriteId);
+                    window.profileManager.setSelectedSprite(spriteId);
+                    // Force update player sprite
+                    if (window.game && window.game.player) {
+                        window.game.player.loadSelectedSprite();
+                    }
+                }
+            },
+            forceSaveToCloud: () => {
+                if (window.profileManager) {
+                    window.profileManager.forceSaveToCloud();
+                }
+            },
+            getCurrentPlayerSprite: () => {
+                if (window.game && window.game.player && window.game.player.sprite) {
+                    console.log('Current player sprite src:', window.game.player.sprite.src);
+                    return window.game.player.sprite.src;
+                }
+            },
+            checkKingRunner: () => {
+                if (this.game.characterCustomizationSystem) {
+                    return this.game.characterCustomizationSystem.debugKingRunnerStatus();
+                } else {
+                    console.log('❌ Character customization system not available');
+                }
+            }
+        };
     }
 
     loadBestScores() {

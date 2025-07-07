@@ -89,37 +89,6 @@ export class AchievementSystem {
                 condition: () => this.stats.deathsUnder100m >= 1
             },
             
-            // 🎨 Customization Achievements
-            'style-exe': {
-                id: 'style-exe',
-                name: 'Style.exe',
-                description: 'Equip a cosmetic skin.',
-                icon: '👕',
-                category: 'customization',
-                unlocked: false,
-                condition: () => this.stats.customizationsUsed.size >= 1
-            },
-            
-            'pixel-you': {
-                id: 'pixel-you',
-                name: 'Pixel You',
-                description: 'Draw and save a custom profile picture.',
-                icon: '🎨',
-                category: 'customization',
-                unlocked: false,
-                condition: () => this.stats.customizationsUsed.has('custom-profile-picture')
-            },
-            
-            'title-hacker': {
-                id: 'title-hacker',
-                name: 'Title Hacker',
-                description: 'Set your display name from the profile screen.',
-                icon: '🏷️',
-                category: 'customization',
-                unlocked: false,
-                condition: () => this.stats.profileNameSet
-            },
-            
             // 🧠 Meta Achievements
             'collector-glitch': {
                 id: 'collector-glitch',
@@ -290,6 +259,19 @@ export class AchievementSystem {
         // Play achievement sound if available
         if (this.gameInstance && this.gameInstance.audioSystem) {
             this.gameInstance.audioSystem.onPowerup(); // Reuse powerup sound for achievements
+        }
+        
+        // Check if all achievements are now unlocked and notify character customization
+        const totalAchievements = Object.keys(this.achievements).length;
+        const unlockedCount = this.unlockedAchievements.size;
+        
+        if (this.gameInstance && this.gameInstance.characterCustomizationSystem) {
+            this.gameInstance.characterCustomizationSystem.updateUnlockStatus();
+            
+            // Special notification for 100% completion
+            if (unlockedCount >= totalAchievements) {
+                console.log('🎉 100% ACHIEVEMENTS UNLOCKED! King Runner is now available!');
+            }
         }
         
         return true;

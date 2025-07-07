@@ -67,6 +67,13 @@ export class OptionsSystem {
                 description: 'Audio, graphics, and controls'
             },
             { 
+                text: 'Feedback', 
+                action: 'feedback', 
+                icon: '📝', 
+                color: '#3b82f6',
+                description: 'Send feedback and suggestions'
+            },
+            { 
                 text: 'Back to Main Menu', 
                 action: 'back', 
                 icon: '🏠', 
@@ -236,8 +243,8 @@ export class OptionsSystem {
         
         ctx.save();
         
-        // Title position with slide animation
-        const titleY = 80 + (1 - slideProgress) * -50;
+        // Title position with slide animation - more compact
+        const titleY = 60 + (1 - slideProgress) * -50;
         
         ctx.globalAlpha = slideProgress;
         ctx.textAlign = 'center';
@@ -248,62 +255,75 @@ export class OptionsSystem {
         ctx.shadowBlur = 15 + Math.sin(time * 1.5) * 5;
         ctx.shadowOffsetY = 3;
         
-        // Main title
-        ctx.font = 'bold 48px "Segoe UI", Arial, sans-serif';
+        // Main title (slightly smaller)
+        ctx.font = 'bold 42px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.fillText('Options', width / 2, titleY);
         
-        // Subtitle
+        // Subtitle (slightly smaller)
         ctx.shadowColor = 'rgba(139, 92, 246, 0.4)';
         ctx.shadowBlur = 8;
-        ctx.font = '18px "Segoe UI", Arial, sans-serif';
+        ctx.font = '16px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillText('Configure your gaming experience', width / 2, titleY + 40);
+        ctx.fillText('Configure your gaming experience', width / 2, titleY + 35);
         
         ctx.restore();
     }
     
     /**
-     * Draw animated menu buttons
+     * Draw animated menu buttons with compact grid layout
      */
     drawMenuButtons(ctx, width, height) {
         const hitAreas = [];
-        const buttonSpacing = 80;
-        const startY = height / 2 - (this.menuOptions.length * buttonSpacing) / 2;
         const buttonsProgress = this.buttonsAnimationProgress;
         
-        this.menuOptions.forEach((option, index) => {
-            // Staggered animation for each button
-            const staggerDelay = index * 0.15;
+        // Separate buttons into main actions and utility actions
+        const mainButtons = this.menuOptions.slice(0, 6); // Tutorial, Achievements, Leaderboard, Shop, Character, Settings
+        const utilityButtons = this.menuOptions.slice(6); // Feedback, Back
+        
+        // Draw main buttons in a 2x3 grid - compact layout
+        const buttonWidth = 280;
+        const buttonHeight = 70;
+        const buttonSpacing = 20;
+        const cols = 2;
+        const rows = Math.ceil(mainButtons.length / cols);
+        
+        const gridWidth = cols * buttonWidth + (cols - 1) * buttonSpacing;
+        const gridHeight = rows * buttonHeight + (rows - 1) * buttonSpacing;
+        const startX = (width - gridWidth) / 2;
+        const startY = height / 2 - 120; // Move grid higher up
+        
+        // Draw main buttons in grid
+        mainButtons.forEach((option, index) => {
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            
+            const staggerDelay = index * 0.1;
             const buttonProgress = Math.max(0, Math.min(1, (buttonsProgress - staggerDelay) / (1 - staggerDelay)));
             
             if (buttonProgress <= 0) return;
             
-            const buttonY = startY + index * buttonSpacing;
-            const buttonWidth = 400;
-            const buttonHeight = 60;
-            const buttonX = width / 2 - buttonWidth / 2;
+            const buttonX = startX + col * (buttonWidth + buttonSpacing);
+            const buttonY = startY + row * (buttonHeight + buttonSpacing);
             
-            // Animation effects
-            const slideX = (1 - buttonProgress) * -200;
+            const slideX = (1 - buttonProgress) * -100;
             const finalX = buttonX + slideX;
             
             const isHovered = this.hoveredButton === index;
-            const hoverScale = isHovered ? 1.05 : 1;
-            const hoverGlow = isHovered ? 1 : 0;
+            const hoverScale = isHovered ? 1.03 : 1;
             
             ctx.save();
             ctx.globalAlpha = buttonProgress;
             
             // Transform for hover effect
-            ctx.translate(width / 2, buttonY + buttonHeight / 2);
+            ctx.translate(buttonX + buttonWidth / 2, buttonY + buttonHeight / 2);
             ctx.scale(hoverScale, hoverScale);
-            ctx.translate(-width / 2, -(buttonY + buttonHeight / 2));
+            ctx.translate(-(buttonX + buttonWidth / 2), -(buttonY + buttonHeight / 2));
             
             // Button glow effect
-            if (hoverGlow > 0) {
+            if (isHovered) {
                 ctx.shadowColor = option.color;
-                ctx.shadowBlur = 20;
+                ctx.shadowBlur = 15;
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = 0;
             }
@@ -314,28 +334,23 @@ export class OptionsSystem {
             gradient.addColorStop(1, isHovered ? 'rgba(51, 65, 85, 0.9)' : 'rgba(30, 41, 59, 0.8)');
             
             ctx.fillStyle = gradient;
-            this.drawRoundedRect(ctx, finalX, buttonY, buttonWidth, buttonHeight, 12);
+            this.drawRoundedRect(ctx, finalX, buttonY, buttonWidth, buttonHeight, 8);
             
             // Button border
             ctx.strokeStyle = isHovered ? option.color : 'rgba(100, 116, 139, 0.5)';
             ctx.lineWidth = isHovered ? 2 : 1;
-            this.strokeRoundedRect(ctx, finalX, buttonY, buttonWidth, buttonHeight, 12);
+            this.strokeRoundedRect(ctx, finalX, buttonY, buttonWidth, buttonHeight, 8);
             
-            // Icon
+            // Icon (medium size)
             ctx.font = '24px Arial';
             ctx.fillStyle = option.color;
             ctx.textAlign = 'left';
-            ctx.fillText(option.icon, finalX + 20, buttonY + 38);
+            ctx.fillText(option.icon, finalX + 18, buttonY + 45);
             
-            // Button text
-            ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
+            // Button text (medium size)
+            ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(option.text, finalX + 60, buttonY + 38);
-            
-            // Description
-            ctx.font = '14px "Segoe UI", Arial, sans-serif';
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-            ctx.fillText(option.description, finalX + 60, buttonY + 52);
+            ctx.fillText(option.text, finalX + 55, buttonY + 45);
             
             ctx.restore();
             
@@ -345,6 +360,79 @@ export class OptionsSystem {
                 y: buttonY,
                 width: buttonWidth,
                 height: buttonHeight,
+                action: option.action
+            });
+        });
+        
+        // Draw utility buttons at the bottom in a single row - compact size
+        const utilityButtonWidth = 240;
+        const utilityButtonHeight = 60;
+        const utilitySpacing = 40;
+        const utilityStartX = (width - (utilityButtons.length * utilityButtonWidth + (utilityButtons.length - 1) * utilitySpacing)) / 2;
+        const utilityY = startY + gridHeight + 40;
+        
+        utilityButtons.forEach((option, utilIndex) => {
+            const mainIndex = mainButtons.length + utilIndex;
+            const staggerDelay = mainIndex * 0.1;
+            const buttonProgress = Math.max(0, Math.min(1, (buttonsProgress - staggerDelay) / (1 - staggerDelay)));
+            
+            if (buttonProgress <= 0) return;
+            
+            const buttonX = utilityStartX + utilIndex * (utilityButtonWidth + utilitySpacing);
+            const slideX = (1 - buttonProgress) * -100;
+            const finalX = buttonX + slideX;
+            
+            const isHovered = this.hoveredButton === mainIndex;
+            const hoverScale = isHovered ? 1.03 : 1;
+            
+            ctx.save();
+            ctx.globalAlpha = buttonProgress;
+            
+            // Transform for hover effect
+            ctx.translate(buttonX + utilityButtonWidth / 2, utilityY + utilityButtonHeight / 2);
+            ctx.scale(hoverScale, hoverScale);
+            ctx.translate(-(buttonX + utilityButtonWidth / 2), -(utilityY + utilityButtonHeight / 2));
+            
+            // Button glow effect
+            if (isHovered) {
+                ctx.shadowColor = option.color;
+                ctx.shadowBlur = 12;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+            }
+            
+            // Button background
+            const gradient = ctx.createLinearGradient(finalX, utilityY, finalX, utilityY + utilityButtonHeight);
+            gradient.addColorStop(0, isHovered ? 'rgba(71, 85, 105, 0.9)' : 'rgba(51, 65, 85, 0.7)');
+            gradient.addColorStop(1, isHovered ? 'rgba(51, 65, 85, 0.9)' : 'rgba(30, 41, 59, 0.7)');
+            
+            ctx.fillStyle = gradient;
+            this.drawRoundedRect(ctx, finalX, utilityY, utilityButtonWidth, utilityButtonHeight, 8);
+            
+            // Button border
+            ctx.strokeStyle = isHovered ? option.color : 'rgba(100, 116, 139, 0.4)';
+            ctx.lineWidth = isHovered ? 2 : 1;
+            this.strokeRoundedRect(ctx, finalX, utilityY, utilityButtonWidth, utilityButtonHeight, 8);
+            
+            // Icon (proportional to button size)
+            ctx.font = '22px Arial';
+            ctx.fillStyle = option.color;
+            ctx.textAlign = 'left';
+            ctx.fillText(option.icon, finalX + 18, utilityY + 38);
+            
+            // Button text (proportional to button size)
+            ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(option.text, finalX + 50, utilityY + 38);
+            
+            ctx.restore();
+            
+            // Add hit area
+            hitAreas.push({
+                x: finalX,
+                y: utilityY,
+                width: utilityButtonWidth,
+                height: utilityButtonHeight,
                 action: option.action
             });
         });

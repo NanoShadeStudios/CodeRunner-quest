@@ -392,37 +392,48 @@ export class SettingsSystem {
      */
     async loadSettings() {
         try {
-            let settings = {};
+            let localSettings = {};
+            let cloudSettings = {};
             
             // Load from localStorage first
-            const localSettings = localStorage.getItem('coderunner_settings');
-            if (localSettings) {
-                settings = JSON.parse(localSettings);
+            const localData = localStorage.getItem('coderunner_settings');
+            if (localData) {
+                localSettings = JSON.parse(localData);
                 console.log('📱 Local settings loaded');
             }
             
-            // Try to load from cloud if enabled and available
-            if (this.gameInstance?.profileManager) {
+            // Try to load from cloud if logged in
+            if (this.gameInstance?.userProfileSystem?.isLoggedIn) {
                 try {
-                    const cloudSettings = await this.loadFromCloud();
+                    cloudSettings = await this.loadFromCloud();
                     if (cloudSettings && Object.keys(cloudSettings).length > 0) {
-                        // Merge cloud settings with local settings (cloud takes precedence)
-                        settings = { ...settings, ...cloudSettings };
-                        console.log('☁️ Cloud settings loaded and merged');
+                        console.log('☁️ Cloud settings loaded');
+                        
+                        // Check for discrepancies and log them
+                        this.checkSettingsDiscrepancies(localSettings, cloudSettings);
                     }
                 } catch (error) {
                     console.warn('☁️ Failed to load cloud settings:', error);
                 }
             }
             
-            // Apply loaded settings
+            // Merge settings with cloud taking precedence over local
+            const mergedSettings = { ...localSettings, ...cloudSettings };
+            
+            // Apply loaded settings to the settings structure
             this.settingsCategories.forEach(category => {
                 category.settings.forEach(setting => {
-                    if (settings.hasOwnProperty(setting.key)) {
-                        setting.value = settings[setting.key];
+                    if (mergedSettings.hasOwnProperty(setting.key)) {
+                        setting.value = mergedSettings[setting.key];
                     }
                 });
             });
+            
+            // If we loaded cloud settings, save them locally for offline access
+            if (Object.keys(cloudSettings).length > 0) {
+                localStorage.setItem('coderunner_settings', JSON.stringify(mergedSettings));
+                console.log('💾 Cloud settings saved to local storage for offline access');
+            }
             
             // Apply settings to game after loading
             setTimeout(() => this.applySettingsToGame(), 100);
@@ -437,16 +448,35 @@ export class SettingsSystem {
      */
     async loadFromCloud() {
         try {
-            if (this.gameInstance?.profileManager?.getProfile) {
-                const profile = await this.gameInstance.profileManager.getProfile();
-                if (profile && profile.settings) {
-                    return profile.settings;
+            if (this.gameInstance?.userProfileSystem?.isLoggedIn && this.gameInstance?.userProfileSystem?.currentUser) {
+                const userProfileSystem = this.gameInstance.userProfileSystem;
+                
+                // Get settings from user profile
+                if (userProfileSystem.userProfile && userProfileSystem.userProfile.settings) {
+                    console.log('☁️ Settings found in user profile');
+                    return userProfileSystem.userProfile.settings;
+                }
+                
+                // Fallback: Try to load directly from Firestore
+                if (userProfileSystem.firestore) {
+                    const profileDoc = await userProfileSystem.firestore
+                        .collection('userProfiles')
+                        .doc(userProfileSystem.currentUser.uid)
+                        .get();
+                    
+                    if (profileDoc.exists) {
+                        const data = profileDoc.data();
+                        if (data.settings) {
+                            console.log('☁️ Settings loaded directly from Firestore');
+                            return data.settings;
+                        }
+                    }
                 }
             }
         } catch (error) {
             console.warn('☁️ Failed to load from cloud:', error);
         }
-        return null;
+        return {};
     }
     
     /**
@@ -463,10 +493,13 @@ export class SettingsSystem {
             
             // Save to localStorage
             localStorage.setItem('coderunner_settings', JSON.stringify(settings));
+            console.log('💾 Settings saved to localStorage');
             
-            // Save to cloud storage if enabled
-            if (this.getSettingValue('cloudSave') && this.gameInstance?.profileManager) {
+            // Save to cloud storage if logged in
+            if (this.gameInstance?.userProfileSystem?.isLoggedIn) {
                 this.saveToCloud(settings);
+            } else {
+                console.log('📝 Not logged in - settings saved locally only');
             }
             
             // Create backup if enabled
@@ -487,12 +520,20 @@ export class SettingsSystem {
      */
     async saveToCloud(settings) {
         try {
-            if (this.gameInstance?.profileManager?.updateProfile) {
-                await this.gameInstance.profileManager.updateProfile({
-                    settings: settings,
-                    lastUpdated: new Date().toISOString()
-                });
-                console.log('☁️ Settings synced to cloud');
+            if (this.gameInstance?.userProfileSystem?.isLoggedIn && this.gameInstance?.userProfileSystem?.currentUser) {
+                const userProfileSystem = this.gameInstance.userProfileSystem;
+                
+                // Update the user profile with settings
+                if (userProfileSystem.userProfile) {
+                    userProfileSystem.userProfile.settings = settings;
+                    userProfileSystem.userProfile.settingsUpdatedAt = new Date().toISOString();
+                    
+                    // Save the profile
+                    await userProfileSystem.saveUserProfile();
+                    console.log('☁️ Settings synced to cloud');
+                } else {
+                    console.warn('☁️ User profile not available for settings sync');
+                }
             }
         } catch (error) {
             console.warn('☁️ Failed to sync settings to cloud:', error);
@@ -2539,7 +2580,9 @@ export class SettingsSystem {
         const arrowText = isExpanded ? '▲' : '▼';
         ctx.fillText(arrowText, x + width - 15, y + height / 2 + 4);
         
-        // Add hit area for main dropdown
+        ctx.restore();
+        
+        // Hit area
         hitAreas.push({
             x: x,
             y: y,
@@ -3309,5 +3352,45 @@ export class SettingsSystem {
                 this.dropdownPosition.width, 
                 hitAreas);
         }
+    }
+
+    /**
+     * Check for discrepancies between local and cloud settings
+     */
+    checkSettingsDiscrepancies(localSettings, cloudSettings) {
+        const discrepancies = [];
+        
+        // Check for settings that differ between local and cloud
+        Object.keys(localSettings).forEach(key => {
+            if (cloudSettings.hasOwnProperty(key) && localSettings[key] !== cloudSettings[key]) {
+                discrepancies.push({
+                    setting: key,
+                    local: localSettings[key],
+                    cloud: cloudSettings[key]
+                });
+            }
+        });
+        
+        // Check for settings that exist in cloud but not locally
+        Object.keys(cloudSettings).forEach(key => {
+            if (!localSettings.hasOwnProperty(key)) {
+                discrepancies.push({
+                    setting: key,
+                    local: 'not set',
+                    cloud: cloudSettings[key]
+                });
+            }
+        });
+        
+        if (discrepancies.length > 0) {
+            console.log('⚠️ Settings discrepancies detected (cloud will take precedence):');
+            discrepancies.forEach(disc => {
+                console.log(`  ${disc.setting}: local="${disc.local}" vs cloud="${disc.cloud}"`);
+            });
+        } else {
+            console.log('✅ Local and cloud settings are in sync');
+        }
+        
+        return discrepancies;
     }
 }

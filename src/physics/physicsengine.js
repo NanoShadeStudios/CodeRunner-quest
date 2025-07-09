@@ -476,10 +476,10 @@ export class PhysicsEngine {
                                 basePoints = 3;
                                 break;
                             case 'HARD':
-                                basePoints = 6;
+                                basePoints = 5;
                                 break;
                             case 'EXTREME':
-                                basePoints = 10;
+                                basePoints = 7;
                                 break;
                             default:
                                 basePoints = 1;

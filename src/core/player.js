@@ -78,7 +78,9 @@ export class Player {
             dashCooldown: 0,
             dashDuration: 0,
             dashDirection: 0,
-            dashSpeed: 0
+            dashSpeed: 0,
+            initialDashSpeed: 0,
+            dashDecelerationRate: 0.92 // How fast the dash decelerates (0.92 = 8% reduction per frame)
         };
 
         // Dash visual effects system
@@ -184,10 +186,12 @@ export class Player {
             }
         }
     }    updateMovement(deltaSeconds, inputKeys) {
-        // Disable movement during quantum dash
-        if (this.quantumDashActive) {
-            // Stop the player completely during quantum dash
-            this.vx = 0;
+        // Disable movement during quantum dash or regular dash
+        if (this.quantumDashActive || this.dashState.isDashing) {
+            // Stop the player completely during quantum dash, but allow dash movement during regular dash
+            if (this.quantumDashActive) {
+                this.vx = 0;
+            }
             return;
         }
         
@@ -1018,17 +1022,22 @@ export class Player {
         const level = this.shopUpgrades.dashModuleLevel;
         if (level === 0) return;
 
-        // Set dash properties based on level
-        const dashProperties = {
-            1: { speed: 400, duration: 200, cooldown: 1500 },  // Level 1
-            2: { speed: 500, duration: 250, cooldown: 1200 },  // Level 2  
-            3: { speed: 600, duration: 300, cooldown: 900 }    // Level 3
-        };        const props = dashProperties[level];
+        // Start smooth dash with initial speed
         this.dashState.isDashing = true;
-        this.dashState.dashDuration = props.duration;
+        this.dashState.dashDirection = 1; // Forward direction
+        this.dashState.initialDashSpeed = 800; // Initial dash speed (pixels per second)
+        this.dashState.dashSpeed = this.dashState.initialDashSpeed;
+        this.dashState.dashDuration = 600; // Dash lasts 600ms max
+
+        // Set dash cooldown based on level
+        const dashProperties = {
+            1: { cooldown: 7000 },  // Level 1 - 7 seconds
+            2: { cooldown: 7000 },  // Level 2 - 7 seconds
+            3: { cooldown: 7000 }   // Level 3 - 7 seconds
+        };
+
+        const props = dashProperties[level];
         this.dashState.dashCooldown = props.cooldown;
-        this.dashState.dashDirection = this.facingDirection;
-        this.dashState.dashSpeed = props.speed;
 
         // Create dash visual effects
         this.createDashParticles();
@@ -1037,27 +1046,55 @@ export class Player {
         if (this.game && this.game.audioSystem) {
             this.game.audioSystem.onJump(); // Reuse jump sound for now
         }
+
+        console.log(`🏃‍♂️ Started smooth dash (module level ${level})`);
     }    /**
      * Update dash state and apply dash movement
      */
     updateDash(deltaTime) {
-        // Update cooldown for both dash types
+        // Update cooldown for dash
         if (this.dashState.dashCooldown > 0) {
             this.dashState.dashCooldown -= deltaTime;
         }
         
-        if (!this.dashState.isDashing) return;
-
-        // Decrease dash duration
-        this.dashState.dashDuration -= deltaTime;
-
-        if (this.dashState.dashDuration <= 0) {
-            // End dash
-            this.dashState.isDashing = false;
-            this.dashState.dashSpeed = 0;
-        } else {
-            // Apply dash velocity
-            this.vx = this.dashState.dashDirection * this.dashState.dashSpeed;
+        // Handle active dash
+        if (this.dashState.isDashing) {
+            // Create continuous dash particles
+            this.createContinuousDashParticles();
+            
+            // Apply dash movement with collision checking
+            const dashMovement = this.dashState.dashSpeed * (deltaTime / 1000);
+            
+            // Check for collision before moving
+            if (this.game && this.game.physicsEngine) {
+                const newX = this.x + dashMovement;
+                const collision = this.game.physicsEngine.checkCollision(
+                    newX, this.y, this.width, this.height, 1, false
+                );
+                
+                if (!collision.collision) {
+                    this.x = newX;
+                } else {
+                    // Stop dash if we hit something
+                    this.dashState.isDashing = false;
+                    this.dashState.dashSpeed = 0;
+                }
+            } else {
+                // Fallback without collision checking
+                this.x += dashMovement;
+            }
+            
+            // Apply deceleration
+            this.dashState.dashSpeed *= this.dashState.dashDecelerationRate;
+            
+            // Reduce dash duration
+            this.dashState.dashDuration -= deltaTime;
+            
+            // End dash when speed is too low or duration expires
+            if (this.dashState.dashSpeed < 50 || this.dashState.dashDuration <= 0) {
+                this.dashState.isDashing = false;
+                this.dashState.dashSpeed = 0;
+            }
         }
     }
 
@@ -1065,13 +1102,17 @@ export class Player {
      * Perform simple dash (basic dash upgrade)
      */
     performSimpleDash() {
-        if (!this.shopUpgrades.dash || this.dashState.isDashing) return;
-          // Simple dash properties - shorter and weaker than dash modules
+        if (!this.shopUpgrades.dash || this.dashState.dashCooldown > 0) return;
+
+        // Start smooth dash with initial speed
         this.dashState.isDashing = true;
-        this.dashState.dashDuration = 150; // 150ms duration
-        this.dashState.dashCooldown = 2000; // 2 second cooldown
-        this.dashState.dashDirection = this.facingDirection;
-        this.dashState.dashSpeed = 300; // Moderate speed
+        this.dashState.dashDirection = 1; // Forward direction
+        this.dashState.initialDashSpeed = 600; // Slower initial speed for basic dash
+        this.dashState.dashSpeed = this.dashState.initialDashSpeed;
+        this.dashState.dashDuration = 500; // Shorter duration for basic dash
+
+        // Set cooldown for simple dash
+        this.dashState.dashCooldown = 7000; // 7 second cooldown
         
         // Create dash visual effects
         this.createDashParticles();
@@ -1080,6 +1121,8 @@ export class Player {
         if (this.game && this.game.audioSystem) {
             this.game.audioSystem.onJump(); // Reuse dash sound for now
         }
+
+        console.log(`🏃‍♂️ Started simple smooth dash`);
     }
 
     /**
@@ -1106,6 +1149,30 @@ export class Player {
         // Initialize trail positions
         this.dashEffects.trailPositions = [];
         this.dashEffects.glowIntensity = 1.0;
+    }
+    /**
+     * Create continuous dash particles during dash movement
+     */
+    createContinuousDashParticles() {
+        // Only create particles during active dash
+        if (!this.dashState.isDashing) return;
+        
+        // Create fewer particles continuously
+        const particleCount = 2 + (this.shopUpgrades.dashModuleLevel || 0);
+        
+        for (let i = 0; i < particleCount; i++) {
+            this.dashEffects.particles.push({
+                x: this.x + this.width / 2 + (Math.random() - 0.5) * this.width,
+                y: this.y + this.height / 2 + (Math.random() - 0.5) * this.height,
+                vx: (Math.random() - 0.5) * 150 - this.dashState.dashDirection * 80,
+                vy: (Math.random() - 0.5) * 100,
+                life: 1.0,
+                maxLife: 200 + Math.random() * 100, // Shorter lifetime for continuous particles
+                size: 1 + Math.random() * 2,
+                color: this.getDashParticleColor(),
+                type: 'trail'
+            });
+        }
     }
 
     /**

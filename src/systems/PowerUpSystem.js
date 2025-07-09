@@ -936,8 +936,8 @@ export class PowerUpSystem {
         switch (this.game.selectedDifficulty) {
             case 'EASY': return 1;
             case 'MEDIUM': return 3;
-            case 'HARD': return 6;
-            case 'EXTREME': return 10;
+            case 'HARD': return 5;
+            case 'EXTREME': return 7;
             default: return 1;
         }
     }

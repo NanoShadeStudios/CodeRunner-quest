@@ -20,13 +20,20 @@ export class PhysicsEngine {
      * Check collision for a rectangular area
      */
     checkCollision(x, y, width, height, direction = 0, playerDropping = false) {
-        // Validate inputs - prevent NaN from undefined dimensions
-        if (width === undefined || width === null || isNaN(width)) {
-            width = 28; // GAME_CONFIG.PLAYER_WIDTH fallback
-        }
-        if (height === undefined || height === null || isNaN(height)) {
-            height = 44; // GAME_CONFIG.PLAYER_HEIGHT fallback
-        }
+        try {
+            // Validate inputs - prevent NaN from undefined dimensions
+            if (width === undefined || width === null || isNaN(width)) {
+                console.warn('Invalid width in checkCollision:', width);
+                width = 28; // GAME_CONFIG.PLAYER_WIDTH fallback
+            }
+            if (height === undefined || height === null || isNaN(height)) {
+                console.warn('Invalid height in checkCollision:', height);
+                height = 44; // GAME_CONFIG.PLAYER_HEIGHT fallback
+            }
+            if (isNaN(x) || isNaN(y)) {
+                console.warn('Invalid position in checkCollision:', x, y);
+                return { collision: false };
+            }
         
         // Create cache key for collision check
         const cacheKey = `${Math.floor(x)}_${Math.floor(y)}_${width}_${height}_${direction}_${playerDropping}`;
@@ -78,6 +85,11 @@ export class PhysicsEngine {
         this.collisionCache.set(cacheKey, result);
         
         return result;
+        
+        } catch (error) {
+            console.error('Error in checkCollision:', error);
+            return { collision: false };
+        }
     }
     
     /**

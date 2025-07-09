@@ -78,6 +78,12 @@ export class LifeBoxSystem {
         const spawnX = this.game.player.x + 500; // Spawn ahead of player
         const spawnY = this.findGroundLevel(spawnX);
         
+        // Only spawn if we found a valid ground level
+        if (spawnY === this.game.canvas.height * 0.6) {
+            console.warn('❤️ Could not find valid ground level, skipping lifebox spawn');
+            return;
+        }
+        
         const lifeBox = {
             x: spawnX,
             y: spawnY - 35, // Spawn above the ground surface
@@ -88,7 +94,7 @@ export class LifeBoxSystem {
         };
         
         this.spawnedLifeBoxes.push(lifeBox);
-        console.log(`❤️ Spawned life box at position (${spawnX}, ${spawnY - 35})`);
+        console.log(`❤️ Spawned life box at position (${spawnX}, ${spawnY - 35}) on ground level ${spawnY}`);
     }
       /**
      * Find the ground level at a specific world X position
@@ -102,13 +108,33 @@ export class LifeBoxSystem {
         
         const tileX = Math.floor(worldX / GAME_CONFIG.TILE_SIZE);
         
-        // Search from bottom up to find the first solid tile
+        // Search from bottom up to find the first solid tile (floor or platform)
         for (let tileY = GAME_CONFIG.CHUNK_HEIGHT - 1; tileY >= 0; tileY--) {
             const tile = this.game.world.getTileAt(tileX, tileY);
             
             // Check if this is a solid tile (floor or platform)
             if (tile === TILE_TYPES.FLOOR || tile === TILE_TYPES.PLATFORM) {
                 return tileY * GAME_CONFIG.TILE_SIZE; // Convert tile coordinate to pixel coordinate
+            }
+        }
+        
+        // Try nearby tiles if current position has no ground
+        for (let offset = 1; offset <= 3; offset++) {
+            // Check tiles to the left and right
+            for (let direction of [-1, 1]) {
+                const checkX = tileX + (direction * offset);
+                if (checkX >= 0) {
+                    for (let tileY = GAME_CONFIG.CHUNK_HEIGHT - 1; tileY >= 0; tileY--) {
+                        const tile = this.game.world.getTileAt(checkX, tileY);
+                        
+                        // Check if this is a solid tile (floor or platform)
+                        if (tile === TILE_TYPES.FLOOR || tile === TILE_TYPES.PLATFORM) {
+                            const groundY = tileY * GAME_CONFIG.TILE_SIZE;
+                            console.log(`❤️ Found ground at nearby tile offset ${direction * offset}: groundY=${groundY}`);
+                            return groundY;
+                        }
+                    }
+                }
             }
         }
         

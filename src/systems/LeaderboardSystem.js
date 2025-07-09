@@ -20,6 +20,8 @@ export class LeaderboardSystem {
         this.selectedDifficulty = 'EASY';
         this.isUploading = false;
         this.uploadResult = null;
+        this.uploadResultTimestamp = 0; // Add timestamp for fade-out
+        this.uploadResultDisplayTime = 3000; // Show for 3 seconds
         this.showUploadPrompt = false;
         this.playerName = '';
         this.nameInputActive = false;
@@ -467,19 +469,19 @@ export class LeaderboardSystem {
             this.isUploading = true;
             const success = await this.submitScore(playerName, score, difficulty, survivalTime);
               if (success) {
-                this.uploadResult = {
+                this.setUploadResult({
                     success: true,
                     message: `Score ${score} automatically uploaded to ${DIFFICULTY_LEVELS[difficulty].name} leaderboard!`
-                };
+                });
                 console.log(`✅ Auto-submission successful: ${score} for ${playerName}`);
                 
                 // Automatically show leaderboard after successful high score submission
                 this.scheduleLeaderboardDisplay();
             } else {
-                this.uploadResult = {
+                this.setUploadResult({
                     success: false,
                     message: 'Auto-upload failed! Score not high enough or other error.'
-                };
+                });
                 console.log(`❌ Auto-submission failed for ${playerName}: ${score}`);
             }
             
@@ -487,10 +489,10 @@ export class LeaderboardSystem {
             
         } catch (error) {
             console.error('Error during auto-submission:', error);
-            this.uploadResult = {
+            this.setUploadResult({
                 success: false,
                 message: 'Auto-upload failed! Please try again later.'
-            };
+            });
             return false;
         } finally {
             this.isUploading = false;
@@ -1696,5 +1698,37 @@ export class LeaderboardSystem {
             width: inputBoxWidth,
             height: inputBoxHeight
         };
+    }
+    
+    /**
+     * Get the opacity of the upload result message (for fade-out effect)
+     */
+    getUploadResultOpacity() {
+        if (!this.uploadResult || !this.uploadResultTimestamp) {
+            return 0;
+        }
+        
+        const elapsed = Date.now() - this.uploadResultTimestamp;
+        const fadeStartTime = this.uploadResultDisplayTime - 1000; // Start fading 1 second before disappearing
+        
+        if (elapsed < fadeStartTime) {
+            return 1; // Full opacity for first 2 seconds
+        } else if (elapsed < this.uploadResultDisplayTime) {
+            // Fade out during the last 1 second
+            return 1 - (elapsed - fadeStartTime) / 1000;
+        } else {
+            // Clear the message after fade-out
+            this.uploadResult = null;
+            this.uploadResultTimestamp = 0;
+            return 0;
+        }
+    }
+    
+    /**
+     * Set upload result with timestamp for fade-out
+     */
+    setUploadResult(result) {
+        this.uploadResult = result;
+        this.uploadResultTimestamp = Date.now();
     }
 }

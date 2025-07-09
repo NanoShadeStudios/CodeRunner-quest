@@ -504,6 +504,35 @@ export class GameNavigation {
         } else {
             this.game.isNewHighScore = false;
         }
+        
+        // ALWAYS attempt to upload score to leaderboard when player dies, regardless of if it's a new high score
+        this.uploadScoreToLeaderboard(currentScore, difficulty);
+    }
+    
+    /**
+     * Upload score to leaderboard when player dies
+     * @param {number} score - The player's final score
+     * @param {string} difficulty - The difficulty level
+     */
+    uploadScoreToLeaderboard(score, difficulty) {
+        // Check if leaderboard system is available
+        if (!this.game.leaderboardSystem) {
+            console.warn('⚠️ Leaderboard system not available, skipping upload');
+            return;
+        }
+        
+        try {
+            // Prepare score upload - this will handle automatic submission or show name dialog
+            const uploadInitiated = this.game.leaderboardSystem.prepareScoreUpload(score, difficulty, this.game.startTime);
+            
+            if (uploadInitiated) {
+                console.log(`📊 Score upload initiated for ${difficulty}: ${score}`);
+            } else {
+                console.log(`📊 Score upload not initiated (score too low or other reason)`);
+            }
+        } catch (error) {
+            console.error('❌ Error uploading score to leaderboard:', error);
+        }
     }
 
     /**

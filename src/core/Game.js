@@ -281,12 +281,16 @@ export class Game {
      * Resize canvas to fill the window
      */
     resizeCanvas() {
-        const displayWidth = this.canvas.clientWidth;
-        const displayHeight = this.canvas.clientHeight;
-        
-        if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
-            this.canvas.width = displayWidth;
-            this.canvas.height = displayHeight;
+        try {
+            const displayWidth = this.canvas.clientWidth;
+            const displayHeight = this.canvas.clientHeight;
+            
+            if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+                this.canvas.width = displayWidth;
+                this.canvas.height = displayHeight;
+            }
+        } catch (error) {
+            console.error('Error resizing canvas:', error);
         }
     }
 
@@ -294,34 +298,40 @@ export class Game {
      * Start the game loop
      */
     start() {
-        console.log('🎮 Starting game loop...');
-        
-        // Check if loading screen should be shown and initialize accordingly
-        const shouldShowLoadingScreen = this.initialization.getShouldShowLoadingScreen();
-        
-        if (shouldShowLoadingScreen) {
-            // Initialize loading screen system immediately if needed
-            if (!this.loadingScreenSystem) {
-                this.loadingScreenSystem = this.initialization.createLoadingScreenSystem();
+        try {
+            console.log('🎮 Starting game loop...');
+            
+            // Check if loading screen should be shown and initialize accordingly
+            const shouldShowLoadingScreen = this.initialization.getShouldShowLoadingScreen();
+            
+            if (shouldShowLoadingScreen) {
+                // Initialize loading screen system immediately if needed
+                if (!this.loadingScreenSystem) {
+                    this.loadingScreenSystem = this.initialization.createLoadingScreenSystem();
+                }
+                
+                // Start the game loop immediately to show loading screen
+                requestAnimationFrame((ts) => this.gameLoop.gameLoop(ts));
+                
+                // Initialize the game asynchronously after a brief delay to show loading screen
+                setTimeout(() => this.initAsync(), 100);
+            } else {
+                // Skip loading screen and go directly to initialization
+                this.gameState = GAME_STATES.INITIALIZING;
+                
+                // Start game loop for normal game states
+                requestAnimationFrame((ts) => this.gameLoop.gameLoop(ts));
+                
+                // Start initialization immediately
+                this.initAsync();
             }
             
-            // Start the game loop immediately to show loading screen
-            requestAnimationFrame((ts) => this.gameLoop.gameLoop(ts));
-            
-            // Initialize the game asynchronously after a brief delay to show loading screen
-            setTimeout(() => this.initAsync(), 100);
-        } else {
-            // Skip loading screen and go directly to initialization
-            this.gameState = GAME_STATES.INITIALIZING;
-            
-            // Start game loop for normal game states
-            requestAnimationFrame((ts) => this.gameLoop.gameLoop(ts));
-            
-            // Start initialization immediately
-            this.initAsync();
+            console.log('✅ Game loop started successfully');
+        } catch (error) {
+            console.error('Failed to start game:', error);
+            // Show error state instead of crashing
+            this.gameState = GAME_STATES.HOME;
         }
-        
-        console.log('✅ Game loop started successfully');
     }
 
     /**

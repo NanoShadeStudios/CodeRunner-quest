@@ -419,158 +419,69 @@ export class GameDialogs {    constructor(game) {
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
         
-        // Multiple layers of animated background effects
+        // Simplified background effects for less clutter
         
-        // Layer 1: Floating orbs with trails
-        for (let i = 0; i < 15; i++) {
-            const orbitRadius = 80 + i * 20;
-            const angle = time * 0.2 + i * 0.8;
+        // Layer 1: Reduced floating orbs
+        for (let i = 0; i < 8; i++) {
+            const orbitRadius = 120 + i * 40;
+            const angle = time * 0.1 + i * 1.0;
             const x = width/2 + Math.cos(angle) * orbitRadius;
             const y = height/2 + Math.sin(angle) * orbitRadius * 0.6;
-            const alpha = 0.03 + Math.sin(time * 2 + i) * 0.02;
-            const size = 3 + Math.sin(time * 1.5 + i) * 2;
+            const alpha = 0.02 + Math.sin(time * 1.5 + i) * 0.01;
+            const size = 2 + Math.sin(time * 1.2 + i) * 1;
             
-            // Create glowing orb with gradient
-            const orbGradient = ctx.createRadialGradient(x, y, 0, x, y, size * 3);
-            const colors = ['#58a6ff', '#ffd700', '#40d158', '#f85149', '#a855f7'];
+            // Create subtle glowing orb
+            const orbGradient = ctx.createRadialGradient(x, y, 0, x, y, size * 2);
+            const colors = ['#58a6ff', '#40d158', '#ffd700'];
             const color = colors[i % colors.length];
             orbGradient.addColorStop(0, color + Math.floor(alpha * 255).toString(16).padStart(2, '0'));
-            orbGradient.addColorStop(0.7, color + '20');
+            orbGradient.addColorStop(0.7, color + '10');
             orbGradient.addColorStop(1, color + '00');
             
             ctx.fillStyle = orbGradient;
             ctx.beginPath();
-            ctx.arc(x, y, size * 3, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Core orb
-            ctx.fillStyle = color + Math.floor(alpha * 180).toString(16).padStart(2, '0');
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.arc(x, y, size * 2, 0, Math.PI * 2);
             ctx.fill();
         }
         
-        // Layer 2: Moving energy lines
-        for (let i = 0; i < 8; i++) {
-            const lineTime = time * 0.5 + i * 0.5;
-            const x1 = (Math.sin(lineTime) * 0.5 + 0.5) * width;
-            const y1 = (Math.cos(lineTime * 0.7) * 0.5 + 0.5) * height;
-            const x2 = (Math.sin(lineTime + 1) * 0.5 + 0.5) * width;
-            const y2 = (Math.cos(lineTime * 0.7 + 1) * 0.5 + 0.5) * height;
-            
-            const lineGradient = ctx.createLinearGradient(x1, y1, x2, y2);
-            lineGradient.addColorStop(0, 'rgba(88, 166, 255, 0)');
-            lineGradient.addColorStop(0.5, 'rgba(88, 166, 255, 0.1)');
-            lineGradient.addColorStop(1, 'rgba(88, 166, 255, 0)');
-            
-            ctx.strokeStyle = lineGradient;
-            ctx.lineWidth = 1;
+        // Layer 2: Subtle grid pattern (no animation)
+        const gridSize = 60;
+        ctx.strokeStyle = 'rgba(48, 54, 61, 0.08)';
+        ctx.lineWidth = 0.5;
+        
+        for (let x = 0; x < width; x += gridSize) {
             ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
             ctx.stroke();
         }
         
-        // Layer 3: Hexagonal grid pattern with animation
-        const hexSize = 40;
-        const hexOffsetX = (time * 10) % (hexSize * 1.5);
-        const hexOffsetY = (time * 15) % (hexSize * Math.sqrt(3));
-        
-        ctx.strokeStyle = 'rgba(48, 54, 61, 0.15)';
-        ctx.lineWidth = 0.5;
-        
-        for (let row = -2; row < height / (hexSize * Math.sqrt(3)) + 2; row++) {
-            for (let col = -2; col < width / (hexSize * 1.5) + 2; col++) {
-                const x = col * hexSize * 1.5 - hexOffsetX;
-                const y = row * hexSize * Math.sqrt(3) + (col % 2) * hexSize * Math.sqrt(3) / 2 - hexOffsetY;
-                
-                if (x > -hexSize && x < width + hexSize && y > -hexSize && y < height + hexSize) {
-                    this.drawHexagon(ctx, x, y, hexSize * 0.8);
-                }
-            }
-        }
-        
-        // Layer 4: Corner accent lights
-        const cornerGlow = Math.sin(time * 2) * 0.5 + 0.5;
-        const cornerPositions = [
-            { x: 50, y: 50 },
-            { x: width - 50, y: 50 },
-            { x: 50, y: height - 50 },
-            { x: width - 50, y: height - 50 }
-        ];
-        
-        cornerPositions.forEach((pos, i) => {
-            const cornerGradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 80);
-            const colors = ['#58a6ff', '#ffd700', '#40d158', '#a855f7'];
-            const alpha = (cornerGlow * 0.1 + 0.05) * (1 - i * 0.1);
-            cornerGradient.addColorStop(0, colors[i] + Math.floor(alpha * 255).toString(16).padStart(2, '0'));
-            cornerGradient.addColorStop(1, colors[i] + '00');
-            
-            ctx.fillStyle = cornerGradient;
+        for (let y = 0; y < height; y += gridSize) {
             ctx.beginPath();
-            ctx.arc(pos.x, pos.y, 80, 0, Math.PI * 2);
-            ctx.fill();
-        });        // Enhanced title with advanced effects
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }        // Clean, simplified title
         const titleY = 60;
         const titleText = '🏆 LEADERBOARD';
         
-        // Title background glow
-        const titleGradient = ctx.createRadialGradient(width/2, titleY, 0, width/2, titleY, 200);
-        titleGradient.addColorStop(0, 'rgba(88, 166, 255, 0.15)');
-        titleGradient.addColorStop(0.5, 'rgba(88, 166, 255, 0.05)');
-        titleGradient.addColorStop(1, 'rgba(88, 166, 255, 0)');
-        ctx.fillStyle = titleGradient;
-        this.drawRoundedRect(ctx, width/2 - 200, titleY - 30, 400, 60, 15);
-        ctx.fill();
-        
-        // Main title with multiple glow layers
+        // Simple title with subtle glow
         ctx.textAlign = 'center';
         ctx.font = 'bold 32px Courier New';
         
-        // Outer glow (largest)
+        // Single subtle glow
         ctx.shadowColor = '#58a6ff';
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 8;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
-        ctx.fillStyle = 'rgba(88, 166, 255, 0.3)';
-        ctx.fillText(titleText, width / 2, titleY);
-        
-        // Middle glow
-        ctx.shadowBlur = 12;
-        ctx.fillStyle = 'rgba(88, 166, 255, 0.6)';
-        ctx.fillText(titleText, width / 2, titleY);
-        
-        // Inner glow
-        ctx.shadowBlur = 6;
-        ctx.fillStyle = 'rgba(88, 166, 255, 0.9)';
-        ctx.fillText(titleText, width / 2, titleY);
-        
-        // Core text
-        ctx.shadowBlur = 0;
         ctx.fillStyle = '#ffffff';
         ctx.fillText(titleText, width / 2, titleY);
         
-        // Animated subtitle with typewriter effect
+        // Simple subtitle without animations
         ctx.font = '16px Courier New';
-        const subtitleFullText = 'Challenge the best players worldwide';
-        const subtitleProgress = (time * 2) % (subtitleFullText.length + 20);
-        const subtitleText = subtitleFullText.substring(0, Math.floor(subtitleProgress));
-        const subtitleAlpha = 0.7 + Math.sin(time * 3) * 0.2;
-        
-        // Subtitle glow
-        ctx.shadowColor = '#a855f7';
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = `rgba(168, 85, 247, ${subtitleAlpha})`;
-        ctx.fillText(subtitleText, width / 2, titleY + 30);
-        
-        // Blinking cursor for typewriter effect
-        if (Math.floor(subtitleProgress) < subtitleFullText.length && Math.sin(time * 8) > 0) {
-            const cursorX = width/2 + ctx.measureText(subtitleText).width/2 + 3;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(cursorX, titleY + 18, 2, 18);
-        }
-        
-        ctx.shadowBlur = 0;        // Draw difficulty tabs with enhanced styling
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#a5b3c1';
+        ctx.fillText('Challenge the best players worldwide', width / 2, titleY + 30);        // Draw difficulty tabs with enhanced styling
         if (!tabHitAreas) {
             tabHitAreas = [];
         }
@@ -1011,41 +922,43 @@ export class GameDialogs {    constructor(game) {
             this.drawUploadPrompt();
         }
         
-        // Enhanced upload result message display
+        // Enhanced upload result message display with fade-out
         const result = this.game.leaderboardSystem.uploadResult;
-        if (result && !this.game.leaderboardSystem.showUploadPrompt) {
+        const resultOpacity = this.game.leaderboardSystem.getUploadResultOpacity();
+        
+        if (result && !this.game.leaderboardSystem.showUploadPrompt && resultOpacity > 0) {
             const messageColor = result.success ? '#40d158' : '#f85149';
             const messageBgColor = result.success ? 'rgba(64, 209, 88, 0.15)' : 'rgba(248, 81, 73, 0.15)';
             const messageY = entries.length > 0 ? tableY + 30 : 380;
             
-            // Message background with gradient
+            // Message background with gradient and fade-out
             const messageWidth = 400;
             const messageHeight = 45;
             const messageX = (width - messageWidth) / 2;
             
             const msgGradient = ctx.createLinearGradient(messageX, messageY - 22, messageX, messageY + 23);
-            msgGradient.addColorStop(0, messageBgColor);
-            msgGradient.addColorStop(0.5, 'rgba(33, 38, 45, 0.8)');
-            msgGradient.addColorStop(1, messageBgColor);
+            msgGradient.addColorStop(0, messageBgColor.replace(/[\d\.]+\)$/g, `${0.15 * resultOpacity})`));
+            msgGradient.addColorStop(0.5, `rgba(33, 38, 45, ${0.8 * resultOpacity})`);
+            msgGradient.addColorStop(1, messageBgColor.replace(/[\d\.]+\)$/g, `${0.15 * resultOpacity})`));
             ctx.fillStyle = msgGradient;
             this.drawRoundedRect(ctx, messageX, messageY - 22, messageWidth, messageHeight, 10);
             ctx.fill();
             
-            // Message border with glow
-            ctx.strokeStyle = messageColor;
+            // Message border with glow and fade-out
+            ctx.strokeStyle = messageColor + Math.floor(resultOpacity * 255).toString(16).padStart(2, '0');
             ctx.lineWidth = 2;
             ctx.shadowColor = messageColor;
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 8 * resultOpacity;
             ctx.strokeRect(messageX, messageY - 22, messageWidth, messageHeight);
             ctx.shadowBlur = 0;
             
-            // Message text with animation
-            const messageAlpha = 0.9 + Math.sin(time * 3) * 0.1;
+            // Message text with animation and fade-out
+            const messageAlpha = (0.9 + Math.sin(time * 3) * 0.1) * resultOpacity;
             ctx.fillStyle = messageColor + Math.floor(messageAlpha * 255).toString(16).padStart(2, '0');
             ctx.textAlign = 'center';
             ctx.font = 'bold 18px Courier New';
             ctx.shadowColor = messageColor;
-            ctx.shadowBlur = 4;
+            ctx.shadowBlur = 4 * resultOpacity;
             ctx.fillText(result.message, width/2, messageY);
             ctx.shadowBlur = 0;
         }

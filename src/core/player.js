@@ -29,9 +29,22 @@ const DEATH_MESSAGES = [
 
 export class Player {
     constructor(x, y, game = null, upgrades = null) {
-        if (isNaN(x) || isNaN(y)) {
-            x = isNaN(x) ? 0 : x;  // Fallback to safe x
-            y = isNaN(y) ? 256 : y;  // Fallback to safe y
+        // Validate and sanitize input parameters
+        if (isNaN(x) || x === null || x === undefined) {
+            console.warn('Invalid x position provided to Player constructor:', x);
+            x = 0;
+        }
+        if (isNaN(y) || y === null || y === undefined) {
+            console.warn('Invalid y position provided to Player constructor:', y);
+            y = 256;
+        }
+        if (game && typeof game !== 'object') {
+            console.warn('Invalid game object provided to Player constructor:', game);
+            game = null;
+        }
+        if (upgrades && typeof upgrades !== 'object') {
+            console.warn('Invalid upgrades object provided to Player constructor:', upgrades);
+            upgrades = null;
         }
         
         this.x = x;
@@ -104,10 +117,14 @@ export class Player {
             airTime: 0,              // Time spent in air (for coyote time)
             lastJumpTime: 0,         // Last time jump was performed
             inputBuffer: 0           // Input buffer for responsive controls
-        };this.health = GAME_CONFIG.PLAYER_HEALTH + this.shopUpgrades.extraHealth;
+        };
+        
+        this.health = GAME_CONFIG.PLAYER_HEALTH + this.shopUpgrades.extraHealth;
         this.maxHealth = this.health;
         this.isInvulnerable = true; // Start invulnerable to prevent spawn deaths
-        this.invulnerabilityTime = 2000; // 2 second spawn protection        this.lastHitTime = 0;
+        this.invulnerabilityTime = 2000; // 2 second spawn protection
+        
+        this.lastHitTime = 0;
         this.spawnProtectionFrames = 60; // Additional frame-based protection (1 second at 60fps)
         
         this.facingDirection = 1; // 1 = right, -1 = left
@@ -125,14 +142,29 @@ export class Player {
         
         // Load a single running sprite instead of animations
         this.loadSingleSprite();
-    }    /**
+    }
+    
+    /**
      * Load a single running sprite for the main character
      */
     loadSingleSprite() {
         // Load the selected sprite from profile manager (if available) or use default
         this.loadSelectedSprite();
-    }update(deltaTime, inputKeys, world, physicsEngine) {
-        const deltaSeconds = deltaTime / 1000;
+    }
+    
+    update(deltaTime, inputKeys, world, physicsEngine) {
+        try {
+            // Validate input parameters
+            if (!deltaTime || isNaN(deltaTime) || deltaTime <= 0) {
+                console.warn('Invalid deltaTime provided to Player.update:', deltaTime);
+                deltaTime = 16.67; // Default to 60fps frame time
+            }
+            if (!inputKeys || typeof inputKeys !== 'object') {
+                console.warn('Invalid inputKeys provided to Player.update:', inputKeys);
+                inputKeys = {}; // Default to empty object
+            }
+            
+            const deltaSeconds = deltaTime / 1000;
         
         this.updateHealthSystem(deltaTime);
         this.updateDamageTexts(deltaTime);
@@ -185,7 +217,18 @@ export class Player {
                 }
             }
         }
-    }    updateMovement(deltaSeconds, inputKeys) {
+        
+        } catch (error) {
+            console.error('Error in Player.update:', error);
+            // Reset player to safe state if update fails
+            this.x = Math.max(0, this.x || 64);
+            this.y = Math.max(0, this.y || 276);
+            this.vx = 0;
+            this.vy = 0;
+        }
+    }
+    
+    updateMovement(deltaSeconds, inputKeys) {
         // Disable movement during quantum dash or regular dash
         if (this.quantumDashActive || this.dashState.isDashing) {
             // Stop the player completely during quantum dash, but allow dash movement during regular dash
@@ -230,7 +273,9 @@ export class Player {
         
         // Ensure velocity doesn't exceed maximum
         this.vx = Math.max(-maxSpeed, Math.min(maxSpeed, this.vx));
-    }    updateJumping(inputKeys, deltaTime) {
+    }
+    
+    updateJumping(inputKeys, deltaTime) {
         // Disable jumping and dash during quantum dash
         if (this.quantumDashActive) {
             return;
@@ -296,16 +341,23 @@ export class Player {
     
     /**
      * Perform regular jump with consistent mechanics
-     */    performJump() {
+     */
+    performJump() {
         // Play jump sound
         if (this.game && this.game.audioSystem) {
             this.game.audioSystem.onJump();
         }
-          this.vy = this.jumpPower;
-        this.onGround = false;        this.isJumping = true;
+        
+        this.vy = this.jumpPower;
+        this.onGround = false;
+        this.isJumping = true;
         this.jumpState.airTime = 0;
         
-        return true;}    updatePhysics(deltaSeconds, physicsEngine) {        if (!this.onGround) {
+        return true;
+    }
+    
+    updatePhysics(deltaSeconds, physicsEngine) {
+        if (!this.onGround) {
             // Normal gravity
             this.vy += GAME_CONFIG.GRAVITY * deltaSeconds;
             
@@ -316,7 +368,10 @@ export class Player {
         
         if (physicsEngine) {
             physicsEngine.handleHorizontalMovement(this, deltaSeconds);
-            physicsEngine.handleVerticalMovement(this, deltaSeconds);        }        // Check for NaN values and reset if detected
+            physicsEngine.handleVerticalMovement(this, deltaSeconds);
+        }
+        
+        // Check for NaN values and reset if detected
         if (isNaN(this.x) || isNaN(this.y) || isNaN(this.vx) || isNaN(this.vy)) {
             // Reset position to proper spawn position (not hardcoded 300)
             this.x = isNaN(this.x) ? 64 : this.x; // Safe spawn x
@@ -366,7 +421,10 @@ export class Player {
             case 'outOfBounds':
                 this.takeDamage(this.health, "lost in the data stream");
                 break;
-        }    }    takeDamage(amount, source) {
+        }
+    }
+    
+    takeDamage(amount, source) {
         console.log(`💥 takeDamage called: amount=${amount}, source=${source}`);
         console.log(`🔍 Current health: ${this.health}`);
         console.log(`🔍 Invulnerability time: ${this.invulnerabilityTime}`);
@@ -453,9 +511,11 @@ export class Player {
             color: 'heal'
         });
     }
-      /**
+    
+    /**
      * Handle collected items (data packets, etc.)
-     */    handleCollectibles(collected) {
+     */
+    handleCollectibles(collected) {
         for (const item of collected) {
             if (item.type === 'dataPacket') {
                 // Play collection sound
@@ -524,7 +584,9 @@ export class Player {
             maxLifetime: 1500,
             size: 14
         });
-    }    draw(ctx, camera) {
+    }
+    
+    draw(ctx, camera) {
         const screenX = this.x - camera.x;
         const screenY = this.y - camera.y;
         
@@ -547,7 +609,9 @@ export class Player {
         
         // Draw damage text
         this.drawDamageTexts(ctx, camera);
-    }    drawPlayerBody(ctx, screenX, screenY, graphicsQuality = 'medium') {
+    }
+    
+    drawPlayerBody(ctx, screenX, screenY, graphicsQuality = 'medium') {
         // Check if player is invulnerable and should flash
         const isFlashing = this.invulnerabilityTime > 0 && Math.floor(Date.now() / 100) % 2 === 0;
         
@@ -861,7 +925,9 @@ export class Player {
         } else if (this.shopUpgrades.airBoostLevel === 2) {
             // Level 2: 25% stronger double jump
             doubleJumpPower = this.jumpPower * 1.1;
-        }        this.vy = doubleJumpPower;
+        }
+
+        this.vy = doubleJumpPower;
           // Mark double jump as used for this air session
         this.jumpState.doubleJumpAvailable = false;
         
@@ -1357,4 +1423,4 @@ export class Player {
             `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` :
             '255, 255, 255';
     }
-  }
+}

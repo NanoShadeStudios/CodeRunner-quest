@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>    <meta charset="UTF-8">
+<head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CodeRunner - Digital Explorer</title>
     <!-- Prevent favicon 404 error -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🏃</text></svg>">    <style>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🏃</text></svg>">
+    <style>
         * {
             box-sizing: border-box;
         }
-          body {
+        body {
             margin: 0;
             padding: 0;
             background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
@@ -18,7 +20,9 @@
             overflow: hidden;
             width: 100vw;
             height: 100vh;
-        }        .game-container {
+        }
+        
+        .game-container {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -34,7 +38,8 @@
         .game-header {
             display: none;
         }
-          .game-header h1 {
+        
+        .game-header h1 {
             margin: 0;
             font-size: 2rem;
             background: linear-gradient(45deg, #58a6ff, #79c0ff, #a5f3fc);
@@ -48,7 +53,9 @@
             margin: 5px 0 0 0;
             font-size: 0.8rem;
             color: #7d8590;
-        }        .main-content {
+        }
+        
+        .main-content {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -58,7 +65,9 @@
             max-width: 100vw;
             margin: 0;
             padding: 0;
-        }        .canvas-container {
+        }
+        
+        .canvas-container {
             position: relative;
             border: none;
             border-radius: 0;
@@ -69,7 +78,9 @@
             height: 100vh;
             margin: 0;
             padding: 0;
-        }/* Fullscreen canvas container styles */
+        }
+        
+        /* Fullscreen canvas container styles */
         .canvas-container:fullscreen {
             position: fixed !important;
             top: 0 !important;
@@ -101,7 +112,7 @@
             overflow: hidden !important;
             z-index: 9999 !important;
         }
-
+        
         .canvas-container:-moz-full-screen {
             position: fixed !important;
             top: 0 !important;

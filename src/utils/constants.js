@@ -39,7 +39,50 @@ export const GAME_CONFIG = {
     // Game over
     GAME_OVER_FADE_DURATION: 1500,
     
-      // Generation probabilities
+      // Performance constants
+    FPS_COUNTER_UPDATE_INTERVAL: 1000,
+    DEFAULT_FRAME_TIME: 16.67,
+    CACHE_CLEANUP_INTERVAL: 5000,
+    
+    // UI constants
+    TOAST_DURATION: 3000,
+    INVULNERABILITY_FLASH_INTERVAL: 100,
+    DAMAGE_TEXT_LIFETIME: 1500,
+    HEAL_TEXT_LIFETIME: 1500,
+    COLLECTION_EFFECT_LIFETIME: 800,
+    
+    // Audio constants
+    SOUND_EFFECT_VOLUME: 0.7,
+    BACKGROUND_MUSIC_VOLUME: 0.5,
+    
+    // Animation constants
+    DASH_INITIAL_SPEED: 800,
+    DASH_DURATION: 600,
+    DASH_COOLDOWN: 7000,
+    DASH_DECELERATION_RATE: 0.92,
+    
+    // Background particle constants
+    BACKGROUND_PARTICLE_COUNT: 30,
+    BACKGROUND_PARTICLE_SPEED: 20,
+    BACKGROUND_PARTICLE_LIFETIME: 5000,
+    
+    // Spawn protection
+    SPAWN_PROTECTION_TIME: 2000,
+    SPAWN_PROTECTION_FRAMES: 60,
+    
+    // Shop upgrade constants
+    SPEED_BOOST_MULTIPLIER: 1.3,
+    DATAPACK_MULTIPLIER: 2.0,
+    SCORE_MULTIPLIER: 1.25,
+    COMBO_BONUS_INCREMENT: 0.5,
+    
+    // Shop upgrade constants
+    SPEED_BOOST_MULTIPLIER: 1.3,
+    DATAPACK_MULTIPLIER: 2.0,
+    SCORE_MULTIPLIER: 1.25,
+    COMBO_BONUS_INCREMENT: 0.5,
+    
+    // Generation probabilities
     FLOOR_BASE_CHANCE: 70,    GAP_CHANCE: 25,
     SPIKE_CHANCE: 8, // Reduced from 15 to 8 to make room for saws
     GLITCH_CHANCE: 8,

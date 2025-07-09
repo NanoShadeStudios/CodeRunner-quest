@@ -43,8 +43,53 @@ export class WorldGenerator {
         this.lastChunkCleanup = 0; // Track when we last cleaned up chunks
 
         // Force generation of spawn chunk immediately
+        this.initialize();
+    }
+
+    /**
+     * Perform periodic cleanup to prevent memory issues
+     */
+    performPeriodicCleanup(camera) {
+        try {
+            // Clear old cache entries
+            if (this.chunkRenderCache.size > this.maxChunkCacheSize) {
+                const cacheKeys = Array.from(this.chunkRenderCache.keys());
+                const keysToRemove = cacheKeys.slice(0, cacheKeys.length - this.maxChunkCacheSize);
+                keysToRemove.forEach(key => this.chunkRenderCache.delete(key));
+            }
+            
+            // Clear old obstacle positions
+            if (this.obstaclePositions.length > 1000) {
+                this.obstaclePositions = this.obstaclePositions.slice(-500);
+            }
+            
+            // Clear old saw positions
+            if (this.sawPositions.length > 500) {
+                this.sawPositions = this.sawPositions.slice(-250);
+            }
+            
+            // Return pooled chunks to pool
+            if (this.chunkPooling.size > this.maxPoolSize) {
+                const poolKeys = Array.from(this.chunkPooling.keys());
+                const keysToRemove = poolKeys.slice(0, poolKeys.length - this.maxPoolSize);
+                keysToRemove.forEach(key => this.chunkPooling.delete(key));
+            }
+            
+            console.log('🧹 WorldGenerator cleanup completed');
+        } catch (error) {
+            console.error('Error during WorldGenerator cleanup:', error);
+        }
+    }
+    
+    /**
+     * Initialize the world generator
+     */
+    initialize() {
+        // Force generation of spawn chunk immediately
         this.generateChunk(0);
-    }    update(deltaTime, camera) {
+    }
+    
+    update(deltaTime, camera) {
         // Safety check for camera
         if (!camera || typeof camera.x !== 'number' || typeof camera.y !== 'number') {
             console.warn('WorldGenerator.update: Invalid camera object', camera);

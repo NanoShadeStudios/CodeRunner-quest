@@ -24,11 +24,22 @@ export class ProfileManager {
             const saved = localStorage.getItem('coderunner_profile');
             if (saved) {
                 const parsed = JSON.parse(saved);
-                this.profileData = { ...this.profileData, ...parsed };
-                console.log('📄 Profile loaded from localStorage', this.profileData);
+                // Validate parsed data structure
+                if (typeof parsed === 'object' && parsed !== null) {
+                    this.profileData = { ...this.profileData, ...parsed };
+                    console.log('📄 Profile loaded from localStorage', this.profileData);
+                } else {
+                    console.warn('⚠️ Invalid profile data format, using defaults');
+                }
             }
         } catch (error) {
             console.warn('⚠️ Failed to load profile data:', error);
+            // Reset to defaults if localStorage is corrupted
+            this.profileData = {
+                name: '',
+                selectedSprite: 'player-sprite.png',
+                preferences: {}
+            };
         }
     }
 
@@ -55,13 +66,23 @@ export class ProfileManager {
      * Set the selected sprite
      */
     setSelectedSprite(spriteId) {
-        this.profileData.selectedSprite = spriteId;
-        this.saveProfile();
-        
-        // Also save to cloud if user is logged in
-        this.saveToCloud();
-        
-        console.log(`🎮 Selected sprite updated: ${spriteId}`);
+        try {
+            // Validate sprite ID
+            if (!spriteId || typeof spriteId !== 'string') {
+                console.warn('⚠️ Invalid sprite ID provided:', spriteId);
+                return;
+            }
+            
+            this.profileData.selectedSprite = spriteId;
+            this.saveProfile();
+            
+            // Also save to cloud if user is logged in
+            this.saveToCloud();
+            
+            console.log(`🎮 Selected sprite updated: ${spriteId}`);
+        } catch (error) {
+            console.error('Failed to set selected sprite:', error);
+        }
     }
 
     /**

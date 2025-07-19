@@ -17,6 +17,7 @@ export class OpeningAnimationSystem {
         this.currentPhase = 'logo'; // 'logo', 'game_logo', 'login', 'homescreen', 'complete'
         this.startTime = 0;
         this.phaseStartTime = 0;
+        this.loginSystemStarted = false; // Track if login system has been started
         
         // Logo images
         this.logoImage = null;
@@ -174,8 +175,32 @@ export class OpeningAnimationSystem {
                 
             case 'login':
                 this.updateLoginPhase(phaseElapsed);
-                // Wait for user to log in or skip after 5 seconds
-                if (phaseElapsed > 5000 || this.isUserLoggedIn()) {
+                
+                // Check authentication state with detailed logging
+                const userIsAuthenticated = this.isUserLoggedIn();
+                const hasChosenAuth = this.hasUserChosenAuthentication();
+                const loginSystem = this.game?.loginSystem;
+                
+                console.log(`🎬 Login phase check - elapsed: ${phaseElapsed}ms`);
+                console.log(`🎬 - userIsAuthenticated: ${userIsAuthenticated}`);
+                console.log(`🎬 - hasChosenAuth: ${hasChosenAuth}`);
+                if (loginSystem) {
+                    console.log(`🎬 - loginSystem.isLoggedIn: ${loginSystem.isLoggedIn}`);
+                    console.log(`🎬 - loginSystem.isGuest: ${loginSystem.isGuest}`);
+                    console.log(`🎬 - loginSystem.hasShown: ${loginSystem.hasShown}`);
+                }
+                
+                // Only transition away if:
+                // 1. User has explicitly chosen authentication AND time has passed
+                // 2. OR maximum timeout has been reached
+                const shouldTransition = (phaseElapsed > 2000 && userIsAuthenticated && hasChosenAuth) || phaseElapsed > 15000;
+                
+                console.log(`🎬 - shouldTransition: ${shouldTransition}`);
+                console.log(`🎬 - condition1: ${phaseElapsed > 2000 && userIsAuthenticated && hasChosenAuth}`);
+                console.log(`🎬 - condition2: ${phaseElapsed > 15000}`);
+                
+                if (shouldTransition) {
+                    console.log('🎬 Login phase complete, transitioning to homescreen');
                     this.transitionToPhase('homescreen');
                 }
                 break;
@@ -205,6 +230,11 @@ export class OpeningAnimationSystem {
         this.phaseStartTime = performance.now();
         this.fadeAlpha = 0;
         this.glowIntensity = 0;
+        
+        // Reset login system started flag when entering login phase
+        if (newPhase === 'login') {
+            this.loginSystemStarted = false;
+        }
         
         // Play sound effect on transitions
         if (!this.audioPlayed && this.game.audioSystem) {
@@ -257,15 +287,15 @@ export class OpeningAnimationSystem {
         this.glowIntensity = 0.5;
         
         // On first frame of login phase, start the login system and update UI
-        if (elapsed < 50) { // Within first 50ms
+        if (elapsed < 50 && !this.loginSystemStarted) { // Within first 50ms and not already started
             console.log('🎬 Login phase started, initiating login system');
+            this.loginSystemStarted = true;
             
-            // Set game state to login prompt
-            this.game.gameState = GAME_STATES.LOGIN_PROMPT;
+            // Set game state to login prompt - let GameNavigation handle starting the appropriate system
+            this.game.setGameState(GAME_STATES.LOGIN_PROMPT);
             
-            if (this.game && this.game.loginSystem && this.game.loginSystem.shouldShow()) {
-                this.game.loginSystem.start();
-            }
+            // Don't manually start systems here - let GameNavigation handle it
+            console.log('🎬 Game state set to LOGIN_PROMPT, GameNavigation will handle system startup');
             
             // Update HTML UI to show login state
             if (window.updateLoginStatus) {
@@ -290,8 +320,7 @@ export class OpeningAnimationSystem {
         const forceLoginAfterSignout = sessionStorage.getItem('coderunner_force_login_after_signout');
         if (forceLoginAfterSignout === 'true') {
             console.log('🎬 Login check - forcing login after sign out');
-            // Clear the flag so it doesn't persist
-            sessionStorage.removeItem('coderunner_force_login_after_signout');
+            // NOTE: Don't clear the flag here - let LoginSystem handle it
             return true;
         }
         
@@ -322,6 +351,33 @@ export class OpeningAnimationSystem {
         return false;
     }
     
+    /**
+     * Check if user has made an authentication choice (not just default state)
+     */
+    hasUserChosenAuthentication() {
+        if (!window.gameInstance || !window.gameInstance.loginSystem) {
+            console.log('🎬 hasUserChosenAuthentication: no login system');
+            return false;
+        }
+        
+        const loginSystem = window.gameInstance.loginSystem;
+        
+        // Check if user is logged in with an actual account (not guest)
+        if (loginSystem.isLoggedIn && loginSystem.currentUser) {
+            console.log('🎬 User has authenticated with account:', loginSystem.currentUser.email);
+            return true;
+        }
+        
+        // Check if user explicitly chose guest mode (not default state)
+        if (loginSystem.isGuest && loginSystem.hasShown) {
+            console.log('🎬 User has explicitly chosen guest mode');
+            return true;
+        }
+        
+        console.log('🎬 User has not made authentication choice yet - isLoggedIn:', loginSystem.isLoggedIn, 'isGuest:', loginSystem.isGuest, 'hasShown:', loginSystem.hasShown);
+        return false;
+    }
+
     /**
      * Render the animation
      */

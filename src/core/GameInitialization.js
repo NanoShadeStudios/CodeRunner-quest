@@ -24,6 +24,7 @@ import { LoadingScreenSystem } from '../systems/LoadingScreenSystem.js';
 import { CharacterCustomizationSystem } from '../systems/CharacterCustomizationSystem.js';
 import { LoginSystem } from '../systems/LoginSystem.js';
 import { UserProfileSystem } from '../systems/UserProfileSystem.js';
+import { GameEventHandlers } from './GameEventHandlers.js';
 import { WorldGenerator } from './WorldGenerator.js';
 import { Player } from './player.js';
 import { PhysicsEngine } from '../physics/physicsengine.js';
@@ -266,6 +267,7 @@ export class GameInitialization {
         
         this.game.renderer = new GameRenderer(this.game);
         this.game.gameDialogs = new GameDialogs(this.game);
+        this.game.eventHandlers = new GameEventHandlers(this.game);
         
         // Set up name input checker for InputManager
         this.game.inputManager.setNameInputChecker(() => {
@@ -635,6 +637,13 @@ export class GameInitialization {
             
             if (this.game.achievementSystem) {
                 this.game.achievementSystem.saveAchievementData();
+            }
+            
+            // Trigger comprehensive cloud save if user is logged in
+            if (this.game.cloudSaveSystem && this.game.cloudSaveSystem.isUserLoggedIn()) {
+                this.game.cloudSaveSystem.saveAllGameData().catch(error => {
+                    console.warn('Failed to autosave to cloud:', error);
+                });
             }
         } catch (error) {
             console.warn('⚠️ Could not save game data:', error);

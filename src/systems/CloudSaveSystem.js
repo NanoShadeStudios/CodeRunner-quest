@@ -245,17 +245,28 @@ export class CloudSaveSystem {
      * Sanitize data to prevent undefined values from being saved to Firestore
      */
     sanitizeData(data) {
-        if (!data || typeof data !== 'object') {
+        if (data === undefined || data === null) {
+            return null;
+        }
+        
+        if (typeof data !== 'object') {
             return data;
+        }
+        
+        if (Array.isArray(data)) {
+            return data.map(item => this.sanitizeData(item)).filter(item => item !== undefined && item !== null);
         }
         
         const sanitized = {};
         
         for (const [key, value] of Object.entries(data)) {
             if (value !== undefined && value !== null) {
-                if (typeof value === 'object' && !Array.isArray(value)) {
-                    // Recursively sanitize nested objects
-                    sanitized[key] = this.sanitizeData(value);
+                if (typeof value === 'object') {
+                    const sanitizedValue = this.sanitizeData(value);
+                    // Only include objects/arrays that have content
+                    if (Array.isArray(sanitizedValue) ? sanitizedValue.length > 0 : Object.keys(sanitizedValue).length > 0) {
+                        sanitized[key] = sanitizedValue;
+                    }
                 } else {
                     sanitized[key] = value;
                 }
@@ -745,6 +756,301 @@ export class CloudSaveSystem {
         } catch (error) {
             console.error('❌ Error loading stats from localStorage:', error);
             return null;
+        }
+    }
+    
+    /**
+     * Collect all game data from various systems
+     */
+    collectGameData() {
+        const gameData = {
+            timestamp: Date.now(),
+            version: '1.5.0',
+            
+            // Core game progress
+            bestScores: this.game.bestScores || {},
+            totalRuns: this.game.totalRuns || 0,
+            
+            // Upgrade system data
+            dataPackets: 0,
+            
+            // Achievement system data
+            achievementData: null,
+            
+            // Settings data
+            settingsData: null,
+            
+            // Profile/customization data
+            profileData: null,
+            
+            // Leaderboard data
+            leaderboardData: null,
+            
+            // Audio settings
+            audioSettings: null,
+            
+            // Any additional user stats
+            userStats: {}
+        };
+        
+        // Collect data from UpgradeSystem
+        if (this.game.upgradeSystem) {
+            gameData.dataPackets = this.game.upgradeSystem.dataPackets || 0;
+        }
+        
+        // Collect data from ShopSystem
+        if (this.game.shopSystem) {
+            gameData.ownedUpgrades = this.game.shopSystem.getOwnedUpgrades();
+        }
+        
+        // Collect data from AchievementSystem
+        if (this.game.achievementSystem) {
+            gameData.achievementData = this.game.achievementSystem.getSaveData();
+        }
+        
+        // Collect data from SettingsSystem
+        if (this.game.settingsSystem) {
+            gameData.settingsData = this.game.settingsSystem.getAllSettings();
+        }
+        
+        // Collect data from ProfileManager
+        if (typeof window !== 'undefined' && window.profileManager) {
+            gameData.profileData = {
+                selectedSprite: window.profileManager.getSelectedSprite(),
+                ...window.profileManager.profileData
+            };
+        }
+        
+        // Collect data from AudioSystem
+        if (this.game.audioSystem) {
+            gameData.audioSettings = {
+                isMuted: this.game.audioSystem.isMuted,
+                masterVolume: this.game.audioSystem.masterVolume,
+                sfxVolume: this.game.audioSystem.sfxVolume,
+                musicVolume: this.game.audioSystem.musicVolume,
+                musicMode: this.game.audioSystem.musicMode,
+                selectedTrack: this.game.audioSystem.selectedTrack
+            };
+        }
+        
+        // Collect data from LeaderboardSystem (offline entries)
+        if (this.game.leaderboardSystem) {
+            gameData.leaderboardData = {
+                playerName: this.game.leaderboardSystem.savedPlayerName || '',
+                uploadedDifficulties: Array.from(this.game.leaderboardSystem.uploadedDifficulties || [])
+            };
+        }
+        
+        // Collect user stats from UserProfileSystem
+        if (this.game.userProfileSystem && this.game.userProfileSystem.userStats) {
+            gameData.userStats = this.game.userProfileSystem.userStats;
+        }
+        
+        return gameData;
+    }
+    
+    /**
+     * Apply loaded game data to all systems
+     */
+    applyGameData(gameData) {
+        if (!gameData || typeof gameData !== 'object') {
+            console.warn('❌ Invalid game data provided to applyGameData');
+            return false;
+        }
+        
+        try {
+            // Apply best scores
+            if (gameData.bestScores) {
+                this.game.bestScores = { ...this.game.bestScores, ...gameData.bestScores };
+                console.log('✅ Best scores applied from cloud save');
+            }
+            
+            // Apply upgrade data
+            if (gameData.dataPackets !== undefined && this.game.upgradeSystem) {
+                this.game.upgradeSystem.loadSavedData({ dataPackets: gameData.dataPackets });
+                console.log(`✅ Data packets applied from cloud save: ${gameData.dataPackets}`);
+            }
+            
+            // Apply shop upgrade data
+            if (gameData.ownedUpgrades && this.game.shopSystem) {
+                this.game.shopSystem.loadOwnedUpgrades(gameData.ownedUpgrades);
+                console.log(`✅ Shop upgrades applied from cloud save: ${gameData.ownedUpgrades.length} upgrades`);
+            }
+            
+            // Apply achievement data
+            if (gameData.achievementData && this.game.achievementSystem) {
+                this.game.achievementSystem.loadSavedData(gameData.achievementData);
+                console.log('✅ Achievement data applied from cloud save');
+            }
+            
+            // Apply settings data
+            if (gameData.settingsData && this.game.settingsSystem) {
+                this.game.settingsSystem.importSettings(gameData.settingsData);
+                console.log('✅ Settings applied from cloud save');
+            }
+            
+            // Apply profile data
+            if (gameData.profileData && typeof window !== 'undefined' && window.profileManager) {
+                window.profileManager.loadFromCloud(gameData.profileData);
+                console.log('✅ Profile data applied from cloud save');
+            }
+            
+            // Apply audio settings
+            if (gameData.audioSettings && this.game.audioSystem) {
+                Object.assign(this.game.audioSystem, gameData.audioSettings);
+                this.game.audioSystem.saveSettings();
+                console.log('✅ Audio settings applied from cloud save');
+            }
+            
+            // Apply leaderboard data
+            if (gameData.leaderboardData && this.game.leaderboardSystem) {
+                if (gameData.leaderboardData.playerName) {
+                    this.game.leaderboardSystem.savedPlayerName = gameData.leaderboardData.playerName;
+                    this.game.leaderboardSystem.savePlayerName(gameData.leaderboardData.playerName);
+                }
+                if (gameData.leaderboardData.uploadedDifficulties) {
+                    this.game.leaderboardSystem.uploadedDifficulties = new Set(gameData.leaderboardData.uploadedDifficulties);
+                }
+                console.log('✅ Leaderboard data applied from cloud save');
+            }
+            
+            // Apply user stats
+            if (gameData.userStats && this.game.userProfileSystem) {
+                this.game.userProfileSystem.userStats = { 
+                    ...this.game.userProfileSystem.userStats, 
+                    ...gameData.userStats 
+                };
+                console.log('✅ User stats applied from cloud save');
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('❌ Error applying game data:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Perform a full save of all game data to cloud
+     */
+    async saveAllGameData() {
+        try {
+            console.log('💾 Starting comprehensive cloud save...');
+            
+            const gameData = this.collectGameData();
+            const success = await this.saveGameData(gameData);
+            
+            if (success) {
+                console.log('✅ Comprehensive cloud save completed successfully');
+                
+                // Also update the user profile with latest data
+                if (this.game.userProfileSystem && this.game.userProfileSystem.isLoggedIn) {
+                    await this.game.userProfileSystem.saveUserProfile();
+                }
+                
+                return true;
+            } else {
+                console.warn('⚠️ Cloud save failed, data saved locally only');
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ Error during comprehensive cloud save:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Perform a full load of all game data from cloud
+     */
+    async loadAllGameData() {
+        try {
+            console.log('📥 Starting comprehensive cloud load...');
+            
+            const gameData = await this.loadGameData();
+            
+            if (gameData) {
+                const success = this.applyGameData(gameData);
+                
+                if (success) {
+                    console.log('✅ Comprehensive cloud load completed successfully');
+                    return true;
+                } else {
+                    console.warn('⚠️ Error applying loaded game data');
+                    return false;
+                }
+            } else {
+                console.log('ℹ️ No cloud save data found');
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ Error during comprehensive cloud load:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Auto-save timer to periodically save data for logged-in users
+     */
+    startAutoSave() {
+        // Only start auto-save for logged-in users
+        if (!this.isUserLoggedIn()) {
+            console.log('ℹ️ Auto-save not started - user not logged in');
+            return;
+        }
+        
+        // Clear any existing auto-save interval
+        if (this.autoSaveInterval) {
+            clearInterval(this.autoSaveInterval);
+        }
+        
+        // Auto-save every 2 minutes for logged-in users
+        this.autoSaveInterval = setInterval(async () => {
+            if (this.isUserLoggedIn()) {
+                console.log('⏰ Auto-saving game data...');
+                await this.saveAllGameData();
+            } else {
+                // Stop auto-save if user logs out
+                this.stopAutoSave();
+            }
+        }, 120000); // 2 minutes
+        
+        console.log('✅ Auto-save started (every 2 minutes)');
+    }
+    
+    /**
+     * Stop auto-save timer
+     */
+    stopAutoSave() {
+        if (this.autoSaveInterval) {
+            clearInterval(this.autoSaveInterval);
+            this.autoSaveInterval = null;
+            console.log('⏹️ Auto-save stopped');
+        }
+    }
+    
+    /**
+     * Manually trigger a sync (save and load)
+     */
+    async syncWithCloud() {
+        if (!this.isUserLoggedIn()) {
+            console.warn('⚠️ Cannot sync with cloud - user not logged in');
+            return false;
+        }
+        
+        try {
+            console.log('🔄 Syncing with cloud...');
+            
+            // First save current data
+            await this.saveAllGameData();
+            
+            // Then load any newer data from cloud
+            await this.loadAllGameData();
+            
+            console.log('✅ Cloud sync completed');
+            return true;
+        } catch (error) {
+            console.error('❌ Error during cloud sync:', error);
+            return false;
         }
     }
 }

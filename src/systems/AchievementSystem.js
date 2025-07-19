@@ -463,6 +463,13 @@ export class AchievementSystem {
             };
             
             localStorage.setItem('coderunner_achievements', JSON.stringify(data));
+            
+            // Trigger comprehensive cloud save if user is logged in
+            if (this.gameInstance && this.gameInstance.cloudSaveSystem && this.gameInstance.cloudSaveSystem.isUserLoggedIn()) {
+                this.gameInstance.cloudSaveSystem.saveAllGameData().catch(error => {
+                    console.warn('Failed to save achievement data to cloud:', error);
+                });
+            }
         } catch (error) {
             console.warn('Failed to save achievement data:', error);
         }

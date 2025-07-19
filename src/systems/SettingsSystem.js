@@ -498,6 +498,13 @@ export class SettingsSystem {
             // Save to cloud storage if logged in
             if (this.gameInstance?.userProfileSystem?.isLoggedIn) {
                 this.saveToCloud(settings);
+                
+                // Also trigger comprehensive cloud save
+                if (this.gameInstance?.cloudSaveSystem) {
+                    this.gameInstance.cloudSaveSystem.saveAllGameData().catch(error => {
+                        console.warn('Failed to save settings to cloud:', error);
+                    });
+                }
             } else {
                 console.log('📝 Not logged in - settings saved locally only');
             }
@@ -2231,7 +2238,10 @@ export class SettingsSystem {
         const settings = {};
         this.settingsCategories.forEach(category => {
             category.settings.forEach(setting => {
-                settings[setting.key] = setting.value;
+                // Only include settings that have a value property (exclude buttons)
+                if (setting.hasOwnProperty('value') && setting.value !== undefined) {
+                    settings[setting.key] = setting.value;
+                }
             });
         });
         return settings;
@@ -2243,7 +2253,10 @@ export class SettingsSystem {
     importSettings(settings) {
         this.settingsCategories.forEach(category => {
             category.settings.forEach(setting => {
-                if (settings.hasOwnProperty(setting.key)) {
+                // Only import settings that have a value property and the imported value is not undefined
+                if (setting.hasOwnProperty('value') && 
+                    settings.hasOwnProperty(setting.key) && 
+                    settings[setting.key] !== undefined) {
                     setting.value = settings[setting.key];
                 }
             });

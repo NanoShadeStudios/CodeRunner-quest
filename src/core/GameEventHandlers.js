@@ -107,6 +107,8 @@ export class GameEventHandlers {
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
 
+        console.log(`🖱️ Canvas click: (${Math.round(x)}, ${Math.round(y)}) in state: ${this.game.gameState}`);
+
         // Check for popup clicks first (popups should work in any state)
         if (this.game.popupSystem && this.game.popupSystem.activePopup) {
             const handled = this.game.popupSystem.handleClick(x, y);
@@ -575,9 +577,14 @@ export class GameEventHandlers {
     }
 
     handleShopClick(x, y) {
-        // This would be handled by the shop system
-        if (this.game.shopSystem) {
-            this.game.shopSystem.handleClick(x, y);
+        console.log(`🛒 Shop click handler called: (${Math.round(x)}, ${Math.round(y)})`);
+        // This would be handled by the game dialogs system
+        if (this.game.gameDialogs) {
+            console.log('🛒 Calling gameDialogs.handleShopClick');
+            const result = this.game.gameDialogs.handleShopClick(x, y);
+            console.log('🛒 Shop click result:', result);
+        } else {
+            console.log('❌ gameDialogs not available');
         }
     }
 

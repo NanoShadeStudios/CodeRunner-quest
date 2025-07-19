@@ -18,10 +18,39 @@ export class UpgradeSystem {    constructor(game) {
         this.scoreMultiplierBonus = 0;
         this.powerUpDurationBonus = 0;
           this.selectedUpgrade = 0; // For menu navigation
-        this.maxUpgrades = 3;        // Load saved data packets immediately (don't await in constructor)
-        this.loadUpgradeData().catch(error => {
-            console.warn('Failed to load upgrade data in constructor:', error);
+        this.maxUpgrades = 3;
+        
+        // Flag to prevent duplicate loading during cloud save restore
+        this.isInitializing = true;
+        this.hasLoadedData = false;
+        
+        // Only load data immediately if user is not logged in
+        // If user is logged in, wait for cloud save system to apply data
+        this.initializeData().catch(error => {
+            console.warn('Failed to initialize upgrade data:', error);
         });
+    }
+    
+    /**
+     * Initialize data with proper timing
+     */
+    async initializeData() {
+        // Small delay to allow cloud save system to initialize if user is logged in
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Check if user is logged in and cloud save system will handle the data
+        const isLoggedIn = this.game && this.game.cloudSaveSystem && this.game.cloudSaveSystem.isUserLoggedIn();
+        
+        if (!isLoggedIn) {
+            // User not logged in, load from localStorage immediately
+            await this.loadUpgradeData();
+        } else {
+            // User is logged in, mark as initialized but don't load data yet
+            // Cloud save system will call loadSavedData() with the cloud data
+            console.log('💾 UpgradeSystem waiting for cloud data...');
+        }
+        
+        this.isInitializing = false;
     }
       /**
      * Add data packets from game collection
@@ -192,13 +221,9 @@ export class UpgradeSystem {    constructor(game) {
             // Save to localStorage immediately
             localStorage.setItem('coderunner_upgrade_data', JSON.stringify(upgradeData));
             
-            // Also trigger cloud save if available
-            if (this.game && this.game.cloudSaveSystem) {
-                const saveData = {
-                    dataPackets: this.dataPackets,
-                    timestamp: Date.now()
-                };
-                this.game.cloudSaveSystem.saveGameData(saveData).catch(error => {
+            // Trigger comprehensive cloud save if user is logged in
+            if (this.game && this.game.cloudSaveSystem && this.game.cloudSaveSystem.isUserLoggedIn()) {
+                this.game.cloudSaveSystem.saveAllGameData().catch(error => {
                     console.warn('Failed to save upgrade data to cloud:', error);
                 });
             }
@@ -210,24 +235,15 @@ export class UpgradeSystem {    constructor(game) {
     }
     
     /**
-     * Load upgrade data from localStorage and cloud
+     * Load upgrade data from localStorage (only when not logged in)
      */
     async loadUpgradeData() {
+        if (this.hasLoadedData) {
+            console.log('⚠️ UpgradeSystem data already loaded, ignoring duplicate call');
+            return;
+        }
+        
         try {
-            // Try to load from cloud first if logged in
-            if (this.game && this.game.cloudSaveSystem && this.game.cloudSaveSystem.isUserLoggedIn()) {
-                try {
-                    const cloudData = await this.game.cloudSaveSystem.loadGameData();
-                    if (cloudData && cloudData.dataPackets !== undefined) {
-                        this.dataPackets = cloudData.dataPackets;
-                        console.log(`💾 Loaded data packets from cloud: ${this.dataPackets}`);
-                        return;
-                    }
-                } catch (error) {
-                    console.warn('Failed to load from cloud, falling back to localStorage:', error);
-                }
-            }
-            
             // Fall back to localStorage
             const saved = localStorage.getItem('coderunner_upgrade_data');
             if (saved) {
@@ -241,6 +257,8 @@ export class UpgradeSystem {    constructor(game) {
             console.warn('⚠️ Failed to load upgrade data:', error);
             // Keep default values on error
         }
+        
+        this.hasLoadedData = true;
     }
     
     /**
@@ -254,9 +272,14 @@ export class UpgradeSystem {    constructor(game) {
     }
     
     /**
-     * Load from unified save system
+     * Load from unified save system (called by CloudSaveSystem)
      */
     loadSavedData(upgradeData) {
+        if (this.hasLoadedData) {
+            console.log('⚠️ UpgradeSystem data already loaded, ignoring duplicate call');
+            return;
+        }
+        
         try {
             if (upgradeData && upgradeData.dataPackets !== undefined) {
                 this.dataPackets = upgradeData.dataPackets;
@@ -265,5 +288,7 @@ export class UpgradeSystem {    constructor(game) {
         } catch (error) {
             console.warn('Failed to load upgrade data from unified save:', error);
         }
+        
+        this.hasLoadedData = true;
     }
 }

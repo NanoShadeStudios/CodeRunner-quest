@@ -131,6 +131,12 @@ export class GameLoop {
                 }
                 break;
                 
+            case GAME_STATES.LOGIN_PROMPT:
+                if (this.game.loginSystem) {
+                    this.game.loginSystem.update(this.game.deltaTime);
+                }
+                break;
+                
             default:
                 // Update background systems that should always run
                 if (this.game.popupSystem) {

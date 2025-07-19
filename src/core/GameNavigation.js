@@ -1,5 +1,16 @@
 /**
- * Game Navigation and State Management
+ * Game Navigation an        } else if (newState === GAME_STATES.LOGIN_PROMPT && this.game.loginSystem) {
+            console.log('🔑 Starting login system for login prompt');
+            console.log('🔑 LoginSystem exists:', !!this.game.loginSystem);
+            console.log('🔑 LoginSystem shouldShow():', this.game.loginSystem.shouldShow());
+            if (this.game.loginSystem.shouldShow()) {
+                console.log('🔑 Calling loginSystem.start()');
+                this.game.loginSystem.start();
+            } else {
+                console.log('🔑 Login system should not show, redirecting to home');
+                this.game.gameState = GAME_STATES.HOME;
+            }
+        } else if (newState === GAME_STATES.PROFILE && this.game.userProfileSystem) {anagement
  */
 
 import { GAME_STATES } from '../utils/constants.js';
@@ -17,15 +28,21 @@ export class GameNavigation {
      */
     setGameState(newState) {
         const oldState = this.game.gameState;
+        console.log(`🎮 GameNavigation.setGameState: ${oldState} → ${newState}`);
         this.game.gameState = newState;
         
         // Handle state change logic
         if (newState === GAME_STATES.OPENING_ANIMATION && this.game.openingAnimation) {
             console.log('🎬 Starting opening animation system');
             this.game.openingAnimation.start();
-        } else if (newState === GAME_STATES.LOGIN_PROMPT && this.game.userProfileSystem) {
-            console.log('👤 Starting user profile system for login');
-            this.game.userProfileSystem.start();
+        } else if (newState === GAME_STATES.LOGIN_PROMPT && this.game.loginSystem) {
+            console.log('� Starting login system for login prompt');
+            if (this.game.loginSystem.shouldShow()) {
+                this.game.loginSystem.start();
+            } else {
+                console.log('🔑 Login system should not show, redirecting to home');
+                this.game.gameState = GAME_STATES.HOME;
+            }
         } else if (newState === GAME_STATES.PROFILE && this.game.userProfileSystem) {
             console.log('👤 Starting user profile system for profile view');
             this.game.userProfileSystem.start();
@@ -287,6 +304,11 @@ export class GameNavigation {
         // Reset game state
         this.resetGameState();
         
+        // Track achievement for game start
+        if (this.game.achievementSystem) {
+            this.game.achievementSystem.trackEvent('gameStart');
+        }
+        
         // Start background music
         if (this.game.audioSystem && typeof this.game.audioSystem.playMusic === 'function') {
             this.game.audioSystem.playMusic();
@@ -333,8 +355,24 @@ export class GameNavigation {
         this.game.gameOverMessage = message;
         this.game.gameOverStartTime = Date.now();
         
+        // Track achievement for game end
+        if (this.game.achievementSystem && this.game.player) {
+            const gameData = {
+                distance: this.game.score || 0,
+                runTime: (Date.now() - this.game.gameStartTime) || 0
+            };
+            this.game.achievementSystem.trackEvent('gameEnd', gameData);
+        }
+        
         // Check for new high score
         this.checkHighScore();
+        
+        // Trigger cloud save for logged-in users
+        if (this.game.cloudSaveSystem && this.game.cloudSaveSystem.isUserLoggedIn()) {
+            this.game.cloudSaveSystem.saveAllGameData().catch(error => {
+                console.warn('Failed to save game data to cloud after game end:', error);
+            });
+        }
         
         // Stop background music and play game over sound
         if (this.game.audioSystem) {

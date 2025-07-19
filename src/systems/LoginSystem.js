@@ -49,7 +49,7 @@ export class LoginSystem {
             github: {
                 text: "🐙 Sign in with GitHub",
                 x: 0, y: 0, width: 220, height: 45,
-                hovered: false, color: '#333333'
+                hovered: false, color: '#24292f'
             },
             guest: {
                 text: "👤 Play as Guest",
@@ -136,9 +136,14 @@ export class LoginSystem {
                         }).catch((error) => {
                             console.error('❌ Error migrating data to cloud:', error);
                         });
-                    }                }else {
+                    }                } else {
                     this.currentUser = null;
                     this.isLoggedIn = false;
+                    
+                    // IMPORTANT: Reset guest state when user signs out
+                    // This ensures the login screen will appear after sign out + reload
+                    this.isGuest = false;
+                    
                     console.log('🔑 Firebase Auth: User signed out');
                     console.log('🔑 Current auth state:', { isLoggedIn: this.isLoggedIn, isGuest: this.isGuest });
                     
@@ -191,10 +196,29 @@ export class LoginSystem {
     }
 
     shouldShow() {
+        // Check if this is after a sign out (force login popup)
+        const forceLoginAfterSignout = sessionStorage.getItem('coderunner_force_login_after_signout');
+        if (forceLoginAfterSignout === 'true') {
+            return true;
+        }
+        
+        // Default behavior - only show if not shown before
         return !this.hasShown;
     }
     
     start() {
+        // Check if this is after a sign out and reset state if needed
+        const forceLoginAfterSignout = sessionStorage.getItem('coderunner_force_login_after_signout');
+        if (forceLoginAfterSignout === 'true') {
+            // Reset authentication state
+            this.isLoggedIn = false;
+            this.isGuest = false;
+            this.currentUser = null;
+            this.hasShown = false; // Allow the login screen to show again
+            // Clear the flag so it doesn't persist
+            sessionStorage.removeItem('coderunner_force_login_after_signout');
+        }
+        
         this.isActive = true;
         this.hasShown = true;
         this.loading = false; // Ensure we're not stuck in loading state
@@ -203,6 +227,8 @@ export class LoginSystem {
         this.slideOffset = 50;
         this.positionButtons();
         this.addEventListeners();
+        
+        console.log('🔑 LoginSystem.start() completed - isActive:', this.isActive);
     }
 
     positionButtons() {
@@ -210,18 +236,22 @@ export class LoginSystem {
         const centerY = this.canvas.height / 2;
         
         if (this.currentView === 'main') {
-            // Main view button positioning - more compact layout
+            // Main view button positioning - improved layout with GitHub
             this.buttons.login.x = centerX - 190;
-            this.buttons.login.y = centerY;
+            this.buttons.login.y = centerY - 10;
             
             this.buttons.register.x = centerX + 10;
-            this.buttons.register.y = centerY;
+            this.buttons.register.y = centerY - 10;
             
-            this.buttons.google.x = centerX - 110;
-            this.buttons.google.y = centerY + 60;
+            // OAuth providers side by side
+            this.buttons.google.x = centerX - 220;
+            this.buttons.google.y = centerY + 50;
+            
+            this.buttons.github.x = centerX + 0;
+            this.buttons.github.y = centerY + 50;
             
             this.buttons.guest.x = centerX - 90;
-            this.buttons.guest.y = centerY + 120;
+            this.buttons.guest.y = centerY + 110;
         } else {
             // Form view positioning
             this.buttons.back.x = centerX - 150;
@@ -389,8 +419,15 @@ export class LoginSystem {
         // Apply fade-in effect
         this.ctx.globalAlpha = this.fadeAlpha;
         
-        // Draw background overlay
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        // Draw enhanced background overlay with subtle pattern
+        const bgGradient = this.ctx.createRadialGradient(
+            this.canvas.width / 2, this.canvas.height / 2, 0,
+            this.canvas.width / 2, this.canvas.height / 2, Math.max(this.canvas.width, this.canvas.height) / 2
+        );
+        bgGradient.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+        bgGradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
+        
+        this.ctx.fillStyle = bgGradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Apply slide animation
@@ -410,30 +447,31 @@ export class LoginSystem {
             this.drawLoadingIndicator();
         }
         
-        this.        ctx.restore();
+        this.ctx.restore();
     }
 
     drawContainer() {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
-        const containerWidth = 500;
-        const containerHeight = 320;
+        const containerWidth = 560;
+        const containerHeight = 380;
         
-        // Modern container background - more subtle
+        // Modern glassmorphism container background
         const gradient = this.ctx.createLinearGradient(
             centerX - containerWidth/2, centerY - containerHeight/2,
             centerX + containerWidth/2, centerY + containerHeight/2
         );
-        gradient.addColorStop(0, 'rgba(20, 25, 35, 0.85)');
-        gradient.addColorStop(1, 'rgba(10, 15, 25, 0.90)');
+        gradient.addColorStop(0, 'rgba(15, 23, 42, 0.95)');
+        gradient.addColorStop(0.5, 'rgba(30, 41, 59, 0.90)');
+        gradient.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
         
         this.ctx.fillStyle = gradient;
-        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-        this.ctx.shadowBlur = 30;
-        this.ctx.shadowOffsetY = 8;
+        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        this.ctx.shadowBlur = 40;
+        this.ctx.shadowOffsetY = 12;
         
         this.roundRect(centerX - containerWidth/2, centerY - containerHeight/2, 
-                      containerWidth, containerHeight, 20);
+                      containerWidth, containerHeight, 24);
         this.ctx.fill();
         
         // Reset shadow
@@ -441,9 +479,16 @@ export class LoginSystem {
         this.ctx.shadowBlur = 0;
         this.ctx.shadowOffsetY = 0;
         
-        // Subtle border
-        this.ctx.strokeStyle = 'rgba(88, 166, 255, 0.2)';
+        // Modern glowing border
+        this.ctx.strokeStyle = 'rgba(88, 166, 255, 0.4)';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        
+        // Inner glow effect
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         this.ctx.lineWidth = 1;
+        this.roundRect(centerX - containerWidth/2 + 1, centerY - containerHeight/2 + 1, 
+                      containerWidth - 2, containerHeight - 2, 23);
         this.ctx.stroke();
     }
 
@@ -459,16 +504,38 @@ export class LoginSystem {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         
-        // Welcome text - larger and more prominent
-        this.ctx.fillStyle = '#f8fafc';
-        this.ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText('Welcome to CodeRunner', centerX, centerY - 100);
+        // Welcome text with gradient effect
+        const titleGradient = this.ctx.createLinearGradient(centerX - 150, centerY - 110, centerX + 150, centerY - 110);
+        titleGradient.addColorStop(0, '#58a6ff');
+        titleGradient.addColorStop(0.5, '#ffffff');
+        titleGradient.addColorStop(1, '#58a6ff');
         
-        // Simple subtitle
-        this.ctx.fillStyle = '#94a3b8';
+        this.ctx.fillStyle = titleGradient;
+        this.ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('Welcome to CodeRunner', centerX, centerY - 110);
+        
+        // Add text shadow for depth
+        this.ctx.shadowColor = 'rgba(88, 166, 255, 0.3)';
+        this.ctx.shadowBlur = 10;
+        this.ctx.fillText('Welcome to CodeRunner', centerX, centerY - 110);
+        
+        // Reset shadow
+        this.ctx.shadowColor = 'transparent';
+        this.ctx.shadowBlur = 0;
+        
+        // Subtitle with better styling
+        this.ctx.fillStyle = '#cbd5e1';
         this.ctx.font = '18px "Segoe UI", Arial, sans-serif';
-        this.ctx.fillText('Choose how to continue:', centerX, centerY - 60);
+        this.ctx.fillText('Choose how to continue your journey:', centerX, centerY - 70);
+        
+        // Add small decorative line
+        this.ctx.strokeStyle = 'rgba(88, 166, 255, 0.4)';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(centerX - 100, centerY - 50);
+        this.ctx.lineTo(centerX + 100, centerY - 50);
+        this.ctx.stroke();
     }
 
     drawFormView() {
@@ -567,46 +634,88 @@ export class LoginSystem {
         this.drawButton(this.buttons.github);
         this.drawButton(this.buttons.guest);
         
-        // Simple note below guest button
+        // Simple note below guest button with better styling
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
+        
         this.ctx.fillStyle = '#64748b';
-        this.ctx.font = '12px "Segoe UI", Arial, sans-serif';
+        this.ctx.font = '13px "Segoe UI", Arial, sans-serif';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('Guest progress is not saved', centerX, centerY + 160);
+        this.ctx.fillText('Guest progress is saved locally only', centerX, centerY + 170);
+        
+        // Add small info icon
+        this.ctx.fillStyle = '#94a3b8';
+        this.ctx.font = '12px "Segoe UI", Arial, sans-serif';
+        this.ctx.fillText('ℹ️', centerX - 110, centerY + 170);
     }drawButton(button) {
         const ctx = this.ctx;
         const isHovered = button.hovered;
         
-        // Modern button styling with subtle shadows
+        // Modern button styling with enhanced effects
         let bgColor = button.color;
         if (isHovered) {
-            bgColor = this.lightenColor(button.color, 15);
+            bgColor = this.lightenColor(button.color, 20);
         }
         
-        // Add subtle shadow for depth
+        // Enhanced shadow and glow effects
         ctx.save();
-        if (!isHovered) {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetY = 3;
+        
+        if (isHovered) {
+            // Glowing effect on hover
+            ctx.shadowColor = button.color;
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetY = 0;
+        } else {
+            // Subtle depth shadow
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetY = 4;
         }
         
-        ctx.fillStyle = bgColor;
+        // Button gradient background
+        const gradient = ctx.createLinearGradient(button.x, button.y, button.x, button.y + button.height);
+        if (isHovered) {
+            gradient.addColorStop(0, this.lightenColor(bgColor, 10));
+            gradient.addColorStop(1, this.darkenColor(bgColor, 10));
+        } else {
+            gradient.addColorStop(0, bgColor);
+            gradient.addColorStop(1, this.darkenColor(bgColor, 15));
+        }
+        
+        ctx.fillStyle = gradient;
         this.roundRect(button.x, button.y, button.width, button.height, 12);
         ctx.fill();
         
         ctx.restore();
         
-        // Clean border - no border for cleaner look
+        // Add subtle border highlight
+        if (isHovered) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            this.roundRect(button.x, button.y, button.width, button.height, 12);
+            ctx.stroke();
+        }
         
-        // Button text - cleaner font
+        // Button text with better typography
         ctx.fillStyle = '#ffffff';
-        ctx.font = '16px "Segoe UI", Arial, sans-serif';
+        ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
         ctx.textAlign = 'center';
+        
+        // Add text shadow for depth
+        if (!isHovered) {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 2;
+            ctx.shadowOffsetY = 1;
+        }
+        
         ctx.fillText(button.text, 
                     button.x + button.width / 2, 
-                    button.y + button.height / 2 + 5);
+                    button.y + button.height / 2 + 6);
+        
+        // Reset text shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
     }
 
     roundRect(x, y, width, height, radius) {

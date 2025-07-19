@@ -461,27 +461,67 @@ export class GameDialogs {    constructor(game) {
             ctx.moveTo(0, y);
             ctx.lineTo(width, y);
             ctx.stroke();
-        }        // Clean, simplified title
+        }        // Enhanced title with advanced effects
         const titleY = 60;
         const titleText = '🏆 LEADERBOARD';
         
-        // Simple title with subtle glow
+        // Title background glow
+        const titleGradient = ctx.createRadialGradient(width/2, titleY, 0, width/2, titleY, 200);
+        titleGradient.addColorStop(0, 'rgba(88, 166, 255, 0.15)');
+        titleGradient.addColorStop(0.5, 'rgba(88, 166, 255, 0.05)');
+        titleGradient.addColorStop(1, 'rgba(88, 166, 255, 0)');
+        ctx.fillStyle = titleGradient;
+        this.drawRoundedRect(ctx, width/2 - 200, titleY - 30, 400, 60, 15);
+        ctx.fill();
+        
+        // Main title with multiple glow layers
         ctx.textAlign = 'center';
         ctx.font = 'bold 32px Courier New';
         
-        // Single subtle glow
+        // Outer glow (largest)
         ctx.shadowColor = '#58a6ff';
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 20;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
+        ctx.fillStyle = 'rgba(88, 166, 255, 0.3)';
+        ctx.fillText(titleText, width / 2, titleY);
+        
+        // Middle glow
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = 'rgba(88, 166, 255, 0.6)';
+        ctx.fillText(titleText, width / 2, titleY);
+        
+        // Inner glow
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = 'rgba(88, 166, 255, 0.9)';
+        ctx.fillText(titleText, width / 2, titleY);
+        
+        // Core text
+        ctx.shadowBlur = 0;
         ctx.fillStyle = '#ffffff';
         ctx.fillText(titleText, width / 2, titleY);
         
-        // Simple subtitle without animations
+        // Animated subtitle with typewriter effect
         ctx.font = '16px Courier New';
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#a5b3c1';
-        ctx.fillText('Challenge the best players worldwide', width / 2, titleY + 30);        // Draw difficulty tabs with enhanced styling
+        const subtitleFullText = 'Challenge the best players worldwide';
+        const subtitleProgress = (time * 2) % (subtitleFullText.length + 20);
+        const subtitleText = subtitleFullText.substring(0, Math.floor(subtitleProgress));
+        const subtitleAlpha = 0.7 + Math.sin(time * 3) * 0.2;
+        
+        // Subtitle glow
+        ctx.shadowColor = '#a855f7';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = `rgba(168, 85, 247, ${subtitleAlpha})`;
+        ctx.fillText(subtitleText, width / 2, titleY + 30);
+        
+        // Blinking cursor for typewriter effect
+        if (Math.floor(subtitleProgress) < subtitleFullText.length && Math.sin(time * 8) > 0) {
+            const cursorX = width/2 + ctx.measureText(subtitleText).width/2 + 3;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(cursorX, titleY + 18, 2, 18);
+        }
+        
+        ctx.shadowBlur = 0;        // Draw difficulty tabs with enhanced styling
         if (!tabHitAreas) {
             tabHitAreas = [];
         }
@@ -2169,6 +2209,8 @@ export class GameDialogs {    constructor(game) {
             categoryUpgrades.forEach((upgrade, index) => {
                 const isOwned = shopSystem.isOwned(upgrade.id);
                 const canAfford = currentCurrency >= upgrade.price;
+                const prereqsMet = this.arePrerequisitesMet(upgrade, shopSystem);
+                const isLocked = !prereqsMet;
                 const isHovered = false; // TODO: implement hover
                 if (itemsInCurrentRow >= itemsPerRow) {
                     currentY += itemHeight + itemSpacing;
@@ -2179,20 +2221,37 @@ export class GameDialogs {    constructor(game) {
                 if (itemVisible) {
                     // Card background
                     let bgColor, borderColor;
-                    if (isOwned) {
+                    if (isLocked) {
+                        bgColor = 'rgba(60,60,60,0.8)'; // Dark gray for locked
+                        borderColor = '#6e7681';
+                    } else if (isOwned) {
                         bgColor = 'rgba(64,209,88,0.13)';
                         borderColor = '#40d158';
                     } else if (canAfford) {
                         bgColor = 'rgba(33,38,45,0.93)';
                         borderColor = categoryInfo.color;
                     } else {
-                        bgColor = 'rgba(139,148,158,0.13)';
-                        borderColor = '#6e7681';
+                        bgColor = 'rgba(248,81,73,0.15)'; // More noticeable red background
+                        borderColor = '#f85149'; // Red border
                     }
                     ctx.save();
+                    
+                    // Apply blur effect for locked items
+                    if (isLocked) {
+                        ctx.filter = 'blur(2px)';
+                        ctx.globalAlpha = 0.6;
+                    }
+                    
                     this.drawGlassmorphicPanel(ctx, currentX, currentY, itemWidth, itemHeight, bgColor, 'rgba(255,255,255,0.10)');
+                    
+                    // Reset filter for non-blurred elements
+                    if (isLocked) {
+                        ctx.filter = 'none';
+                        ctx.globalAlpha = 1.0;
+                    }
+                    
                     // Card border with animated glow for affordable
-                    if (canAfford && !isOwned) {
+                    if (canAfford && !isOwned && !isLocked) {
                         ctx.shadowColor = categoryInfo.color;
                         ctx.shadowBlur = 12 + Math.sin(time * 4 + index) * 4;
                     } else {
@@ -2207,7 +2266,12 @@ export class GameDialogs {    constructor(game) {
                     const iconSize = 20;
                     const iconX = currentX + itemWidth - iconSize - 10;
                     const iconY = currentY + 10;
-                    if (isOwned) {
+                    if (isLocked) {
+                        ctx.fillStyle = '#6e7681';
+                        ctx.font = '18px Courier New';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('🔒', iconX + iconSize/2, iconY + iconSize/2 + 5);
+                    } else if (isOwned) {
                         ctx.fillStyle = '#40d158';
                         ctx.font = '16px Courier New';
                         ctx.textAlign = 'center';
@@ -2218,28 +2282,60 @@ export class GameDialogs {    constructor(game) {
                         ctx.textAlign = 'center';
                         ctx.fillText('🔒', iconX + iconSize/2, iconY + iconSize/2 + 5);
                     }
+                    
+                    // Apply blur to text content for locked items
+                    if (isLocked) {
+                        ctx.filter = 'blur(1px)';
+                        ctx.globalAlpha = 0.6;
+                    }
+                    
                     // Upgrade name
                     ctx.font = isHovered ? 'bold 24px Courier New' : 'bold 20px Courier New';
-                    ctx.fillStyle = isHovered ? '#ffffff' : '#f0f6fc';
+                    ctx.fillStyle = isLocked ? '#6e7681' : (isHovered ? '#ffffff' : '#f0f6fc');
                     ctx.textAlign = 'left';
                     ctx.fillText(upgrade.name, currentX + 15, currentY + 30);
                     // Price display
                     ctx.font = '14px Courier New';
-                    if (isOwned) {
+                    if (isLocked) {
+                        ctx.fillStyle = '#6e7681';
+                        ctx.textAlign = 'right';
+                        ctx.fillText('LOCKED', currentX + itemWidth - 35, currentY + 30);
+                    } else if (isOwned) {
                         ctx.fillStyle = '#40d158';
                         ctx.textAlign = 'right';
                         ctx.fillText('OWNED', currentX + itemWidth - 35, currentY + 30);
                     } else {
-                        ctx.fillStyle = canAfford ? '#ffd700' : '#8b949e';
+                        ctx.fillStyle = canAfford ? '#ffd700' : '#f85149'; // Red price for unaffordable
                         ctx.textAlign = 'right';
                         ctx.fillText(`${upgrade.price} 📦`, currentX + itemWidth - 35, currentY + 30);
+                        
+                        // Add "NEED MORE DATA PACKETS" text for unaffordable items
+                        if (!canAfford) {
+                            ctx.font = 'bold 11px Courier New';
+                            ctx.fillStyle = '#f85149';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('NEED MORE DATA PACKETS', currentX + itemWidth/2, currentY + 105);
+                        }
                     }
                     // Description (wrap)
                     ctx.font = '12px Courier New';
-                    ctx.fillStyle = isOwned ? '#7d8590' : canAfford ? '#c9d1d9' : '#6e7681';
+                    ctx.fillStyle = isLocked ? '#6e7681' : (isOwned ? '#7d8590' : canAfford ? '#c9d1d9' : '#6e7681');
                     ctx.textAlign = 'left';
                     const maxWidth = itemWidth - 30;
-                    const description = upgrade.description || 'No description available';
+                    
+                    let description;
+                    if (isLocked && upgrade.prerequisites && upgrade.prerequisites.length > 0) {
+                        // Show prerequisite requirements for locked items
+                        const missingPrereqs = upgrade.prerequisites.filter(prereqId => !shopSystem.isOwned(prereqId));
+                        const prereqNames = missingPrereqs.map(prereqId => {
+                            const prereqUpgrade = shopSystem.upgradeData[prereqId];
+                            return prereqUpgrade ? prereqUpgrade.name : prereqId;
+                        });
+                        description = `Requires: ${prereqNames.join(', ')}`;
+                    } else {
+                        description = upgrade.description || 'No description available';
+                    }
+                    
                     const words = description.split(' ');
                     let line = '';
                     let yOffset = currentY + 55;
@@ -2270,16 +2366,35 @@ export class GameDialogs {    constructor(game) {
                             ctx.fillText(finalLine, currentX + 15, yOffset);
                         }
                     }
+                    
+                    // Reset filter for locked items
+                    if (isLocked) {
+                        ctx.filter = 'none';
+                        ctx.globalAlpha = 1.0;
+                    }
+                    
                     ctx.restore();
                 }
-                if (!isOwned && canAfford) {
+                if (!isOwned && !isLocked) {
                     shopHitAreas.push({
                         x: currentX,
                         y: currentY,
                         width: itemWidth,
                         height: itemHeight,
                         upgradeId: upgrade.id,
-                        action: 'buy'
+                        action: canAfford ? 'buy' : 'insufficient_funds',
+                        canAfford: canAfford
+                    });
+                } else if (isLocked) {
+                    // Add hit area for locked items to show prerequisite info
+                    shopHitAreas.push({
+                        x: currentX,
+                        y: currentY,
+                        width: itemWidth,
+                        height: itemHeight,
+                        upgradeId: upgrade.id,
+                        action: 'locked',
+                        canAfford: false
                     });
                 }
                 currentX += itemWidth + itemSpacing;
@@ -2595,24 +2710,72 @@ export class GameDialogs {    constructor(game) {
     }
     
     /**
+     * Check if upgrade prerequisites are met
+     */
+    arePrerequisitesMet(upgrade, shopSystem) {
+        if (!upgrade.prerequisites || upgrade.prerequisites.length === 0) {
+            return true;
+        }
+        
+        return upgrade.prerequisites.every(prereqId => shopSystem.isOwned(prereqId));
+    }
+    
+    /**
      * Handle shop clicks
      */
     handleShopClick(x, y) {
-        const { shopHitAreas } = this;
+        const shopHitAreas = this.game.shopHitAreas || [];
+        console.log(`🛒 GameDialogs.handleShopClick called with ${shopHitAreas ? shopHitAreas.length : 0} hit areas`);
         
         for (const area of shopHitAreas) {
+            console.log(`🛒 Checking area: ${area.upgradeId} at (${area.x}, ${area.y}) size ${area.width}x${area.height}`);
             if (x >= area.x && x <= area.x + area.width &&
                 y >= area.y && y <= area.y + area.height) {
                 
+                console.log(`🛒 Hit detected for ${area.upgradeId} with action: ${area.action}`);
+                
                 // Purchase upgrade if click is on a purchasable item
                 if (area.action === 'buy') {
-                    this.game.shopSystem.purchaseUpgrade(area.upgradeId);
+                    const success = this.game.shopSystem.purchaseUpgrade(area.upgradeId);
+                    if (success && this.game.popupSystem) {
+                        const upgrade = this.game.shopSystem.upgradeData[area.upgradeId];
+                        this.game.popupSystem.showConfirmationPopup(
+                            'Purchase Successful', 
+                            `✅ Successfully purchased: ${upgrade.name}`
+                        );
+                    }
+                } else if (area.action === 'insufficient_funds') {
+                    // Show insufficient funds message
+                    if (this.game.popupSystem) {
+                        const upgrade = this.game.shopSystem.upgradeData[area.upgradeId];
+                        const currentCurrency = this.game.upgradeSystem ? this.game.upgradeSystem.getDataPackets() : 0;
+                        const needed = upgrade.price - currentCurrency;
+                        this.game.popupSystem.showErrorPopup(
+                            'Insufficient Data Packets', 
+                            `❌ You need ${needed} more data packets to purchase "${upgrade.name}"\n\nCurrent: ${currentCurrency} 📦\nRequired: ${upgrade.price} 📦`
+                        );
+                    }
+                } else if (area.action === 'locked') {
+                    // Show prerequisites message for locked items
+                    if (this.game.popupSystem) {
+                        const upgrade = this.game.shopSystem.upgradeData[area.upgradeId];
+                        const missingPrereqs = upgrade.prerequisites.filter(prereqId => !this.game.shopSystem.isOwned(prereqId));
+                        const prereqNames = missingPrereqs.map(prereqId => {
+                            const prereqUpgrade = this.game.shopSystem.upgradeData[prereqId];
+                            return prereqUpgrade ? prereqUpgrade.name : prereqId;
+                        });
+                        this.game.popupSystem.showErrorPopup(
+                            'Prerequisites Required', 
+                            `🔒 "${upgrade.name}" is locked!\n\nYou must first purchase:\n${prereqNames.map(name => `• ${name}`).join('\n')}`
+                        );
+                    }
                 }
                 
                 return true;
             }
         }
         
+        console.log('🛒 No hit areas matched the click');
         return false;
     }
     
